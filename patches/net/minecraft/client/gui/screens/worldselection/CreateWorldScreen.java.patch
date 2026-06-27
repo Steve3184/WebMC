@@ -1,0 +1,177 @@
+--- a/net/minecraft/client/gui/screens/worldselection/CreateWorldScreen.java
++++ b/net/minecraft/client/gui/screens/worldselection/CreateWorldScreen.java
+@@ -47,11 +47,14 @@
+ import net.minecraft.client.gui.screens.ConfirmScreen;
+ import net.minecraft.client.gui.screens.GenericMessageScreen;
+ import net.minecraft.client.gui.screens.Screen;
++import net.minecraft.client.gui.screens.WebEnterWorldPlaceholderScreen;
+ import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
+ import net.minecraft.client.renderer.RenderPipelines;
+ import net.minecraft.commands.Commands;
+ import net.minecraft.core.LayeredRegistryAccess;
++import net.minecraft.core.RegistryAccess;
+ import net.minecraft.core.registries.Registries;
++import net.minecraft.data.registries.VanillaRegistries;
+ import net.minecraft.network.chat.CommonComponents;
+ import net.minecraft.network.chat.Component;
+ import net.minecraft.network.chat.MutableComponent;
+@@ -86,9 +89,14 @@
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.apache.commons.lang3.mutable.MutableObject;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class CreateWorldScreen extends Screen {
++    static {
++        System.out.println("[mc-web/createworld] <clinit> begin");
++    }
++
+     private static final int GROUP_BOTTOM = 1;
+     private static final int TAB_COLUMN_WIDTH = 210;
+     private static final Logger LOGGER = LogUtils.getLogger();
+@@ -103,6 +111,7 @@
+     public static final ResourceLocation TAB_HEADER_BACKGROUND = ResourceLocation.withDefaultNamespace("textures/gui/tab_header_background.png");
+     private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
+     final WorldCreationUiState uiState;
++    private final boolean webLiteMode;
+     private final TabManager tabManager = new TabManager(p_374587_ -> {
+         AbstractWidget abstractwidget = this.addRenderableWidget(p_374587_);
+     }, p_325424_ -> this.removeWidget(p_325424_));
+@@ -117,6 +126,8 @@
+     private PackRepository tempDataPackRepository;
+     @Nullable
+     private TabNavigationBar tabNavigationBar;
++    @Nullable
++    private EditBox webLiteNameBox;
+ 
+     public static void openFresh(Minecraft p_232897_, @Nullable Screen p_232898_) {
+         openFresh(p_232897_, p_232898_, (p_357709_, p_357710_, p_357711_, p_357712_) -> p_357709_.createNewWorld(p_357710_, p_357711_));
+@@ -166,6 +177,11 @@
+         ResourceKey<WorldPreset> p_369771_,
+         CreateWorldCallback p_366315_
+     ) {
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/createworld] web lite path: open screen");
++            p_369292_.setScreen(new CreateWorldScreen(p_369292_, p_365265_, p_366315_));
++            return;
++        }
+         queueLoadScreen(p_369292_, PREPARING_WORLD_DATA);
+         PackRepository packrepository = new PackRepository(new ServerPacksSource(p_369292_.directoryValidator()));
+         WorldDataConfiguration worlddataconfiguration = SharedConstants.IS_RUNNING_IN_IDE
+@@ -227,6 +243,16 @@
+         this.packValidator = p_276053_.directoryValidator();
+         this.createWorldCallback = p_368964_;
+         this.uiState = new WorldCreationUiState(p_276053_.getLevelSource().getBaseDir(), p_276047_, p_276013_, p_276031_);
++        this.webLiteMode = false;
++    }
++
++    private CreateWorldScreen(Minecraft p_369292_, @Nullable Screen p_365265_, CreateWorldCallback p_366315_) {
++        super(Component.translatable("selectWorld.create"));
++        this.lastScreen = p_365265_;
++        this.packValidator = p_369292_.directoryValidator();
++        this.createWorldCallback = p_366315_;
++        this.uiState = null;
++        this.webLiteMode = true;
+     }
+ 
+     public WorldCreationUiState getUiState() {
+@@ -235,6 +261,10 @@
+ 
+     @Override
+     protected void init() {
++        if (this.webLiteMode) {
++            this.initWebLite();
++            return;
++        }
+         this.tabNavigationBar = TabNavigationBar.builder(this.tabManager, this.width)
+             .addTabs(new CreateWorldScreen.GameTab(), new CreateWorldScreen.WorldTab(), new CreateWorldScreen.MoreTab())
+             .build();
+@@ -251,12 +281,33 @@
+         this.repositionElements();
+     }
+ 
++    private void initWebLite() {
++        int i = this.width / 2 - 100;
++        int j = 56;
++        this.webLiteNameBox = new EditBox(this.font, i, j, 200, 20, Component.translatable("selectWorld.enterName"));
++        this.webLiteNameBox.setValue("Web World");
++        this.addRenderableWidget(this.webLiteNameBox);
++        this.addRenderableWidget(
++            Button.builder(Component.translatable("selectWorld.create"), p_232938_ -> this.onCreate())
++                .bounds(this.width / 2 - 102, this.height - 28, 100, 20)
++                .build()
++        );
++        this.addRenderableWidget(
++            Button.builder(CommonComponents.GUI_CANCEL, p_232903_ -> this.popScreen())
++                .bounds(this.width / 2 + 2, this.height - 28, 100, 20)
++                .build()
++        );
++    }
++
+     @Override
+     protected void setInitialFocus() {
+     }
+ 
+     @Override
+     public void repositionElements() {
++        if (this.webLiteMode) {
++            return;
++        }
+         if (this.tabNavigationBar != null) {
+             this.tabNavigationBar.setWidth(this.width);
+             this.tabNavigationBar.arrangeElements();
+@@ -273,6 +324,15 @@
+     }
+ 
+     private void onCreate() {
++        if (this.webLiteMode) {
++            String s = this.webLiteNameBox != null ? this.webLiteNameBox.getValue().trim() : "";
++            if (s.isEmpty()) {
++                s = "Web World";
++            }
++            System.out.println("[mc-web/createworld] web lite create pressed: " + s);
++            this.minecraft.setScreen(new WebEnterWorldPlaceholderScreen(this, s));
++            return;
++        }
+         WorldCreationContext worldcreationcontext = this.uiState.getSettings();
+         WorldDimensions.Complete worlddimensions$complete = worldcreationcontext.selectedDimensions().bake(worldcreationcontext.datapackDimensions());
+         LayeredRegistryAccess<RegistryLayer> layeredregistryaccess = worldcreationcontext.worldgenRegistries()
+@@ -331,7 +391,16 @@
+ 
+     @Override
+     public boolean keyPressed(int p_100875_, int p_100876_, int p_100877_) {
+-        if (this.tabNavigationBar.keyPressed(p_100875_)) {
++        if (this.webLiteMode) {
++            if (super.keyPressed(p_100875_, p_100876_, p_100877_)) {
++                return true;
++            } else if (p_100875_ != 257 && p_100875_ != 335) {
++                return false;
++            } else {
++                this.onCreate();
++                return true;
++            }
++        } else if (this.tabNavigationBar.keyPressed(p_100875_)) {
+             return true;
+         } else if (super.keyPressed(p_100875_, p_100876_, p_100877_)) {
+             return true;
+@@ -355,6 +424,12 @@
+ 
+     @Override
+     public void render(GuiGraphics p_282137_, int p_283640_, int p_281243_, float p_282743_) {
++        if (this.webLiteMode) {
++            super.render(p_282137_, p_283640_, p_281243_, p_282743_);
++            p_282137_.drawCenteredString(this.font, this.title, this.width / 2, 20, -1);
++            p_282137_.drawString(this.font, NAME_LABEL, this.width / 2 - 100, 42, -1);
++            return;
++        }
+         super.render(p_282137_, p_283640_, p_281243_, p_282743_);
+         p_282137_.blit(RenderPipelines.GUI_TEXTURED, Screen.FOOTER_SEPARATOR, 0, this.height - this.layout.getFooterHeight() - 2, 0.0F, 0.0F, this.width, 2, 32, 2);
+     }
+@@ -806,4 +881,4 @@
+             return p_268292_.getValue().isAmplified() ? CommonComponents.joinForNarration(p_268292_.createDefaultNarrationMessage(), AMPLIFIED_HELP_TEXT) : p_268292_.createDefaultNarrationMessage();
+         }
+     }
+-}
+\ No newline at end of file
++}

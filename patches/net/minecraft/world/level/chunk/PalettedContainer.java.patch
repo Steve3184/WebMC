@@ -1,0 +1,156 @@
+diff --git a/net/minecraft/world/level/chunk/PalettedContainer.java b/net/minecraft/world/level/chunk/PalettedContainer.java
+index db75888..8bb4f25 100644
+--- a/net/minecraft/world/level/chunk/PalettedContainer.java
++++ b/net/minecraft/world/level/chunk/PalettedContainer.java
+@@ -24,6 +24,7 @@ import net.minecraft.util.Mth;
+ import net.minecraft.util.SimpleBitStorage;
+ import net.minecraft.util.ThreadingDetector;
+ import net.minecraft.util.ZeroBitStorage;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainerRO<T> {
+     private static final int MIN_PALETTE_BITS = 0;
+@@ -32,6 +33,8 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+     private volatile PalettedContainer.Data<T> data;
+     private final PalettedContainer.Strategy strategy;
+     private final ThreadingDetector threadingDetector = new ThreadingDetector("PalettedContainer");
++    private static int webResizeRecoveryLogs;
++    private static int webReadRecoveryLogs;
+ 
+     public void acquire() {
+         this.threadingDetector.checkAndLock();
+@@ -129,9 +132,14 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+     }
+ 
+     private T getAndSet(int p_63097_, T p_63098_) {
+-        int i = this.data.palette.idFor(p_63098_);
+-        int j = this.data.storage.getAndSet(p_63097_, i);
+-        return this.data.palette.valueFor(j);
++        PalettedContainer.Data<T> data = this.data;
++        int i = data.palette.idFor(p_63098_);
++        PalettedContainer.Data<T> data1 = this.ensureWritableDataAfterIdFor(data, p_63098_, i);
++        if (data1 != data) {
++            i = data1.palette.idFor(p_63098_);
++        }
++        int j = data1.storage.getAndSet(p_63097_, i);
++        return data1.palette.valueFor(j);
+     }
+ 
+     public void set(int p_156471_, int p_156472_, int p_156473_, T p_156474_) {
+@@ -145,8 +153,42 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+     }
+ 
+     private void set(int p_63133_, T p_63134_) {
+-        int i = this.data.palette.idFor(p_63134_);
+-        this.data.storage.set(p_63133_, i);
++        PalettedContainer.Data<T> data = this.data;
++        int i = data.palette.idFor(p_63134_);
++        PalettedContainer.Data<T> data1 = this.ensureWritableDataAfterIdFor(data, p_63134_, i);
++        if (data1 != data) {
++            i = data1.palette.idFor(p_63134_);
++        }
++        data1.storage.set(p_63133_, i);
++    }
++
++    private PalettedContainer.Data<T> ensureWritableDataAfterIdFor(PalettedContainer.Data<T> p_407784_, T p_407380_, int p_406157_) {
++        PalettedContainer.Data<T> data = this.data;
++        if (BuildFlags.WEB_RUNTIME && p_406157_ != 0 && data.storage.getBits() == 0) {
++            if (webResizeRecoveryLogs < 20) {
++                webResizeRecoveryLogs++;
++                System.err.println(
++                    "[mc-web/palette] recover zero-bit write strategy="
++                        + this.strategy.size()
++                        + " requestedId="
++                        + p_406157_
++                        + " registryId="
++                        + this.registry.getId(p_407380_)
++                );
++            }
++
++            PalettedContainer.Data<T> data1 = this.createOrReuseData(p_407784_, 1);
++            data1.copyFrom(p_407784_.palette, p_407784_.storage);
++            this.data = data1;
++            data = data1;
++            p_406157_ = data.palette.idFor(p_407380_);
++            if (BuildFlags.WEB_RUNTIME && p_406157_ == 0 && this.registry.getId(p_407380_) != 0 && webResizeRecoveryLogs < 20) {
++                webResizeRecoveryLogs++;
++                System.err.println("[mc-web/palette] recover produced id=0 for non-zero registry entry");
++            }
++        }
++
++        return data;
+     }
+ 
+     @Override
+@@ -156,7 +198,18 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+ 
+     protected T get(int p_63086_) {
+         PalettedContainer.Data<T> data = this.data;
+-        return data.palette.valueFor(data.storage.get(p_63086_));
++        int i = data.storage.get(p_63086_);
++
++        try {
++            T t = data.palette.valueFor(i);
++            return BuildFlags.WEB_RUNTIME && t == null ? this.recoverWebRead(data, p_63086_, i, null) : t;
++        } catch (Throwable throwable) {
++            if (!BuildFlags.WEB_RUNTIME) {
++                throw throwable;
++            }
++
++            return this.recoverWebRead(data, p_63086_, i, throwable);
++        }
+     }
+ 
+     @Override
+@@ -272,6 +325,44 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+         }
+     }
+ 
++    private T recoverWebRead(PalettedContainer.Data<T> p_409612_, int p_408701_, int p_407661_, @Nullable Throwable p_408352_) {
++        if (webReadRecoveryLogs < 40) {
++            webReadRecoveryLogs++;
++            System.err.println(
++                "[mc-web/palette] recover read strategy="
++                    + this.strategy.size()
++                    + " index="
++                    + p_408701_
++                    + " rawId="
++                    + p_407661_
++                    + " bits="
++                    + p_409612_.storage.getBits()
++                    + " palette="
++                    + p_409612_.palette.getClass().getName()
++                    + " cause="
++                    + (p_408352_ == null ? "null-value" : p_408352_)
++            );
++        }
++
++        T t = this.registry.byId(0);
++        if (t != null) {
++            return t;
++        }
++
++        for (int i = 1; i < this.registry.size(); i++) {
++            t = this.registry.byId(i);
++            if (t != null) {
++                return t;
++            }
++        }
++
++        if (p_408352_ instanceof RuntimeException runtimeexception) {
++            throw runtimeexception;
++        }
++
++        throw new IllegalStateException("Unable to recover web palette read for rawId " + p_407661_, p_408352_);
++    }
++
+     @Override
+     public int getSerializedSize() {
+         return this.data.getSerializedSize();
+@@ -388,4 +479,4 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+             return configuration.factory() == GLOBAL_PALETTE_FACTORY ? i : configuration.bits();
+         }
+     }
+-}
+\ No newline at end of file
++}

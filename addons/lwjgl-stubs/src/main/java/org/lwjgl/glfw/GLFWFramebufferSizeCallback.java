@@ -1,0 +1,6 @@
+package org.lwjgl.glfw;
+public abstract class GLFWFramebufferSizeCallback implements GLFWFramebufferSizeCallbackI {
+    public static GLFWFramebufferSizeCallback create(GLFWFramebufferSizeCallbackI l) { return new GLFWFramebufferSizeCallback() { @Override public void invoke(long w, int x, int y) { l.invoke(w, x, y); } }; }
+    public void free() {}
+    public GLFWFramebufferSizeCallback set(long window) { GLFW.glfwSetFramebufferSizeCallback(window, this); return this; }
+}

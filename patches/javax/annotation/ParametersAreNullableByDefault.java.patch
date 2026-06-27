@@ -1,0 +1,5 @@
+--- a/javax/annotation/ParametersAreNullableByDefault.java
++++ b/javax/annotation/ParametersAreNullableByDefault.java
+@@ -0,0 +1,2 @@
++package javax.annotation;
++public @interface ParametersAreNullableByDefault {}

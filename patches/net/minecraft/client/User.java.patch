@@ -1,0 +1,67 @@
+--- a/net/minecraft/client/User.java
++++ b/net/minecraft/client/User.java
+@@ -1,16 +1,15 @@
+ package net.minecraft.client;
+ 
+ import com.mojang.util.UndashedUuid;
+-import java.util.Arrays;
++import java.util.HashMap;
+ import java.util.Locale;
+ import java.util.Map;
+ import java.util.Optional;
+ import java.util.UUID;
+-import java.util.function.Function;
+-import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class User {
+@@ -31,11 +30,17 @@
+     }
+ 
+     public String getSessionId() {
+-        return "token:" + this.accessToken + ":" + UndashedUuid.toString(this.uuid);
++        return "token:" + this.accessToken + ":" + UndashedUuid.toString(this.getProfileId());
+     }
+ 
+     public UUID getProfileId() {
+-        return this.uuid;
++        if (this.uuid != null) {
++            return this.uuid;
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            return new UUID(0x4d435f574542L, this.name == null ? 0L : (long)this.name.hashCode());
++        }
++        return null;
+     }
+ 
+     public String getName() {
+@@ -64,8 +69,7 @@
+         MOJANG("mojang"),
+         MSA("msa");
+ 
+-        private static final Map<String, User.Type> BY_NAME = Arrays.stream(values())
+-            .collect(Collectors.toMap(p_92560_ -> p_92560_.name, Function.identity()));
++        private static final Map<String, User.Type> BY_NAME = createByName();
+         private final String name;
+ 
+         private Type(final String p_92558_) {
+@@ -80,5 +84,13 @@
+         public String getName() {
+             return this.name;
+         }
++
++        private static Map<String, User.Type> createByName() {
++            Map<String, User.Type> map = new HashMap<>();
++            for (User.Type type : values()) {
++                map.put(type.name, type);
++            }
++            return map;
++        }
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,141 @@
+diff --git a/net/minecraft/client/resources/model/ModelBakery.java b/net/minecraft/client/resources/model/ModelBakery.java
+index 3820d04..7670fe1 100644
+--- a/net/minecraft/client/resources/model/ModelBakery.java
++++ b/net/minecraft/client/resources/model/ModelBakery.java
+@@ -7,6 +7,7 @@ import java.util.Map;
+ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.Executor;
++import java.util.function.BiFunction;
+ import java.util.function.Function;
+ import java.util.stream.Collectors;
+ import java.util.stream.IntStream;
+@@ -30,6 +31,8 @@ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class ModelBakery {
+@@ -50,6 +53,8 @@ public class ModelBakery {
+         .collect(Collectors.toList());
+     public static final List<RenderType> DESTROY_TYPES = BREAKING_LOCATIONS.stream().map(RenderType::crumbling).collect(Collectors.toList());
+     static final Logger LOGGER = LogUtils.getLogger();
++    private static final int WEB_BLOCK_BAKE_BATCH_SIZE = 128;
++    private static final int WEB_ITEM_BAKE_BATCH_SIZE = 48;
+     private final EntityModelSet entityModelSet;
+     private final Map<BlockState, BlockStateModel.UnbakedRoot> unbakedBlockStateModels;
+     private final Map<ResourceLocation, ClientItem> clientInfos;
+@@ -71,17 +76,47 @@ public class ModelBakery {
+     }
+ 
+     public CompletableFuture<ModelBakery.BakingResult> bakeModels(SpriteGetter p_393789_, Executor p_392289_) {
++        return this.bakeModels(p_393789_, p_392289_, 0L);
++    }
++
++    public CompletableFuture<ModelBakery.BakingResult> bakeModels(SpriteGetter p_393789_, Executor p_392289_, long webModelReloadStartMs) {
++        final boolean webDiagnostics = WebDiagnostics.enabled();
++        if (webDiagnostics) {
++            String detail = "";
++            if (BuildFlags.WEB_RUNTIME) {
++                detail = " blockTasks=" + webBakeTaskCount(this.unbakedBlockStateModels.size(), WEB_BLOCK_BAKE_BATCH_SIZE)
++                    + " itemTasks=" + webBakeTaskCount(this.clientInfos.size(), WEB_ITEM_BAKE_BATCH_SIZE);
++            }
++            WebDiagnostics.timelineEvent(
++                "modelReloadEvents",
++                "bakeModels:begin",
++                "blocks=" + this.unbakedBlockStateModels.size() + " items=" + this.clientInfos.size() + detail,
++                this.unbakedBlockStateModels.size() + this.clientInfos.size(),
++                webModelReloadStartMs
++            );
++        }
+         ModelBakery.MissingModels modelbakery$missingmodels = ModelBakery.MissingModels.bake(this.missingModel, p_393789_);
+         ModelBakery.ModelBakerImpl modelbakery$modelbakerimpl = new ModelBakery.ModelBakerImpl(p_393789_);
+-        CompletableFuture<Map<BlockState, BlockStateModel>> completablefuture = ParallelMapTransform.schedule(this.unbakedBlockStateModels, (p_389589_, p_389590_) -> {
+-            try {
+-                return p_389590_.bake(p_389589_, modelbakery$modelbakerimpl);
+-            } catch (Exception exception) {
+-                LOGGER.warn("Unable to bake model: '{}': {}", p_389589_, exception);
+-                return null;
++        CompletableFuture<Map<BlockState, BlockStateModel>> completablefuture = scheduleBake(
++            this.unbakedBlockStateModels,
++            (p_389589_, p_389590_) -> {
++                try {
++                    return p_389590_.bake(p_389589_, modelbakery$modelbakerimpl);
++                } catch (Exception exception) {
++                    LOGGER.warn("Unable to bake model: '{}': {}", p_389589_, exception);
++                    return null;
++                }
++            },
++            p_392289_,
++            WEB_BLOCK_BAKE_BATCH_SIZE
++        ).whenComplete((v, t) -> {
++            if (webDiagnostics) {
++                WebDiagnostics.timelineEvent(
++                    "modelReloadEvents", "bakeBlockModels:done", String.valueOf(t), v == null ? -1 : v.size(), webModelReloadStartMs
++                );
+             }
+-        }, p_392289_);
+-        CompletableFuture<Map<ResourceLocation, ItemModel>> completablefuture1 = ParallelMapTransform.schedule(
++        });
++        CompletableFuture<Map<ResourceLocation, ItemModel>> completablefuture1 = scheduleBake(
+             this.clientInfos,
+             (p_389600_, p_389601_) -> {
+                 try {
+@@ -94,8 +129,15 @@ public class ModelBakery {
+                     return null;
+                 }
+             },
+-            p_392289_
+-        );
++            p_392289_,
++            WEB_ITEM_BAKE_BATCH_SIZE
++        ).whenComplete((v, t) -> {
++            if (webDiagnostics) {
++                WebDiagnostics.timelineEvent(
++                    "modelReloadEvents", "bakeItemModels:done", String.valueOf(t), v == null ? -1 : v.size(), webModelReloadStartMs
++                );
++            }
++        });
+         Map<ResourceLocation, ClientItem.Properties> map = new HashMap<>(this.clientInfos.size());
+         this.clientInfos.forEach((p_389592_, p_389593_) -> {
+             ClientItem.Properties clientitem$properties = p_389593_.properties();
+@@ -103,12 +145,35 @@ public class ModelBakery {
+                 map.put(p_389592_, clientitem$properties);
+             }
+         });
++        if (webDiagnostics) {
++            WebDiagnostics.timelineEvent("modelReloadEvents", "itemProperties:done", "", map.size(), webModelReloadStartMs);
++        }
+         return completablefuture.thenCombine(
+             completablefuture1,
+             (p_389596_, p_389597_) -> new ModelBakery.BakingResult(
+                 modelbakery$missingmodels, (Map<BlockState, BlockStateModel>)p_389596_, (Map<ResourceLocation, ItemModel>)p_389597_, map
+             )
+-        );
++        ).whenComplete((v, t) -> {
++            if (webDiagnostics) {
++                WebDiagnostics.timelineEvent("modelReloadEvents", "bakeModels:done", String.valueOf(t), v == null ? -1 : 1, webModelReloadStartMs);
++            }
++        });
++    }
++
++    private static <K, U, V> CompletableFuture<Map<K, V>> scheduleBake(
++        Map<K, U> inputs, BiFunction<K, U, V> operation, Executor executor, int webBatchSize
++    ) {
++        if (!BuildFlags.WEB_RUNTIME) {
++            return ParallelMapTransform.schedule(inputs, operation, executor);
++        }
++        return ParallelMapTransform.schedule(inputs, operation, webBakeTaskCount(inputs.size(), webBatchSize), executor);
++    }
++
++    private static int webBakeTaskCount(int size, int batchSize) {
++        if (size <= 0) {
++            return 1;
++        }
++        return Math.max(1, (size + batchSize - 1) / batchSize);
+     }
+ 
+     @OnlyIn(Dist.CLIENT)

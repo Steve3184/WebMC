@@ -1,0 +1,93 @@
+--- a/net/minecraft/client/MouseHandler.java
++++ b/net/minecraft/client/MouseHandler.java
+@@ -25,6 +25,7 @@
+ import org.joml.Vector2i;
+ import org.lwjgl.glfw.GLFWDropCallback;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class MouseHandler {
+@@ -47,6 +48,7 @@
+     private final ScrollWheelHandler scrollWheelHandler;
+     private double lastHandleMovementTime = Double.MIN_VALUE;
+     private boolean mouseGrabbed;
++    private static int webPressLogCount;
+ 
+     public MouseHandler(Minecraft p_91522_) {
+         this.minecraft = p_91522_;
+@@ -99,14 +101,48 @@
+                     double d0 = this.getScaledXPos(window);
+                     double d1 = this.getScaledYPos(window);
+                     Screen screen = this.minecraft.screen;
++                    if (BuildFlags.WEB_RUNTIME && webPressLogCount < 24) {
++                        System.err.println(
++                            "[mc-web/input] onPress screen=" + screen.getClass().getName()
++                                + " overlay=null"
++                                + " action=" + p_91533_
++                                + " button=" + i
++                                + " raw=" + this.xpos + "," + this.ypos
++                                + " scaled=" + d0 + "," + d1
++                                + " gui=" + window.getGuiScaledWidth() + "x" + window.getGuiScaledHeight()
++                                + " screenPx=" + window.getScreenWidth() + "x" + window.getScreenHeight()
++                        );
++                        webPressLogCount++;
++                    }
+                     if (flag) {
++                        if (BuildFlags.WEB_RUNTIME) {
++                            System.err.println("[mc-web/input] afterMouseAction begin screen=" + screen.getClass().getName());
++                        }
+                         screen.afterMouseAction();
++                        if (BuildFlags.WEB_RUNTIME) {
++                            System.err.println("[mc-web/input] afterMouseAction end screen=" + screen.getClass().getName());
++                        }
+ 
+                         try {
+-                            if (screen.mouseClicked(d0, d1, i)) {
++                            boolean handled = screen.mouseClicked(d0, d1, i);
++                            if (BuildFlags.WEB_RUNTIME && webPressLogCount < 24) {
++                                System.err.println("[mc-web/input] mouseClicked handled=" + handled + " screen=" + screen.getClass().getName());
++                                webPressLogCount++;
++                            }
++                            if (handled) {
+                                 return;
+                             }
+                         } catch (Throwable throwable1) {
++                            if (BuildFlags.WEB_RUNTIME) {
++                                System.err.println("[mc-web/input] mouseClicked threw: " + throwable1);
++                                throwable1.printStackTrace();
++                                Throwable cause = throwable1.getCause();
++                                while (cause != null) {
++                                    System.err.println("[mc-web/input] mouseClicked cause: " + cause);
++                                    cause.printStackTrace();
++                                    cause = cause.getCause();
++                                }
++                            }
+                             CrashReport crashreport = CrashReport.forThrowable(throwable1, "mouseClicked event handler");
+                             screen.fillCrashDetails(crashreport);
+                             CrashReportCategory crashreportcategory = crashreport.addCategory("Mouse");
+@@ -226,6 +262,17 @@
+     }
+ 
+     public void setup(long p_91525_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            InputConstants.setupMouseCallbacks(
++                p_91525_,
++                (p_91591_, p_91592_, p_91593_) -> this.minecraft.schedule(this.minecraft.wrapRunnable(() -> this.onMove(p_91591_, p_91592_, p_91593_))),
++                (p_91566_, p_91567_, p_91568_, p_91569_) -> this.minecraft.schedule(this.minecraft.wrapRunnable(() -> this.onPress(p_91566_, p_91567_, p_91568_, p_91569_))),
++                (p_91576_, p_91577_, p_91578_) -> this.minecraft.schedule(this.minecraft.wrapRunnable(() -> this.onScroll(p_91576_, p_91577_, p_91578_))),
++                (p_340767_, p_340768_, p_340769_) -> {
++                }
++            );
++            return;
++        }
+         InputConstants.setupMouseCallbacks(
+             p_91525_,
+             (p_91591_, p_91592_, p_91593_) -> this.minecraft.execute(() -> this.onMove(p_91591_, p_91592_, p_91593_)),
+@@ -441,4 +488,4 @@
+         String s = String.format(Locale.ROOT, "%.0f,%.0f", d0, d1);
+         p_398226_.drawString(p_398229_, s, (int)d0, (int)d1, -1);
+     }
+-}
+\ No newline at end of file
++}

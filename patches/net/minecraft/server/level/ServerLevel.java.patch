@@ -1,0 +1,161 @@
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 6fed078..6a4af85 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -167,6 +167,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraft.world.ticks.LevelTicks;
+ import net.minecraft.world.waypoints.WaypointTransmitter;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLevel {
+     public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
+@@ -223,6 +224,7 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+         @Nullable RandomSequences p_288977_
+     ) {
+         super(p_215002_, p_215003_, p_214999_.registryAccess(), p_215004_.type(), false, p_215006_, p_215007_, p_214999_.getMaxChainedNeighborUpdates());
++        System.out.println("[mc-web/serverlevel] ctor begin dim=" + p_215003_.location());
+         this.tickTime = p_215009_;
+         this.server = p_214999_;
+         this.customSpawners = p_215008_;
+@@ -230,6 +232,7 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+         ChunkGenerator chunkgenerator = p_215004_.generator();
+         boolean flag = p_214999_.forceSynchronousWrites();
+         DataFixer datafixer = p_214999_.getFixerUpper();
++        System.out.println("[mc-web/serverlevel] ctor before entity storage dim=" + p_215003_.location());
+         EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(
+             new SimpleRegionStorage(
+                 new RegionStorageInfo(p_215001_.getLevelId(), p_215003_, "entities"),
+@@ -241,7 +244,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+             this,
+             p_214999_
+         );
++        System.out.println("[mc-web/serverlevel] ctor after entity storage dim=" + p_215003_.location());
+         this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++        System.out.println("[mc-web/serverlevel] ctor after entityManager dim=" + p_215003_.location());
+         this.chunkSource = new ServerChunkCache(
+             this,
+             p_215001_,
+@@ -256,17 +261,27 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+             this.entityManager::updateChunkStatus,
+             () -> p_214999_.overworld().getDataStorage()
+         );
+-        this.chunkSource.getGeneratorState().ensureStructuresGenerated();
++        System.out.println("[mc-web/serverlevel] ctor after chunkSource dim=" + p_215003_.location());
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/serverlevel] ctor skip ensureStructuresGenerated dim=" + p_215003_.location());
++        } else {
++            this.chunkSource.getGeneratorState().ensureStructuresGenerated();
++            System.out.println("[mc-web/serverlevel] ctor after ensureStructuresGenerated dim=" + p_215003_.location());
++        }
+         this.portalForcer = new PortalForcer(this);
+         this.updateSkyBrightness();
+         this.prepareWeather();
++        System.out.println("[mc-web/serverlevel] ctor after weather dim=" + p_215003_.location());
+         this.getWorldBorder().setAbsoluteMaxSize(p_214999_.getAbsoluteMaxWorldSize());
++        System.out.println("[mc-web/serverlevel] ctor after worldBorder dim=" + p_215003_.location());
+         this.raids = this.getDataStorage().computeIfAbsent(Raids.getType(this.dimensionTypeRegistration()));
++        System.out.println("[mc-web/serverlevel] ctor after raids dim=" + p_215003_.location());
+         if (!p_214999_.isSingleplayer()) {
+             p_215002_.setGameType(p_214999_.getDefaultGameType());
+         }
+ 
+         long i = p_214999_.getWorldData().worldGenOptions().seed();
++        System.out.println("[mc-web/serverlevel] ctor before structureCheck dim=" + p_215003_.location());
+         this.structureCheck = new StructureCheck(
+             this.chunkSource.chunkScanner(),
+             this.registryAccess(),
+@@ -279,7 +294,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+             i,
+             datafixer
+         );
++        System.out.println("[mc-web/serverlevel] ctor after structureCheck dim=" + p_215003_.location());
+         this.structureManager = new StructureManager(this, p_214999_.getWorldData().worldGenOptions(), this.structureCheck);
++        System.out.println("[mc-web/serverlevel] ctor after structureManager dim=" + p_215003_.location());
+         if (this.dimension() == Level.END && this.dimensionTypeRegistration().is(BuiltinDimensionTypes.END)) {
+             this.dragonFight = new EndDragonFight(this, i, p_214999_.getWorldData().endDragonFightData());
+         } else {
+@@ -288,8 +305,10 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+ 
+         this.sleepStatus = new SleepStatus();
+         this.gameEventDispatcher = new GameEventDispatcher(this);
++        System.out.println("[mc-web/serverlevel] ctor before randomSequences dim=" + p_215003_.location());
+         this.randomSequences = Objects.requireNonNullElseGet(p_288977_, () -> this.getDataStorage().computeIfAbsent(RandomSequences.TYPE));
+         this.waypointManager = new ServerWaypointManager();
++        System.out.println("[mc-web/serverlevel] ctor end dim=" + p_215003_.location());
+     }
+ 
+     @Deprecated
+@@ -317,6 +336,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+ 
+     public void tick(BooleanSupplier p_8794_) {
+         ProfilerFiller profilerfiller = Profiler.get();
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && this.server.getTickCount() <= 2) {
++            System.out.println("[mc-web/serverlevel] tick begin tick=" + this.server.getTickCount() + " dim=" + this.dimension().location());
++        }
+         this.handlingTick = true;
+         TickRateManager tickratemanager = this.tickRateManager();
+         boolean flag = tickratemanager.runsNormally();
+@@ -362,7 +384,13 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+         }
+ 
+         profilerfiller.popPush("chunkSource");
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && this.server.getTickCount() <= 2) {
++            System.out.println("[mc-web/serverlevel] tick before chunkSource tick=" + this.server.getTickCount() + " dim=" + this.dimension().location());
++        }
+         this.getChunkSource().tick(p_8794_, true);
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && this.server.getTickCount() <= 2) {
++            System.out.println("[mc-web/serverlevel] tick after chunkSource tick=" + this.server.getTickCount() + " dim=" + this.dimension().location());
++        }
+         profilerfiller.popPush("blockEvents");
+         if (flag) {
+             this.runBlockEvents();
+@@ -413,6 +441,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+         profilerfiller.push("entityManagement");
+         this.entityManager.tick();
+         profilerfiller.pop();
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && this.server.getTickCount() <= 2) {
++            System.out.println("[mc-web/serverlevel] tick end tick=" + this.server.getTickCount() + " dim=" + this.dimension().location());
++        }
+     }
+ 
+     @Override
+@@ -908,6 +939,11 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+     }
+ 
+     private void addPlayer(ServerPlayer p_8854_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            this.entityManager.addNewEntity(p_8854_);
++            return;
++        }
++
+         Entity entity = this.getEntity(p_8854_.getUUID());
+         if (entity != null) {
+             LOGGER.warn("Force-added player with duplicate UUID {}", p_8854_.getUUID());
+@@ -1374,6 +1410,11 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+             this.getChunkSource().removeTicketWithRadius(TicketType.START, new ChunkPos(blockpos), this.lastSpawnChunkRadius);
+         }
+ 
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            this.lastSpawnChunkRadius = 0;
++            return;
++        }
++
+         int i = this.getGameRules().getInt(GameRules.RULE_SPAWN_CHUNK_RADIUS) + 1;
+         if (i > 1) {
+             this.getChunkSource().addTicketWithRadius(TicketType.START, new ChunkPos(p_8734_), i);
+@@ -1643,6 +1684,14 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+     }
+ 
+     public void waitForChunkAndEntities(ChunkPos p_410166_, int p_408388_) {
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            System.out.println("[mc-web/serverlevel] waitForChunkAndEntities web fast path chunk=" + p_410166_ + " radius=" + p_408388_);
++            this.chunkSource.addTicketWithRadius(TicketType.UNKNOWN, p_410166_, 1);
++            this.getChunk(p_410166_.x, p_410166_.z);
++            this.entityManager.processPendingLoads();
++            return;
++        }
++
+         List<ChunkPos> list = ChunkPos.rangeClosed(p_410166_, p_408388_).toList();
+         this.chunkSource.addTicketWithRadius(TicketType.UNKNOWN, p_410166_, p_408388_);
+         list.forEach(p_405215_ -> this.getChunk(p_405215_.x, p_405215_.z));

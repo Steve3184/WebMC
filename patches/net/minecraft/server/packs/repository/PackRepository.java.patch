@@ -1,0 +1,43 @@
+--- a/net/minecraft/server/packs/repository/PackRepository.java
++++ b/net/minecraft/server/packs/repository/PackRepository.java
+@@ -34,15 +34,30 @@
+ 
+     public void reload() {
+         List<String> list = this.selected.stream().map(Pack::getId).collect(ImmutableList.toImmutableList());
+-        this.available = this.discoverAvailable();
+-        this.selected = this.rebuildSelected(list);
++        System.out.println("[mc-web/packrepo] reload: begin selected=" + list);
++        try {
++            this.available = this.discoverAvailable();
++            System.out.println("[mc-web/packrepo] reload: discovered available=" + this.available.keySet());
++            this.selected = this.rebuildSelected(list);
++            System.out.println("[mc-web/packrepo] reload: rebuilt selected=" + this.getSelectedIds());
++        } catch (Throwable throwable) {
++            System.out.println(
++                "[mc-web/packrepo] reload failed: " + throwable.getClass().getSimpleName() + ": " + (throwable.getMessage() == null ? "<no message>" : throwable.getMessage())
++            );
++            throwable.printStackTrace();
++            throw throwable;
++        }
+     }
+ 
+     private Map<String, Pack> discoverAvailable() {
+         Map<String, Pack> map = Maps.newTreeMap();
+ 
+         for (RepositorySource repositorysource : this.sources) {
+-            repositorysource.loadPacks(p_143903_ -> map.put(p_143903_.getId(), p_143903_));
++            System.out.println("[mc-web/packrepo] discover source=" + repositorysource.getClass().getName());
++            repositorysource.loadPacks(p_143903_ -> {
++                System.out.println("[mc-web/packrepo] discovered pack=" + p_143903_.getId());
++                map.put(p_143903_.getId(), p_143903_);
++            });
+         }
+ 
+         return ImmutableMap.copyOf(map);
+@@ -129,4 +144,4 @@
+     public List<PackResources> openAllSelected() {
+         return this.selected.stream().map(Pack::open).collect(ImmutableList.toImmutableList());
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,58 @@
+--- a/net/minecraft/client/gui/components/events/ContainerEventHandler.java
++++ b/net/minecraft/client/gui/components/events/ContainerEventHandler.java
+@@ -11,6 +11,7 @@
+ import java.util.function.Supplier;
+ import javax.annotation.Nullable;
+ import net.minecraft.client.gui.ComponentPath;
++import net.minecraft.client.gui.components.AbstractWidget;
+ import net.minecraft.client.gui.navigation.FocusNavigationEvent;
+ import net.minecraft.client.gui.navigation.ScreenAxis;
+ import net.minecraft.client.gui.navigation.ScreenDirection;
+@@ -19,6 +20,7 @@
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.joml.Vector2i;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public interface ContainerEventHandler extends GuiEventListener {
+@@ -38,9 +40,32 @@
+     default boolean mouseClicked(double p_94695_, double p_94696_, int p_94697_) {
+         Optional<GuiEventListener> optional = this.getChildAt(p_94695_, p_94696_);
+         if (optional.isEmpty()) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.out.println("[mc-web/container] no child at " + p_94695_ + "," + p_94696_ + " in " + this.getClass().getName());
++            }
+             return false;
+         } else {
+             GuiEventListener guieventlistener = optional.get();
++            if (BuildFlags.WEB_RUNTIME) {
++                if (guieventlistener instanceof AbstractWidget abstractwidget) {
++                    System.out.println(
++                        "[mc-web/container] child hit "
++                            + guieventlistener.getClass().getName()
++                            + " msg="
++                            + abstractwidget.getMessage().getString()
++                            + " rect="
++                            + abstractwidget.getX()
++                            + ","
++                            + abstractwidget.getY()
++                            + " "
++                            + abstractwidget.getWidth()
++                            + "x"
++                            + abstractwidget.getHeight()
++                    );
++                } else {
++                    System.out.println("[mc-web/container] child hit " + guieventlistener.getClass().getName());
++                }
++            }
+             if (guieventlistener.mouseClicked(p_94695_, p_94696_, p_94697_)) {
+                 this.setFocused(guieventlistener);
+                 if (p_94697_ == 0) {
+@@ -251,4 +276,4 @@
+ 
+         return null;
+     }
+-}
+\ No newline at end of file
++}

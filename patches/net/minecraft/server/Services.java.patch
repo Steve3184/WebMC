@@ -1,0 +1,30 @@
+--- a/net/minecraft/server/Services.java
++++ b/net/minecraft/server/Services.java
+@@ -9,11 +9,20 @@
+ import javax.annotation.Nullable;
+ import net.minecraft.server.players.GameProfileCache;
+ import net.minecraft.util.SignatureValidator;
++import top.steve3184.webmc.net.OfflineGameProfileRepository;
++import top.steve3184.webmc.net.OfflineSessionService;
+ 
+ public record Services(MinecraftSessionService sessionService, ServicesKeySet servicesKeySet, GameProfileRepository profileRepository, GameProfileCache profileCache) {
+     private static final String USERID_CACHE_FILE = "usercache.json";
+ 
+     public static Services create(YggdrasilAuthenticationService p_214345_, File p_214346_) {
++        if (p_214345_ == null) {
++            MinecraftSessionService minecraftsessionservice = OfflineSessionService.INSTANCE;
++            GameProfileRepository gameprofilerepository = OfflineGameProfileRepository.INSTANCE;
++            GameProfileCache gameprofilecache = new GameProfileCache(gameprofilerepository, new File(p_214346_, "usercache.json"));
++            return new Services(minecraftsessionservice, ServicesKeySet.EMPTY, gameprofilerepository, gameprofilecache);
++        }
++
+         MinecraftSessionService minecraftsessionservice = p_214345_.createMinecraftSessionService();
+         GameProfileRepository gameprofilerepository = p_214345_.createProfileRepository();
+         GameProfileCache gameprofilecache = new GameProfileCache(gameprofilerepository, new File(p_214346_, "usercache.json"));
+@@ -28,4 +37,4 @@
+     public boolean canValidateProfileKeys() {
+         return !this.servicesKeySet.keys(ServicesKeyType.PROFILE_KEY).isEmpty();
+     }
+-}
+\ No newline at end of file
++}

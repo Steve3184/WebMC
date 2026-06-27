@@ -1,0 +1,33 @@
+--- a/net/minecraft/ChatFormatting.java
++++ b/net/minecraft/ChatFormatting.java
+@@ -13,6 +13,7 @@
+ import javax.annotation.Nullable;
+ import net.minecraft.util.StringRepresentable;
+ import org.jetbrains.annotations.Contract;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public enum ChatFormatting implements StringRepresentable {
+     BLACK("BLACK", '0', 0, 0),
+@@ -38,7 +39,9 @@
+     ITALIC("ITALIC", 'o', true),
+     RESET("RESET", 'r', -1, null);
+ 
+-    public static final Codec<ChatFormatting> CODEC = StringRepresentable.fromEnum(ChatFormatting::values);
++    public static final Codec<ChatFormatting> CODEC = BuildFlags.WEB_RUNTIME
++        ? Codec.INT.xmap(ChatFormatting::byCodecId, ChatFormatting::getId)
++        : StringRepresentable.fromEnum(ChatFormatting::values);
+     public static final Codec<ChatFormatting> COLOR_CODEC = CODEC.validate(
+         p_389112_ -> p_389112_.isFormat() ? DataResult.error(() -> "Formatting was not a valid color: " + p_389112_) : DataResult.success(p_389112_)
+     );
+@@ -160,4 +163,9 @@
+     public String getSerializedName() {
+         return this.getName();
+     }
+-}
+\ No newline at end of file
++
++    private static ChatFormatting byCodecId(int id) {
++        ChatFormatting value = getById(id);
++        return value != null ? value : RESET;
++    }
++}

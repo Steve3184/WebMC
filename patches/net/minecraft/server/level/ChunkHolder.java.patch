@@ -1,0 +1,295 @@
+diff --git a/net/minecraft/server/level/ChunkHolder.java b/net/minecraft/server/level/ChunkHolder.java
+index 0c41e1c..a770002 100644
+--- a/net/minecraft/server/level/ChunkHolder.java
++++ b/net/minecraft/server/level/ChunkHolder.java
+@@ -5,8 +5,10 @@ import it.unimi.dsi.fastutil.shorts.ShortSet;
+ import java.util.BitSet;
+ import java.util.List;
+ import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CancellationException;
+ import java.util.concurrent.CompletionStage;
+ import java.util.concurrent.Executor;
++import java.util.concurrent.CompletionException;
+ import java.util.function.IntConsumer;
+ import java.util.function.IntSupplier;
+ import javax.annotation.Nullable;
+@@ -28,10 +30,15 @@ import net.minecraft.world.level.chunk.LevelChunk;
+ import net.minecraft.world.level.chunk.LevelChunkSection;
+ import net.minecraft.world.level.chunk.status.ChunkStatus;
+ import net.minecraft.world.level.lighting.LevelLightEngine;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ public class ChunkHolder extends GenerationChunkHolder {
+     public static final ChunkResult<LevelChunk> UNLOADED_LEVEL_CHUNK = ChunkResult.error("Unloaded level chunk");
+     private static final CompletableFuture<ChunkResult<LevelChunk>> UNLOADED_LEVEL_CHUNK_FUTURE = CompletableFuture.completedFuture(UNLOADED_LEVEL_CHUNK);
++    private static int webNullLevelChunkResultLogs;
++    private static int webUpdateFuturesLogs;
++    private static int webChunkToSendGlobalLogs;
+     private final LevelHeightAccessor levelHeightAccessor;
+     private volatile CompletableFuture<ChunkResult<LevelChunk>> fullChunkFuture = UNLOADED_LEVEL_CHUNK_FUTURE;
+     private volatile CompletableFuture<ChunkResult<LevelChunk>> tickingChunkFuture = UNLOADED_LEVEL_CHUNK_FUTURE;
+@@ -51,6 +58,20 @@ public class ChunkHolder extends GenerationChunkHolder {
+     private CompletableFuture<?> sendSync = CompletableFuture.completedFuture(null);
+     private CompletableFuture<?> saveSync = CompletableFuture.completedFuture(null);
+ 
++    private static int webLogLimit(int p_410638_, int p_410719_) {
++        return WebDiagnostics.enabled() ? p_410638_ : p_410719_;
++    }
++
++    private static boolean isWebChunkTicketDiagLevel(int p_410420_) {
++        return p_410420_ >= 34 && p_410420_ <= 36;
++    }
++
++    private boolean shouldLogWebChunkTicketDiag() {
++        return BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && (isWebChunkTicketDiagLevel(this.oldTicketLevel) || isWebChunkTicketDiagLevel(this.ticketLevel));
++    }
++
+     public ChunkHolder(
+         ChunkPos p_142986_,
+         int p_142987_,
+@@ -85,12 +106,143 @@ public class ChunkHolder extends GenerationChunkHolder {
+ 
+     @Nullable
+     public LevelChunk getTickingChunk() {
+-        return this.getTickingChunkFuture().getNow(UNLOADED_LEVEL_CHUNK).orElse(null);
++        return getLevelChunkNow(this.getTickingChunkFuture(), UNLOADED_LEVEL_CHUNK, this.getPos(), "getTickingChunk");
+     }
+ 
+     @Nullable
+     public LevelChunk getChunkToSend() {
+-        return !this.sendSync.isDone() ? null : this.getTickingChunk();
++        boolean allowExperimentalFallback = BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN;
++        if (!this.sendSync.isDone() && !allowExperimentalFallback) {
++            if (BuildFlags.WEB_RUNTIME && webChunkToSendGlobalLogs < webLogLimit(64, 4)) {
++                webChunkToSendGlobalLogs++;
++                ChunkPos chunkpos = this.getPos();
++                System.err.println(
++                    "[mc-web/serverchunks] chunkToSend.reject chunk="
++                        + chunkpos.x
++                        + ","
++                        + chunkpos.z
++                        + " reason=sendSyncPending sendSyncDone="
++                        + this.sendSync.isDone()
++                        + " tickingFuture="
++                        + describeLevelChunkFuture(this.tickingChunkFuture)
++                        + " fullFuture="
++                        + describeLevelChunkFuture(this.fullChunkFuture)
++                        + " ticket="
++                        + this.ticketLevel
++                        + " queueLevel="
++                        + this.queueLevel
++                        + " fullStatus="
++                        + this.getFullStatus()
++                        + " latestStatus="
++                        + this.getLatestStatus()
++                );
++            }
++            return null;
++        } else {
++            LevelChunk levelchunk = this.getTickingChunk();
++            String source = "ticking";
++            if (levelchunk == null && allowExperimentalFallback) {
++                levelchunk = getLevelChunkNow(this.getFullChunkFuture(), UNLOADED_LEVEL_CHUNK, this.getPos(), "getChunkToSend.fullFallback");
++                source = "full";
++            }
++
++            if (BuildFlags.WEB_RUNTIME && webChunkToSendGlobalLogs < webLogLimit(64, 4) && levelchunk == null) {
++                webChunkToSendGlobalLogs++;
++                ChunkPos chunkpos = this.getPos();
++                System.err.println(
++                    "[mc-web/serverchunks] chunkToSend.reject chunk="
++                        + chunkpos.x
++                        + ","
++                        + chunkpos.z
++                        + " reason=noReadyChunk source="
++                        + source
++                        + " sendSyncDone="
++                        + this.sendSync.isDone()
++                        + " tickingFuture="
++                        + describeLevelChunkFuture(this.tickingChunkFuture)
++                        + " fullFuture="
++                        + describeLevelChunkFuture(this.fullChunkFuture)
++                        + " ticket="
++                        + this.ticketLevel
++                        + " queueLevel="
++                        + this.queueLevel
++                        + " fullStatus="
++                        + this.getFullStatus()
++                        + " latestStatus="
++                        + this.getLatestStatus()
++                );
++            }
++
++            return levelchunk;
++        }
++    }
++
++    public String getWebChunkSendDebug() {
++        ChunkPos chunkpos = this.getPos();
++        return "chunk="
++            + chunkpos.x
++            + ","
++            + chunkpos.z
++            + " sendSyncDone="
++            + this.sendSync.isDone()
++            + " tickingFuture="
++            + describeLevelChunkFuture(this.tickingChunkFuture)
++            + " fullFuture="
++            + describeLevelChunkFuture(this.fullChunkFuture)
++            + " ticket="
++            + this.ticketLevel
++            + " queueLevel="
++            + this.queueLevel
++            + " fullStatus="
++            + this.getFullStatus()
++            + " latestStatus="
++            + this.getLatestStatus();
++    }
++
++    private static String describeLevelChunkFuture(CompletableFuture<ChunkResult<LevelChunk>> p_400001_) {
++        if (!p_400001_.isDone()) {
++            return "pending";
++        } else {
++            try {
++                ChunkResult<LevelChunk> chunkresult = p_400001_.getNow(null);
++                if (chunkresult == null) {
++                    return "done-null";
++                } else {
++                    LevelChunk levelchunk = chunkresult.orElse(null);
++                    return levelchunk == null ? "unloaded" : "ready";
++                }
++            } catch (CompletionException completionexception) {
++                Throwable throwable = completionexception.getCause();
++                return "failed:" + (throwable == null ? completionexception.getClass().getSimpleName() : throwable.getClass().getSimpleName());
++            } catch (CancellationException cancellationexception) {
++                return "cancelled";
++            }
++        }
++    }
++
++    @Nullable
++    private static LevelChunk getLevelChunkNow(
++        CompletableFuture<ChunkResult<LevelChunk>> p_411242_, ChunkResult<LevelChunk> p_410569_, ChunkPos p_411319_, String p_410607_
++    ) {
++        ChunkResult<LevelChunk> chunkresult = p_411242_.getNow(p_410569_);
++        if (chunkresult == null) {
++            if (BuildFlags.WEB_RUNTIME && webNullLevelChunkResultLogs < webLogLimit(64, 8)) {
++                webNullLevelChunkResultLogs++;
++                System.err.println(
++                    "[mc-web/chunkfuture] null level chunk result context="
++                        + p_410607_
++                        + " chunk="
++                        + p_411319_.x
++                        + ","
++                        + p_411319_.z
++                        + " futureDone="
++                        + p_411242_.isDone()
++                );
++            }
++            return null;
++        } else {
++            return chunkresult.orElse(null);
++        }
+     }
+ 
+     public CompletableFuture<?> getSendSyncFuture() {
+@@ -275,9 +427,45 @@ public class ChunkHolder extends GenerationChunkHolder {
+         FullChunkStatus fullchunkstatus1 = ChunkLevel.fullStatus(this.ticketLevel);
+         boolean flag = fullchunkstatus.isOrAfter(FullChunkStatus.FULL);
+         boolean flag1 = fullchunkstatus1.isOrAfter(FullChunkStatus.FULL);
++        if (this.shouldLogWebChunkTicketDiag() && this.oldTicketLevel != this.ticketLevel && webUpdateFuturesLogs < webLogLimit(48, 4)) {
++            webUpdateFuturesLogs++;
++            System.out.println(
++                "[mc-web/serverchunks] updateFutures chunk="
++                    + this.getPos().x
++                    + ","
++                    + this.getPos().z
++                    + " oldTicket="
++                    + this.oldTicketLevel
++                    + " newTicket="
++                    + this.ticketLevel
++                    + " oldFull="
++                    + fullchunkstatus
++                    + " newFull="
++                    + fullchunkstatus1
++                    + " queueLevel="
++                    + this.queueLevel
++                    + " latest="
++                    + this.getLatestStatus()
++            );
++        }
+         this.wasAccessibleSinceLastSave |= flag1;
+         if (!flag && flag1) {
+             this.fullChunkFuture = p_143004_.prepareAccessibleChunk(this);
++            if (this.shouldLogWebChunkTicketDiag() && webUpdateFuturesLogs < webLogLimit(48, 4)) {
++                webUpdateFuturesLogs++;
++                System.out.println(
++                    "[mc-web/serverchunks] schedule fullFuture chunk="
++                        + this.getPos().x
++                        + ","
++                        + this.getPos().z
++                        + " futureDone="
++                        + this.fullChunkFuture.isDone()
++                        + " ticket="
++                        + this.ticketLevel
++                        + " queueLevel="
++                        + this.queueLevel
++                );
++            }
+             this.scheduleFullChunkPromotion(p_143004_, this.fullChunkFuture, p_143005_, FullChunkStatus.FULL);
+             this.addSaveDependency(this.fullChunkFuture);
+         }
+@@ -291,6 +479,21 @@ public class ChunkHolder extends GenerationChunkHolder {
+         boolean flag3 = fullchunkstatus1.isOrAfter(FullChunkStatus.BLOCK_TICKING);
+         if (!flag2 && flag3) {
+             this.tickingChunkFuture = p_143004_.prepareTickingChunk(this);
++            if (this.shouldLogWebChunkTicketDiag() && webUpdateFuturesLogs < webLogLimit(48, 4)) {
++                webUpdateFuturesLogs++;
++                System.out.println(
++                    "[mc-web/serverchunks] schedule tickingFuture chunk="
++                        + this.getPos().x
++                        + ","
++                        + this.getPos().z
++                        + " futureDone="
++                        + this.tickingChunkFuture.isDone()
++                        + " ticket="
++                        + this.ticketLevel
++                        + " queueLevel="
++                        + this.queueLevel
++                );
++            }
+             this.scheduleFullChunkPromotion(p_143004_, this.tickingChunkFuture, p_143005_, FullChunkStatus.BLOCK_TICKING);
+             this.addSaveDependency(this.tickingChunkFuture);
+         }
+@@ -308,6 +511,21 @@ public class ChunkHolder extends GenerationChunkHolder {
+             }
+ 
+             this.entityTickingChunkFuture = p_143004_.prepareEntityTickingChunk(this);
++            if (this.shouldLogWebChunkTicketDiag() && webUpdateFuturesLogs < webLogLimit(48, 4)) {
++                webUpdateFuturesLogs++;
++                System.out.println(
++                    "[mc-web/serverchunks] schedule entityFuture chunk="
++                        + this.getPos().x
++                        + ","
++                        + this.getPos().z
++                        + " futureDone="
++                        + this.entityTickingChunkFuture.isDone()
++                        + " ticket="
++                        + this.ticketLevel
++                        + " queueLevel="
++                        + this.queueLevel
++                );
++            }
+             this.scheduleFullChunkPromotion(p_143004_, this.entityTickingChunkFuture, p_143005_, FullChunkStatus.ENTITY_TICKING);
+             this.addSaveDependency(this.entityTickingChunkFuture);
+         }
+@@ -341,4 +559,4 @@ public class ChunkHolder extends GenerationChunkHolder {
+     public interface PlayerProvider {
+         List<ServerPlayer> getPlayers(ChunkPos p_183717_, boolean p_183718_);
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,71 @@
+--- a/net/minecraft/world/level/chunk/LevelChunkSection.java
++++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
+@@ -12,6 +12,7 @@
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.material.FluidState;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class LevelChunkSection {
+     public static final int SECTION_WIDTH = 16;
+@@ -187,20 +188,52 @@
+ 
+     public void fillBiomesFromNoise(BiomeResolver p_282075_, Climate.Sampler p_283084_, int p_282310_, int p_281510_, int p_283057_) {
+         PalettedContainer<Holder<Biome>> palettedcontainer = this.biomes.recreate();
+-        int i = 4;
+ 
+-        for (int j = 0; j < 4; j++) {
+-            for (int k = 0; k < 4; k++) {
+-                for (int l = 0; l < 4; l++) {
+-                    palettedcontainer.getAndSetUnchecked(j, k, l, p_282075_.getNoiseBiome(p_282310_ + j, p_281510_ + k, p_283057_ + l, p_283084_));
++        try {
++            for (int j = 0; j < 4; j++) {
++                for (int k = 0; k < 4; k++) {
++                    for (int l = 0; l < 4; l++) {
++                        // Use set(...) instead of getAndSetUnchecked(...) so biome init never
++                        // reads back partially-initialized palette ids during resize.
++                        palettedcontainer.set(j, k, l, p_282075_.getNoiseBiome(p_282310_ + j, p_281510_ + k, p_283057_ + l, p_283084_));
++                    }
++                }
++            }
++            this.biomes = palettedcontainer;
++        } catch (RuntimeException exception) {
++            if (!BuildFlags.WEB_RUNTIME || !isRecoverableWebBiomeFillFailure(exception)) {
++                throw exception;
++            }
++
++            Holder<Biome> holder = this.biomes.get(0, 0, 0);
++            PalettedContainer<Holder<Biome>> fallback = this.biomes.recreate();
++            for (int j = 0; j < 4; j++) {
++                for (int k = 0; k < 4; k++) {
++                    for (int l = 0; l < 4; l++) {
++                        fallback.set(j, k, l, holder);
++                    }
+                 }
+             }
++            this.biomes = fallback;
++            System.err.println(
++                "[mc-web/biomes] fillBiomesFromNoise fallback sectionQuartY="
++                    + p_281510_
++                    + " chunkQuartX="
++                    + p_282310_
++                    + " chunkQuartZ="
++                    + p_283057_
++                    + " cause="
++                    + exception
++            );
+         }
++    }
+ 
+-        this.biomes = palettedcontainer;
++    private static boolean isRecoverableWebBiomeFillFailure(Throwable throwable) {
++        String message = String.valueOf(throwable);
++        return message.contains("MissingPaletteEntryException") || message.contains("Missing Palette entry");
+     }
+ 
+     public LevelChunkSection copy() {
+         return new LevelChunkSection(this);
+     }
+-}
+\ No newline at end of file
++}

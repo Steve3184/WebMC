@@ -1,0 +1,24 @@
+--- a/net/minecraft/server/network/CommonListenerCookie.java
++++ b/net/minecraft/server/network/CommonListenerCookie.java
+@@ -1,10 +1,19 @@
+ package net.minecraft.server.network;
+ 
+ import com.mojang.authlib.GameProfile;
++import net.minecraft.core.UUIDUtil;
+ import net.minecraft.server.level.ClientInformation;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public record CommonListenerCookie(GameProfile gameProfile, int latency, ClientInformation clientInformation, boolean transferred) {
++    public CommonListenerCookie {
++        if (!BuildFlags.WEB_RUNTIME && gameProfile != null && gameProfile.getId() == null) {
++            gameProfile = UUIDUtil.createOfflineProfile(gameProfile.getName());
++            System.out.println("[mc-web/loopback] commonCookie.repairedProfile " + gameProfile.getName() + " " + gameProfile.getId());
++        }
++    }
++
+     public static CommonListenerCookie createInitial(GameProfile p_297256_, boolean p_335270_) {
+         return new CommonListenerCookie(p_297256_, 0, ClientInformation.createDefault(), p_335270_);
+     }
+-}
+\ No newline at end of file
++}

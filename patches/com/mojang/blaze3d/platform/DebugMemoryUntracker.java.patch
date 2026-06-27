@@ -1,0 +1,29 @@
+--- a/com/mojang/blaze3d/platform/DebugMemoryUntracker.java
++++ b/com/mojang/blaze3d/platform/DebugMemoryUntracker.java
+@@ -12,21 +12,12 @@
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class DebugMemoryUntracker {
++    // mc-web: we have no LWJGL DebugAllocator, so the original reflection
++    // chain fails with ClassNotFoundException at the top of class init and
++    // takes the whole boot down. Disable untrack altogether — it's purely a
++    // diagnostic for native LWJGL leak tracking and a no-op is correct here.
+     @Nullable
+-    private static final MethodHandle UNTRACK = GLX.make(() -> {
+-        try {
+-            Lookup lookup = MethodHandles.lookup();
+-            Class<?> oclass = Class.forName("org.lwjgl.system.MemoryManage$DebugAllocator");
+-            Method method = oclass.getDeclaredMethod("untrack", long.class);
+-            method.setAccessible(true);
+-            Field field = Class.forName("org.lwjgl.system.MemoryUtil$LazyInit").getDeclaredField("ALLOCATOR");
+-            field.setAccessible(true);
+-            Object object = field.get(null);
+-            return oclass.isInstance(object) ? lookup.unreflect(method) : null;
+-        } catch (NoSuchMethodException | NoSuchFieldException | IllegalAccessException | ClassNotFoundException classnotfoundexception) {
+-            throw new RuntimeException(classnotfoundexception);
+-        }
+-    });
++    private static final MethodHandle UNTRACK = null;
+ 
+     public static void untrack(long p_84002_) {
+         if (UNTRACK != null) {

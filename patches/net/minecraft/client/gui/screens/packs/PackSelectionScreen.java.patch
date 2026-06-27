@@ -1,0 +1,23 @@
+--- a/net/minecraft/client/gui/screens/packs/PackSelectionScreen.java
++++ b/net/minecraft/client/gui/screens/packs/PackSelectionScreen.java
+@@ -4,6 +4,7 @@
+ import com.google.common.hash.Hashing;
+ import com.mojang.blaze3d.platform.NativeImage;
+ import com.mojang.logging.LogUtils;
++import java.io.File;
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.nio.file.DirectoryStream;
+@@ -326,8 +327,10 @@
+             try {
+                 this.watchDir(p_250327_);
+ 
+-                try (DirectoryStream<Path> directorystream = Files.newDirectoryStream(p_250327_)) {
+-                    for (Path path : directorystream) {
++                File[] children = p_250327_.toFile().listFiles();
++                if (children != null) {
++                    for (File child : children) {
++                        Path path = child.toPath();
+                         if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                             this.watchDir(path);
+                         }

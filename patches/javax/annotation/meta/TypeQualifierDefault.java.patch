@@ -1,0 +1,6 @@
+--- a/javax/annotation/meta/TypeQualifierDefault.java
++++ b/javax/annotation/meta/TypeQualifierDefault.java
+@@ -0,0 +1,3 @@
++package javax.annotation.meta;
++import java.lang.annotation.ElementType;
++public @interface TypeQualifierDefault { ElementType[] value(); }

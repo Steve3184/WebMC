@@ -1,0 +1,5 @@
+--- a/javax/annotation/Nullable.java
++++ b/javax/annotation/Nullable.java
+@@ -0,0 +1,2 @@
++package javax.annotation;
++public @interface Nullable {}

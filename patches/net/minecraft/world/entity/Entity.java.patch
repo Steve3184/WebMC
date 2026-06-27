@@ -1,0 +1,175 @@
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index 4d8e4a7..c414510 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -147,6 +147,8 @@ import net.minecraft.world.scores.Team;
+ import net.minecraft.world.waypoints.WaypointTransmitter;
+ import org.jetbrains.annotations.Contract;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess, ScoreHolder, DataComponentGetter {
+     private static final Logger LOGGER = LogUtils.getLogger();
+@@ -282,12 +284,16 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+     private CustomData customData = CustomData.EMPTY;
+ 
+     public Entity(EntityType<?> p_19870_, Level p_19871_) {
++        if (WebDiagnostics.enabled()) {
++            WebDiagnostics.log("[mc-web/ctor] Entity.begin type=" + (p_19870_ == null ? "<null>" : p_19870_.toString()));
++        }
+         this.type = p_19870_;
+         this.level = p_19871_;
+         this.dimensions = p_19870_.getDimensions();
+         this.position = Vec3.ZERO;
+         this.blockPosition = BlockPos.ZERO;
+         this.chunkPosition = ChunkPos.ZERO;
++        WebDiagnostics.log("[mc-web/ctor] Entity.beforeSynchedData");
+         SynchedEntityData.Builder synchedentitydata$builder = new SynchedEntityData.Builder(this);
+         synchedentitydata$builder.define(DATA_SHARED_FLAGS_ID, (byte)0);
+         synchedentitydata$builder.define(DATA_AIR_SUPPLY_ID, this.getMaxAirSupply());
+@@ -299,8 +305,10 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+         synchedentitydata$builder.define(DATA_TICKS_FROZEN, 0);
+         this.defineSynchedData(synchedentitydata$builder);
+         this.entityData = synchedentitydata$builder.build();
++        WebDiagnostics.log("[mc-web/ctor] Entity.afterSynchedData");
+         this.setPos(0.0, 0.0, 0.0);
+         this.eyeHeight = this.dimensions.eyeHeight();
++        WebDiagnostics.log("[mc-web/ctor] Entity.end");
+     }
+ 
+     public boolean isColliding(BlockPos p_20040_, BlockState p_20041_) {
+@@ -471,58 +479,84 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+     }
+ 
+     public void baseTick() {
+-        ProfilerFiller profilerfiller = Profiler.get();
+-        profilerfiller.push("entityBaseTick");
+-        this.inBlockState = null;
+-        if (this.isPassenger() && this.getVehicle().isRemoved()) {
+-            this.stopRiding();
+-        }
++        String webBaseTickStage = "start";
++        try {
++            ProfilerFiller profilerfiller = Profiler.get();
++            profilerfiller.push("entityBaseTick");
++            this.inBlockState = null;
++            webBaseTickStage = "after-reset";
++            if (this.isPassenger() && this.getVehicle().isRemoved()) {
++                this.stopRiding();
++            }
+ 
+-        if (this.boardingCooldown > 0) {
+-            this.boardingCooldown--;
+-        }
++            if (this.boardingCooldown > 0) {
++                this.boardingCooldown--;
++            }
+ 
+-        this.handlePortal();
+-        if (this.canSpawnSprintParticle()) {
+-            this.spawnSprintParticle();
+-        }
++            webBaseTickStage = "handlePortal";
++            this.handlePortal();
++            webBaseTickStage = "spawnSprintParticle";
++            if (this.canSpawnSprintParticle()) {
++                this.spawnSprintParticle();
++            }
+ 
+-        this.wasInPowderSnow = this.isInPowderSnow;
+-        this.isInPowderSnow = false;
+-        this.updateInWaterStateAndDoFluidPushing();
+-        this.updateFluidOnEyes();
+-        this.updateSwimming();
+-        if (this.level() instanceof ServerLevel serverlevel) {
+-            if (this.remainingFireTicks > 0) {
+-                if (this.fireImmune()) {
+-                    this.setRemainingFireTicks(this.remainingFireTicks - 4);
+-                } else {
+-                    if (this.remainingFireTicks % 20 == 0 && !this.isInLava()) {
+-                        this.hurtServer(serverlevel, this.damageSources().onFire(), 1.0F);
+-                    }
++            this.wasInPowderSnow = this.isInPowderSnow;
++            this.isInPowderSnow = false;
++            webBaseTickStage = "waterPush";
++            this.updateInWaterStateAndDoFluidPushing();
++            webBaseTickStage = "fluidEyes";
++            this.updateFluidOnEyes();
++            webBaseTickStage = "swimming";
++            this.updateSwimming();
++            webBaseTickStage = "fireTicks";
++            if (this.level() instanceof ServerLevel serverlevel) {
++                if (this.remainingFireTicks > 0) {
++                    if (this.fireImmune()) {
++                        this.setRemainingFireTicks(this.remainingFireTicks - 4);
++                    } else {
++                        if (this.remainingFireTicks % 20 == 0 && !this.isInLava()) {
++                            this.hurtServer(serverlevel, this.damageSources().onFire(), 1.0F);
++                        }
+ 
+-                    this.setRemainingFireTicks(this.remainingFireTicks - 1);
++                        this.setRemainingFireTicks(this.remainingFireTicks - 1);
++                    }
+                 }
++            } else {
++                this.clearFire();
+             }
+-        } else {
+-            this.clearFire();
+-        }
+ 
+-        if (this.isInLava()) {
+-            this.fallDistance *= 0.5;
+-        }
++            webBaseTickStage = "lava";
++            if (this.isInLava()) {
++                this.fallDistance *= 0.5;
++            }
+ 
+-        this.checkBelowWorld();
+-        if (!this.level().isClientSide) {
+-            this.setSharedFlagOnFire(this.remainingFireTicks > 0);
+-        }
++            webBaseTickStage = "belowWorld";
++            this.checkBelowWorld();
++            webBaseTickStage = "fireFlag";
++            if (!this.level().isClientSide) {
++                this.setSharedFlagOnFire(this.remainingFireTicks > 0);
++            }
+ 
+-        this.firstTick = false;
+-        if (this.level() instanceof ServerLevel serverlevel1 && this instanceof Leashable) {
+-            Leashable.tickLeash(serverlevel1, (Entity & Leashable)this);
+-        }
++            this.firstTick = false;
++            webBaseTickStage = "leash";
++            if (this.level() instanceof ServerLevel serverlevel1 && this instanceof Leashable) {
++                Leashable.tickLeash(serverlevel1, (Entity & Leashable)this);
++            }
+ 
+-        profilerfiller.pop();
++            profilerfiller.pop();
++        } catch (Throwable throwable) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println(
++                    "[mc-web/entity] baseTick caught stage="
++                        + webBaseTickStage
++                        + " "
++                        + throwable.getClass().getName()
++                        + ": "
++                        + throwable.getMessage()
++                );
++            }
++            throw throwable;
++        }
+     }
+ 
+     public void setSharedFlagOnFire(boolean p_146869_) {
+@@ -4029,4 +4063,4 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+             return this.save;
+         }
+     }
+-}
+\ No newline at end of file
++}

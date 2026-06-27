@@ -1,0 +1,73 @@
+--- a/net/minecraft/client/gui/screens/WebExperimentalWorldLoadScreen.java
++++ b/net/minecraft/client/gui/screens/WebExperimentalWorldLoadScreen.java
+@@ -0,0 +1,70 @@
++package net.minecraft.client.gui.screens;
++
++import javax.annotation.Nullable;
++import net.minecraft.client.gui.GuiGraphics;
++import net.minecraft.client.gui.components.Button;
++import net.minecraft.network.chat.CommonComponents;
++import net.minecraft.network.chat.Component;
++import net.minecraftforge.api.distmarker.Dist;
++import net.minecraftforge.api.distmarker.OnlyIn;
++
++@OnlyIn(Dist.CLIENT)
++public class WebExperimentalWorldLoadScreen extends Screen {
++    public static record ProbeResult(boolean ok, String stage, String detail, @Nullable String levelId) {
++    }
++
++    private static enum ProbeState {
++        REQUESTED,
++        RUNNING,
++        SUCCESS,
++        FAILURE;
++    }
++
++    @Nullable
++    private final Screen returnScreen;
++    private final String worldName;
++    private ProbeState state = ProbeState.REQUESTED;
++    private String statusLine = "Startup probe requested";
++    private String detail = "Waiting for startup probe.";
++
++    public WebExperimentalWorldLoadScreen(String p_410100_, @Nullable Screen p_410101_) {
++        super(Component.literal("Experimental World Startup"));
++        this.worldName = p_410100_;
++        this.returnScreen = p_410101_;
++    }
++
++    @Override
++    protected void init() {
++        System.out.println("[mc-web/worldload] experimental screen init: " + this.worldName);
++        this.addRenderableWidget(
++            Button.builder(CommonComponents.GUI_BACK, p_410102_ -> this.minecraft.setScreen(this.returnScreen))
++                .bounds(this.width / 2 - 100, this.height - 28, 200, 20)
++                .build()
++        );
++    }
++
++    public void setProbeState(String p_410110_, String p_410111_) {
++        this.statusLine = p_410110_;
++        this.detail = p_410111_;
++    }
++
++    public void applyProbeResult(ProbeResult p_410112_) {
++        this.state = p_410112_.ok() ? ProbeState.SUCCESS : ProbeState.FAILURE;
++        this.setProbeState(p_410112_.ok() ? "Startup probe completed" : "Startup probe failed", p_410112_.detail());
++    }
++
++    @Override
++    public void render(GuiGraphics p_410103_, int p_410104_, int p_410105_, float p_410106_) {
++        super.render(p_410103_, p_410104_, p_410105_, p_410106_);
++        p_410103_.drawCenteredString(this.font, this.title, this.width / 2, this.height / 2 - 52, -1);
++        p_410103_.drawCenteredString(this.font, Component.literal("Target world: " + this.worldName), this.width / 2, this.height / 2 - 28, -1);
++        p_410103_.drawCenteredString(this.font, Component.literal("State: " + this.state.name()), this.width / 2, this.height / 2 - 6, -1);
++        p_410103_.drawCenteredString(this.font, Component.literal(this.statusLine), this.width / 2, this.height / 2 + 12, -1);
++        p_410103_.drawCenteredString(this.font, Component.literal(this.detail), this.width / 2, this.height / 2 + 16, -1);
++    }
++
++    @Override
++    public boolean shouldCloseOnEsc() {
++        return true;
++    }
++}

@@ -1,0 +1,132 @@
+diff --git a/net/minecraft/client/multiplayer/LevelLoadStatusManager.java b/net/minecraft/client/multiplayer/LevelLoadStatusManager.java
+index 26f651d..c04044c 100644
+--- a/net/minecraft/client/multiplayer/LevelLoadStatusManager.java
++++ b/net/minecraft/client/multiplayer/LevelLoadStatusManager.java
+@@ -5,6 +5,8 @@ import net.minecraft.client.renderer.LevelRenderer;
+ import net.minecraft.core.BlockPos;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class LevelLoadStatusManager {
+@@ -12,6 +14,9 @@ public class LevelLoadStatusManager {
+     private final ClientLevel level;
+     private final LevelRenderer levelRenderer;
+     private LevelLoadStatusManager.Status status = LevelLoadStatusManager.Status.WAITING_FOR_SERVER;
++    private int webSectionProbeLogs;
++    private int webTickTraceLogs;
++    private boolean webLoggedCompiledProbe;
+ 
+     public LevelLoadStatusManager(LocalPlayer p_312813_, ClientLevel p_310113_, LevelRenderer p_311686_) {
+         this.player = p_312813_;
+@@ -22,13 +27,72 @@ public class LevelLoadStatusManager {
+     public void tick() {
+         switch (this.status) {
+             case WAITING_FOR_PLAYER_CHUNK:
++                boolean webLogTickTrace = WebDiagnostics.enabled() && this.webTickTraceLogs++ < 2;
++                if (webLogTickTrace) {
++                    WebDiagnostics.log("[mc-web/clienttick] levelLoadStatusManager.step=blockPosition.begin");
++                }
+                 BlockPos blockpos = this.player.blockPosition();
++                if (webLogTickTrace) {
++                    WebDiagnostics.log("[mc-web/clienttick] levelLoadStatusManager.step=blockPosition.end " + blockpos);
++                    WebDiagnostics.log("[mc-web/clienttick] levelLoadStatusManager.step=isOutsideBuildHeight.begin");
++                }
+                 boolean flag = this.level.isOutsideBuildHeight(blockpos.getY());
+-                if (flag || this.levelRenderer.isSectionCompiled(blockpos) || this.player.isSpectator() || !this.player.isAlive()) {
++                if (webLogTickTrace) {
++                    WebDiagnostics.log("[mc-web/clienttick] levelLoadStatusManager.step=isOutsideBuildHeight.end " + flag);
++                    WebDiagnostics.log("[mc-web/clienttick] levelLoadStatusManager.step=isSectionCompiled.begin");
++                }
++                boolean sectionCompiled = this.levelRenderer.isSectionCompiled(blockpos);
++                boolean sectionRenderable = this.levelRenderer.isSectionRenderable(blockpos);
++                if (webLogTickTrace) {
++                    WebDiagnostics.log(
++                        "[mc-web/clienttick] levelLoadStatusManager.step=isSectionCompiled.end "
++                            + sectionCompiled
++                            + " sectionRenderable="
++                            + sectionRenderable
++                            + " renderedSections="
++                            + this.levelRenderer.countRenderedSections()
++                    );
++                    if (((!sectionCompiled || !this.webLoggedCompiledProbe) || this.webSectionProbeLogs < 2) && this.webSectionProbeLogs < 4) {
++                        this.webSectionProbeLogs++;
++                        if (sectionCompiled || sectionRenderable) {
++                            this.webLoggedCompiledProbe = true;
++                        }
++                        WebDiagnostics.log(
++                            "[mc-web/clienttick] levelLoadStatusManager.sectionProbe pos="
++                                + blockpos
++                                + " "
++                                + this.levelRenderer.getSectionCompileProbe(blockpos)
++                        );
++                    }
++                }
++                if (BuildFlags.WEB_RUNTIME) {
++                    boolean terrainReady = this.levelRenderer.hasWebTerrainReady();
++                    if (flag || terrainReady || this.player.isSpectator() || !this.player.isAlive()) {
++                        this.status = LevelLoadStatusManager.Status.LEVEL_READY;
++                        WebDiagnostics.log(
++                            "[mc-web/clienttick] levelLoadStatusManager.levelReady sectionCompiled="
++                                + sectionCompiled
++                                + " sectionRenderable="
++                                + sectionRenderable
++                                + " renderedSections="
++                                + this.levelRenderer.countRenderedSections()
++                                + " requiredRenderedSections="
++                                + this.levelRenderer.getRequiredWebRenderedSections()
++                                + " outside="
++                                + flag
++                                + " terrainReady="
++                                + terrainReady
++                        );
++                    }
++                    break;
++                }
++                if (flag || sectionCompiled || this.player.isSpectator() || !this.player.isAlive()) {
+                     this.status = LevelLoadStatusManager.Status.LEVEL_READY;
+                 }
++                break;
+             case WAITING_FOR_SERVER:
+             case LEVEL_READY:
++                break;
+         }
+     }
+ 
+@@ -36,6 +100,27 @@ public class LevelLoadStatusManager {
+         return this.status == LevelLoadStatusManager.Status.LEVEL_READY;
+     }
+ 
++    public boolean canSignalPlayerLoaded() {
++        return this.status == LevelLoadStatusManager.Status.LEVEL_READY;
++    }
++
++    public boolean markReadyFromRenderedContent(String source) {
++        if (this.status == LevelLoadStatusManager.Status.WAITING_FOR_PLAYER_CHUNK && BuildFlags.WEB_RUNTIME) {
++            if (this.levelRenderer.hasWebTerrainReady()) {
++                this.status = LevelLoadStatusManager.Status.LEVEL_READY;
++                WebDiagnostics.log(
++                    "[mc-web/clienttick] levelLoadStatusManager.levelReady source="
++                        + source
++                        + " renderedSections="
++                        + this.levelRenderer.countRenderedSections()
++                        + " requiredRenderedSections="
++                        + this.levelRenderer.getRequiredWebRenderedSections()
++                );
++            }
++        }
++        return this.status == LevelLoadStatusManager.Status.LEVEL_READY;
++    }
++
+     public void loadingPacketsReceived() {
+         if (this.status == LevelLoadStatusManager.Status.WAITING_FOR_SERVER) {
+             this.status = LevelLoadStatusManager.Status.WAITING_FOR_PLAYER_CHUNK;
+@@ -48,4 +133,4 @@ public class LevelLoadStatusManager {
+         WAITING_FOR_PLAYER_CHUNK,
+         LEVEL_READY;
+     }
+-}
+\ No newline at end of file
++}

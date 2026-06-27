@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebMC</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
+#canvas-container{position:absolute;top:0;left:0;width:100%;height:100%}
+#game-canvas{display:block;image-rendering:pixelated}
+#loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-family:monospace;font-size:16px;text-align:center}
+</style>
+</head>
+<body>
+<div id="canvas-container"><canvas id="game-canvas"></canvas></div>
+<div id="loading">Loading WebMC...<br><span id="progress">0%</span></div>
+<script src="vfs.js"></script>
+<script src="socket.js"></script>
+<script src="parts/part_000.js"></script>
+<script src="parts/part_001.js"></script>
+<script src="parts/part_002.js"></script>
+<script src="parts/part_003.js"></script>
+<script src="parts/part_004.js"></script>
+<script src="parts/part_005.js"></script>
+<script src="parts/part_006.js"></script>
+<script src="parts/part_007.js"></script>
+<script src="parts/part_008.js"></script>
+<script src="parts/part_009.js"></script>
+<script src="parts/part_010.js"></script>
+<script src="parts/part_011.js"></script>
+<script src="parts/part_012.js"></script>
+<script src="parts/part_013.js"></script>
+<script src="parts/part_014.js"></script>
+<script src="parts/part_015.js"></script>
+<script>
+document.getElementById('loading').style.display = 'none';
+</script>
+</body>
+</html>

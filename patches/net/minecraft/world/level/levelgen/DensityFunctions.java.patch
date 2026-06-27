@@ -1,0 +1,40 @@
+--- a/net/minecraft/world/level/levelgen/DensityFunctions.java
++++ b/net/minecraft/world/level/levelgen/DensityFunctions.java
+@@ -29,18 +29,20 @@
+ import org.slf4j.Logger;
+ 
+ public final class DensityFunctions {
+-    private static final Codec<DensityFunction> CODEC = BuiltInRegistries.DENSITY_FUNCTION_TYPE
+-        .byNameCodec()
+-        .dispatch(p_327452_ -> p_327452_.codec().codec(), Function.identity());
++    private static final Codec<DensityFunction> CODEC = Codec.lazyInitialized(
++        () -> BuiltInRegistries.DENSITY_FUNCTION_TYPE.byNameCodec().dispatch(p_327452_ -> p_327452_.codec().codec(), Function.identity())
++    );
+     protected static final double MAX_REASONABLE_NOISE_VALUE = 1000000.0;
+     static final Codec<Double> NOISE_VALUE_CODEC = Codec.doubleRange(-1000000.0, 1000000.0);
+-    public static final Codec<DensityFunction> DIRECT_CODEC = Codec.either(NOISE_VALUE_CODEC, CODEC)
+-        .xmap(
+-            p_224023_ -> p_224023_.map(DensityFunctions::constant, Function.identity()),
+-            p_224051_ -> p_224051_ instanceof DensityFunctions.Constant densityfunctions$constant
+-                ? Either.left(densityfunctions$constant.value())
+-                : Either.right(p_224051_)
+-        );
++    public static final Codec<DensityFunction> DIRECT_CODEC = Codec.lazyInitialized(
++        () -> Codec.either(NOISE_VALUE_CODEC, CODEC)
++                .xmap(
++                    p_224023_ -> p_224023_.map(DensityFunctions::constant, Function.identity()),
++                    p_224051_ -> p_224051_ instanceof DensityFunctions.Constant densityfunctions$constant
++                        ? Either.left(densityfunctions$constant.value())
++                        : Either.right(p_224051_)
++                )
++    );
+ 
+     public static MapCodec<? extends DensityFunction> bootstrap(Registry<MapCodec<? extends DensityFunction>> p_208343_) {
+         register(p_208343_, "blend_alpha", DensityFunctions.BlendAlpha.CODEC);
+@@ -1460,4 +1462,4 @@
+             return CODEC;
+         }
+     }
+-}
+\ No newline at end of file
++}

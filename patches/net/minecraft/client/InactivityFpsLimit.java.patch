@@ -1,0 +1,36 @@
+--- a/net/minecraft/client/InactivityFpsLimit.java
++++ b/net/minecraft/client/InactivityFpsLimit.java
+@@ -5,13 +5,16 @@
+ import net.minecraft.util.StringRepresentable;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public enum InactivityFpsLimit implements OptionEnum, StringRepresentable {
+     MINIMIZED(0, "minimized", "options.inactivityFpsLimit.minimized"),
+     AFK(1, "afk", "options.inactivityFpsLimit.afk");
+ 
+-    public static final Codec<InactivityFpsLimit> CODEC = StringRepresentable.fromEnum(InactivityFpsLimit::values);
++    public static final Codec<InactivityFpsLimit> CODEC = BuildFlags.WEB_RUNTIME
++        ? Codec.INT.xmap(InactivityFpsLimit::byId, InactivityFpsLimit::getId)
++        : StringRepresentable.fromEnum(InactivityFpsLimit::values);
+     private final int id;
+     private final String serializedName;
+     private final String key;
+@@ -36,4 +39,13 @@
+     public String getSerializedName() {
+         return this.serializedName;
+     }
+-}
+\ No newline at end of file
++
++    private static InactivityFpsLimit byId(int id) {
++        for (InactivityFpsLimit value : values()) {
++            if (value.id == id) {
++                return value;
++            }
++        }
++        return AFK;
++    }
++}

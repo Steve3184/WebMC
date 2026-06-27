@@ -1,0 +1,154 @@
+--- a/net/minecraft/client/gui/screens/worldselection/WorldOpenFlows.java
++++ b/net/minecraft/client/gui/screens/worldselection/WorldOpenFlows.java
+@@ -64,6 +64,7 @@ import net.minecraft.world.level.validation.ContentValidationException;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class WorldOpenFlows {
+@@ -80,19 +81,70 @@ public class WorldOpenFlows {
+     public void createFreshLevel(
+         String p_233158_, LevelSettings p_233159_, WorldOptions p_249243_, Function<HolderLookup.Provider, WorldDimensions> p_249252_, Screen p_310233_
+     ) {
+-        this.minecraft.forceSetScreen(new GenericMessageScreen(Component.translatable("selectWorld.data_read")));
++        System.out.println("[mc-web/createfresh] begin levelId=" + p_233158_);
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            this.minecraft.setScreen(new GenericMessageScreen(Component.translatable("selectWorld.data_read")));
++        } else {
++            this.minecraft.forceSetScreen(new GenericMessageScreen(Component.translatable("selectWorld.data_read")));
++        }
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            this.deleteExistingExperimentalLevel(p_233158_);
++        }
+         LevelStorageSource.LevelStorageAccess levelstoragesource$levelstorageaccess = this.createWorldAccess(p_233158_);
+         if (levelstoragesource$levelstorageaccess != null) {
++            System.out.println("[mc-web/createfresh] access ok levelId=" + p_233158_);
+             PackRepository packrepository = ServerPacksSource.createPackRepository(levelstoragesource$levelstorageaccess);
+             WorldDataConfiguration worlddataconfiguration = p_233159_.getDataConfiguration();
+ 
+             try {
++                System.out.println("[mc-web/createfresh] prepare WorldLoader packConfig begin levelId=" + p_233158_);
+                 WorldLoader.PackConfig worldloader$packconfig = new WorldLoader.PackConfig(packrepository, worlddataconfiguration, false, false);
++                if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++                    System.out.println("[mc-web/createfresh] loadWorldDataAsync schedule levelId=" + p_233158_);
++                    this.loadWorldDataAsync(
++                            worldloader$packconfig,
++                            p_389327_ -> {
++                                System.out.println("[mc-web/createfresh] worldDataSupplier begin levelId=" + p_233158_);
++                                WorldDimensions.Complete worlddimensions$complete = p_249252_.apply(p_389327_.datapackWorldgen())
++                                    .bake(p_389327_.datapackDimensions().lookupOrThrow(Registries.LEVEL_STEM));
++                                System.out.println("[mc-web/createfresh] worldDataSupplier end levelId=" + p_233158_);
++                                return new WorldLoader.DataLoadOutput<>(
++                                    new PrimaryLevelData(p_233159_, p_249243_, worlddimensions$complete.specialWorldProperty(), worlddimensions$complete.lifecycle()),
++                                    worlddimensions$complete.dimensionsRegistryAccess()
++                                );
++                            },
++                            WorldStem::new
++                        )
++                        .whenCompleteAsync((p_410380_, p_410381_) -> {
++                            if (p_410381_ != null) {
++                                System.out.println(
++                                    "[mc-web/createfresh] failed levelId="
++                                        + p_233158_
++                                        + " "
++                                        + p_410381_.getClass().getSimpleName()
++                                        + ": "
++                                        + (p_410381_.getMessage() == null ? "<no message>" : p_410381_.getMessage())
++                                );
++                                LOGGER.warn("Failed to load datapacks, can't proceed with server load", p_410381_);
++                                levelstoragesource$levelstorageaccess.safeClose();
++                                this.minecraft.setScreen(p_310233_);
++                            } else {
++                                System.out.println("[mc-web/createfresh] loadWorldDataAsync end levelId=" + p_233158_);
++                                System.out.println("[mc-web/createfresh] doWorldLoad begin levelId=" + p_233158_);
++                                this.minecraft.doWorldLoad(levelstoragesource$levelstorageaccess, packrepository, p_410380_, true);
++                                System.out.println("[mc-web/createfresh] doWorldLoad returned levelId=" + p_233158_);
++                            }
++                        }, this.minecraft);
++                    return;
++                }
++                System.out.println("[mc-web/createfresh] loadWorldDataBlocking begin levelId=" + p_233158_);
+                 WorldStem worldstem = this.loadWorldDataBlocking(
+                     worldloader$packconfig,
+                     p_389327_ -> {
++                        System.out.println("[mc-web/createfresh] worldDataSupplier begin levelId=" + p_233158_);
+                         WorldDimensions.Complete worlddimensions$complete = p_249252_.apply(p_389327_.datapackWorldgen())
+                             .bake(p_389327_.datapackDimensions().lookupOrThrow(Registries.LEVEL_STEM));
++                        System.out.println("[mc-web/createfresh] worldDataSupplier end levelId=" + p_233158_);
+                         return new WorldLoader.DataLoadOutput<>(
+                             new PrimaryLevelData(p_233159_, p_249243_, worlddimensions$complete.specialWorldProperty(), worlddimensions$complete.lifecycle()),
+                             worlddimensions$complete.dimensionsRegistryAccess()
+@@ -100,8 +152,19 @@ public class WorldOpenFlows {
+                     },
+                     WorldStem::new
+                 );
++                System.out.println("[mc-web/createfresh] loadWorldDataBlocking end levelId=" + p_233158_);
++                System.out.println("[mc-web/createfresh] doWorldLoad begin levelId=" + p_233158_);
+                 this.minecraft.doWorldLoad(levelstoragesource$levelstorageaccess, packrepository, worldstem, true);
++                System.out.println("[mc-web/createfresh] doWorldLoad returned levelId=" + p_233158_);
+             } catch (Exception exception) {
++                System.out.println(
++                    "[mc-web/createfresh] failed levelId="
++                        + p_233158_
++                        + " "
++                        + exception.getClass().getSimpleName()
++                        + ": "
++                        + (exception.getMessage() == null ? "<no message>" : exception.getMessage())
++                );
+                 LOGGER.warn("Failed to load datapacks, can't proceed with server load", (Throwable)exception);
+                 levelstoragesource$levelstorageaccess.safeClose();
+                 this.minecraft.setScreen(p_310233_);
+@@ -109,6 +172,29 @@ public class WorldOpenFlows {
+         }
+     }
+ 
++    private void deleteExistingExperimentalLevel(String p_410360_) {
++        Path path = this.levelSource.getBaseDir().resolve(p_410360_);
++        if (!Files.exists(path)) {
++            return;
++        }
++
++        try {
++            LevelStorageSource.LevelStorageAccess levelstoragesource$levelstorageaccess = this.levelSource.createAccess(p_410360_);
++
++            try {
++                System.out.println("[mc-web/createfresh] deleting existing experimental levelId=" + p_410360_);
++                levelstoragesource$levelstorageaccess.deleteLevel();
++                System.out.println("[mc-web/createfresh] deleted existing experimental levelId=" + p_410360_);
++            } finally {
++                if (Files.exists(path)) {
++                    levelstoragesource$levelstorageaccess.safeClose();
++                }
++            }
++        } catch (IOException ioexception) {
++            throw new RuntimeException("Failed to delete existing experimental level " + p_410360_, ioexception);
++        }
++    }
++
+     @Nullable
+     private LevelStorageSource.LevelStorageAccess createWorldAccess(String p_233156_) {
+         try {
+@@ -192,11 +278,21 @@ public class WorldOpenFlows {
+ 
+     private <D, R> R loadWorldDataBlocking(WorldLoader.PackConfig p_250997_, WorldLoader.WorldDataSupplier<D> p_251759_, WorldLoader.ResultFactory<D, R> p_249635_) throws Exception {
+         WorldLoader.InitConfig worldloader$initconfig = new WorldLoader.InitConfig(p_250997_, Commands.CommandSelection.INTEGRATED, 2);
++        System.out.println("[mc-web/createfresh] WorldLoader.load begin");
+         CompletableFuture<R> completablefuture = WorldLoader.load(worldloader$initconfig, p_251759_, p_249635_, Util.backgroundExecutor(), this.minecraft);
+         this.minecraft.managedBlock(completablefuture::isDone);
++        System.out.println("[mc-web/createfresh] WorldLoader.load join");
+         return completablefuture.get();
+     }
+ 
++    private <D, R> CompletableFuture<R> loadWorldDataAsync(
++        WorldLoader.PackConfig p_250997_, WorldLoader.WorldDataSupplier<D> p_251759_, WorldLoader.ResultFactory<D, R> p_249635_
++    ) {
++        WorldLoader.InitConfig worldloader$initconfig = new WorldLoader.InitConfig(p_250997_, Commands.CommandSelection.INTEGRATED, 2);
++        System.out.println("[mc-web/createfresh] WorldLoader.load async begin");
++        return WorldLoader.load(worldloader$initconfig, p_251759_, p_249635_, Util.backgroundExecutor(), this.minecraft);
++    }
++
+     private void askForBackup(LevelStorageSource.LevelStorageAccess p_312560_, boolean p_233143_, Runnable p_233144_, Runnable p_312163_) {
+         Component component;
+         Component component1;

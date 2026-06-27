@@ -1,0 +1,198 @@
+diff --git a/net/minecraft/network/syncher/SynchedEntityData.java b/net/minecraft/network/syncher/SynchedEntityData.java
+index 6cb8baf..50f0384 100644
+--- a/net/minecraft/network/syncher/SynchedEntityData.java
++++ b/net/minecraft/network/syncher/SynchedEntityData.java
+@@ -3,6 +3,8 @@ package net.minecraft.network.syncher;
+ import com.mojang.logging.LogUtils;
+ import io.netty.handler.codec.DecoderException;
+ import io.netty.handler.codec.EncoderException;
++import java.lang.reflect.Field;
++import java.lang.reflect.Modifier;
+ import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Locale;
+@@ -10,6 +12,7 @@ import java.util.Objects;
+ import javax.annotation.Nullable;
+ import net.minecraft.network.RegistryFriendlyByteBuf;
+ import net.minecraft.util.ClassTreeIdRegistry;
++import top.steve3184.webmc.web.BuildFlags;
+ import org.apache.commons.lang3.ObjectUtils;
+ import org.slf4j.Logger;
+ 
+@@ -26,21 +29,138 @@ public class SynchedEntityData {
+         this.itemsById = p_331536_;
+     }
+ 
++    @Nullable
++    private static Class<?> safeSuperclass(@Nullable Class<?> type) {
++        try {
++            return type == null ? null : type.getSuperclass();
++        } catch (Throwable throwable) {
++            return null;
++        }
++    }
++
++    private static int getReflectiveLastIdFor(@Nullable Class<?> type) {
++        int maxId = -1;
++
++        for (Class<?> current = type; current != null && current != Object.class; current = safeSuperclass(current)) {
++            for (Field field : current.getDeclaredFields()) {
++                if (!Modifier.isStatic(field.getModifiers()) || !EntityDataAccessor.class.isAssignableFrom(field.getType())) {
++                    continue;
++                }
++
++                try {
++                    field.setAccessible(true);
++                    Object value = field.get(null);
++                    if (value instanceof EntityDataAccessor<?> accessor) {
++                        maxId = Math.max(maxId, accessor.id());
++                    }
++                } catch (Throwable ignored) {
++                }
++            }
++        }
++
++        return maxId;
++    }
++
++    private static String describeAccessor(@Nullable Class<?> type, EntityDataAccessor<?> accessor) {
++        for (Class<?> current = type; current != null && current != Object.class; current = safeSuperclass(current)) {
++            for (Field field : current.getDeclaredFields()) {
++                if (!Modifier.isStatic(field.getModifiers()) || !EntityDataAccessor.class.isAssignableFrom(field.getType())) {
++                    continue;
++                }
++
++                try {
++                    field.setAccessible(true);
++                    Object value = field.get(null);
++                    if (value == accessor) {
++                        return safeClassName(current) + "." + field.getName() + "#" + accessor.id();
++                    }
++                } catch (Throwable ignored) {
++                }
++            }
++        }
++
++        return accessor.toString();
++    }
++
++    private static String safeClassName(@Nullable Class<?> type) {
++        if (type == null) {
++            return "<null>";
++        }
++
++        try {
++            return type.getName();
++        } catch (Throwable throwable) {
++            return "<class@" + Integer.toHexString(System.identityHashCode(type)) + ">";
++        }
++    }
++
++    private static boolean shouldLogDefineId(Class<?> type) {
++        String s = safeClassName(type);
++        return "net.minecraft.world.entity.Entity".equals(s)
++            || "net.minecraft.world.entity.LivingEntity".equals(s)
++            || "net.minecraft.world.entity.Mob".equals(s)
++            || "net.minecraft.world.entity.AgeableMob".equals(s)
++            || "net.minecraft.world.entity.animal.Chicken".equals(s)
++            || "net.minecraft.world.entity.animal.Cow".equals(s)
++            || "net.minecraft.world.entity.animal.Pig".equals(s)
++            || "net.minecraft.world.entity.animal.sheep.Sheep".equals(s);
++    }
++
+     public static <T> EntityDataAccessor<T> defineId(Class<? extends SyncedDataHolder> p_135354_, EntityDataSerializer<T> p_135355_) {
+         if (LOGGER.isDebugEnabled()) {
+             try {
+                 Class<?> oclass = Class.forName(Thread.currentThread().getStackTrace()[2].getClassName());
+                 if (!oclass.equals(p_135354_)) {
+-                    LOGGER.debug("defineId called for: {} from {}", p_135354_, oclass, new RuntimeException());
++                LOGGER.debug("defineId called for: {} from {}", p_135354_, oclass, new RuntimeException());
+                 }
+             } catch (ClassNotFoundException classnotfoundexception) {
+             }
+         }
+ 
++        boolean firstAccessorForClass = ID_REGISTRY.getLocalLastIdFor(p_135354_) == ClassTreeIdRegistry.NO_ID_VALUE;
+         int i = ID_REGISTRY.define(p_135354_);
++        if (firstAccessorForClass) {
++            Class<?> parent = safeSuperclass(p_135354_);
++            int reflectiveLastId = getReflectiveLastIdFor(parent);
++            if (reflectiveLastId >= 0 && i <= reflectiveLastId) {
++                i = reflectiveLastId + 1;
++                ID_REGISTRY.setLastIdFor(p_135354_, i);
++                LOGGER.info(
++                    "[mc-web/syncher] repaired defineId base for {} using reflective parent max {} (parent={})",
++                    safeClassName(p_135354_),
++                    reflectiveLastId,
++                    safeClassName(parent)
++                );
++                return p_135355_.createAccessor(i);
++            }
++        }
++
+         if (i > 254) {
+             throw new IllegalArgumentException("Data value id is too big with " + i + "! (Max is 254)");
+         } else {
++            if (BuildFlags.WEB_RUNTIME && shouldLogDefineId(p_135354_)) {
++                Class<?> oclass1 = safeSuperclass(p_135354_);
++                System.out.println(
++                    "[mc-web/syncher] defineId class="
++                        + safeClassName(p_135354_)
++                        + " id="
++                        + i
++                        + " parent="
++                        + safeClassName(oclass1)
++                        + " parentLast="
++                        + (oclass1 == null ? -1 : ID_REGISTRY.getLastIdFor(oclass1))
++                        + " reflectiveParentLast="
++                        + getReflectiveLastIdFor(oclass1)
++                );
++            }
++            if (
++                "net.minecraft.world.entity.Entity".equals(safeClassName(p_135354_))
++                    || "net.minecraft.world.entity.LivingEntity".equals(safeClassName(p_135354_))
++                    || "net.minecraft.world.entity.player.Player".equals(safeClassName(p_135354_))
++                    || "net.minecraft.server.level.ServerPlayer".equals(safeClassName(p_135354_))
++            ) {
++                LOGGER.info("[mc-web/syncher] defineId class={} id={}", safeClassName(p_135354_), i);
++            }
+             return p_135355_.createAccessor(i);
+         }
+     }
+@@ -150,7 +270,28 @@ public class SynchedEntityData {
+             if (i > this.itemsById.length) {
+                 throw new IllegalArgumentException("Data value id is too big with " + i + "! (Max is " + this.itemsById.length + ")");
+             } else if (this.itemsById[i] != null) {
+-                throw new IllegalArgumentException("Duplicate id value for " + i + "!");
++                if (BuildFlags.WEB_RUNTIME) {
++                    System.out.println(
++                        "[mc-web/syncher] duplicate entity="
++                            + safeClassName(this.entity.getClass())
++                            + " id="
++                            + i
++                            + " sameAccessor="
++                            + (this.itemsById[i].getAccessor() == p_329741_)
++                            + " slots="
++                            + this.itemsById.length
++                    );
++                }
++                throw new IllegalArgumentException(
++                    "Duplicate id value for "
++                        + i
++                        + "! entity="
++                        + safeClassName(this.entity.getClass())
++                        + " newAccessor="
++                        + describeAccessor(this.entity.getClass(), p_329741_)
++                        + " existingAccessor="
++                        + describeAccessor(this.entity.getClass(), this.itemsById[i].getAccessor())
++                );
+             } else if (EntityDataSerializers.getSerializedId(p_329741_.serializer()) < 0) {
+                 throw new IllegalArgumentException("Unregistered serializer " + p_329741_.serializer() + " for " + i + "!");
+             } else {
+@@ -242,4 +383,4 @@ public class SynchedEntityData {
+             return new SynchedEntityData.DataValue<>(p_253899_, p_254222_, p_254222_.codec().decode(p_333448_));
+         }
+     }
+-}
+\ No newline at end of file
++}

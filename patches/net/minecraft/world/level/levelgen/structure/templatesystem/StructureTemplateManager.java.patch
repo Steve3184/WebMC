@@ -1,0 +1,34 @@
+--- a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
++++ b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
+@@ -155,21 +155,19 @@
+         if (!Files.isDirectory(this.generatedDir)) {
+             return Stream.empty();
+         } else {
+-            try {
+-                List<ResourceLocation> list = new ArrayList<>();
++            List<ResourceLocation> list = new ArrayList<>();
+ 
+-                try (DirectoryStream<Path> directorystream = Files.newDirectoryStream(this.generatedDir, p_230419_ -> Files.isDirectory(p_230419_))) {
+-                    for (Path path : directorystream) {
+-                        String s = path.getFileName().toString();
+-                        Path path1 = path.resolve("structures");
+-                        this.listFolderContents(path1, s, ".nbt", list::add);
+-                    }
++            File[] children = this.generatedDir.toFile().listFiles(File::isDirectory);
++            if (children != null) {
++                for (File child : children) {
++                    Path path = child.toPath();
++                    String s = path.getFileName().toString();
++                    Path path1 = path.resolve("structures");
++                    this.listFolderContents(path1, s, ".nbt", list::add);
+                 }
+-
+-                return list.stream();
+-            } catch (IOException ioexception) {
+-                return Stream.empty();
+             }
++
++            return list.stream();
+         }
+     }
+ 

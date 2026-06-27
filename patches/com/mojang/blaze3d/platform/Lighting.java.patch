@@ -1,0 +1,77 @@
+--- a/com/mojang/blaze3d/platform/Lighting.java
++++ b/com/mojang/blaze3d/platform/Lighting.java
+@@ -7,6 +7,7 @@
+ import com.mojang.blaze3d.systems.RenderSystem;
+ import java.nio.ByteBuffer;
+ import net.minecraft.util.Mth;
++import top.steve3184.webmc.web.BuildFlags;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.joml.Matrix4f;
+@@ -15,20 +16,34 @@
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class Lighting implements AutoCloseable {
+-    private static final Vector3f DIFFUSE_LIGHT_0 = new Vector3f(0.2F, 1.0F, -0.7F).normalize();
+-    private static final Vector3f DIFFUSE_LIGHT_1 = new Vector3f(-0.2F, 1.0F, 0.7F).normalize();
+-    private static final Vector3f NETHER_DIFFUSE_LIGHT_0 = new Vector3f(0.2F, 1.0F, -0.7F).normalize();
+-    private static final Vector3f NETHER_DIFFUSE_LIGHT_1 = new Vector3f(-0.2F, -1.0F, 0.7F).normalize();
+-    private static final Vector3f INVENTORY_DIFFUSE_LIGHT_0 = new Vector3f(0.2F, -1.0F, 1.0F).normalize();
+-    private static final Vector3f INVENTORY_DIFFUSE_LIGHT_1 = new Vector3f(-0.2F, -1.0F, 0.0F).normalize();
++    private static final Vector3f DIFFUSE_LIGHT_0 = new Vector3f(0.16169042F, 0.80845207F, -0.5659165F);
++    private static final Vector3f DIFFUSE_LIGHT_1 = new Vector3f(-0.16169042F, 0.80845207F, 0.5659165F);
++    private static final Vector3f NETHER_DIFFUSE_LIGHT_0 = new Vector3f(0.16169042F, 0.80845207F, -0.5659165F);
++    private static final Vector3f NETHER_DIFFUSE_LIGHT_1 = new Vector3f(-0.16169042F, -0.80845207F, 0.5659165F);
++    private static final Vector3f INVENTORY_DIFFUSE_LIGHT_0 = new Vector3f(0.140028F, -0.70014F, 0.70014F);
++    private static final Vector3f INVENTORY_DIFFUSE_LIGHT_1 = new Vector3f(-0.19611613F, -0.9805807F, 0.0F);
+     public static final int UBO_SIZE = new Std140SizeCalculator().putVec3().putVec3().get();
+     private final GpuBuffer buffer;
+     private final int paddedSize;
+ 
+     public Lighting() {
+         GpuDevice gpudevice = RenderSystem.getDevice();
+-        this.paddedSize = Mth.roundToward(UBO_SIZE, gpudevice.getUniformOffsetAlignment());
+-        this.buffer = gpudevice.createBuffer(() -> "Lighting UBO", 136, this.paddedSize * Lighting.Entry.values().length);
++        int alignment = gpudevice.getUniformOffsetAlignment();
++        int computedPaddedSize = alignment > 0 ? Mth.roundToward(UBO_SIZE, alignment) : UBO_SIZE;
++        if (computedPaddedSize <= 0) {
++            computedPaddedSize = UBO_SIZE;
++        }
++        this.paddedSize = computedPaddedSize;
++        int entryCount = BuildFlags.WEB_RUNTIME ? 5 : Lighting.Entry.values().length;
++        this.buffer = gpudevice.createBuffer(() -> "Lighting UBO", 136, this.paddedSize * entryCount);
++        if (BuildFlags.WEB_RUNTIME) {
++            Vector3f light0 = DIFFUSE_LIGHT_0;
++            Vector3f light1 = DIFFUSE_LIGHT_1;
++            for (int i = 0; i < entryCount; i++) {
++                this.updateBufferSlot(i, light0, light1);
++            }
++            return;
++        }
+         Matrix4f matrix4f = new Matrix4f().rotationY((float) (-Math.PI / 8)).rotateX((float) (Math.PI * 3.0 / 4.0));
+         this.updateBuffer(Lighting.Entry.ITEMS_FLAT, matrix4f.transformDirection(DIFFUSE_LIGHT_0, new Vector3f()), matrix4f.transformDirection(DIFFUSE_LIGHT_1, new Vector3f()));
+         Matrix4f matrix4f1 = new Matrix4f()
+@@ -52,11 +67,15 @@
+     }
+ 
+     private void updateBuffer(Lighting.Entry p_408846_, Vector3f p_409019_, Vector3f p_408652_) {
++        this.updateBufferSlot(p_408846_.ordinal(), p_409019_, p_408652_);
++    }
++
++    private void updateBufferSlot(int slot, Vector3f p_409019_, Vector3f p_408652_) {
+         try (MemoryStack memorystack = MemoryStack.stackPush()) {
+             ByteBuffer bytebuffer = Std140Builder.onStack(memorystack, UBO_SIZE).putVec3(p_409019_).putVec3(p_408652_).get();
+             RenderSystem.getDevice()
+                 .createCommandEncoder()
+-                .writeToBuffer(this.buffer.slice(p_408846_.ordinal() * this.paddedSize, this.paddedSize), bytebuffer);
++                .writeToBuffer(this.buffer.slice(slot * this.paddedSize, this.paddedSize), bytebuffer);
+         }
+     }
+ 
+@@ -77,4 +96,4 @@
+         ENTITY_IN_UI,
+         PLAYER_SKIN;
+     }
+-}
+\ No newline at end of file
++}

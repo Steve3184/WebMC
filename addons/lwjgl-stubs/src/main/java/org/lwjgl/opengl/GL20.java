@@ -1,0 +1,78 @@
+package org.lwjgl.opengl;
+
+import top.steve3184.webmc.teavm.gl.GLBackendHolder;
+import java.nio.FloatBuffer;
+
+/** Stub of {@code org.lwjgl.opengl.GL20}. Shaders + programs + uniforms + attribs. */
+public final class GL20 {
+    public static final int GL_FRAGMENT_SHADER = 0x8B30;
+    public static final int GL_VERTEX_SHADER   = 0x8B31;
+
+    public static final int GL_COMPILE_STATUS  = 0x8B81;
+    public static final int GL_LINK_STATUS     = 0x8B82;
+    public static final int GL_INFO_LOG_LENGTH = 0x8B84;
+    public static final int GL_SHADER_SOURCE_LENGTH = 0x8B88;
+
+    public static final int GL_CURRENT_PROGRAM = 0x8B8D;
+
+    public static final int GL_BLEND_EQUATION_RGB   = 0x8009;
+    public static final int GL_BLEND_EQUATION_ALPHA = 0x883D;
+    public static final int GL_FUNC_ADD               = 0x8006;
+    public static final int GL_FUNC_SUBTRACT          = 0x800A;
+    public static final int GL_FUNC_REVERSE_SUBTRACT  = 0x800B;
+    public static final int GL_MIN                    = 0x8007;
+    public static final int GL_MAX                    = 0x8008;
+
+    public static int  glCreateShader(int type)               { return GLBackendHolder.current().createShader(type); }
+    public static void glDeleteShader(int id)                 { GLBackendHolder.current().deleteShader(id); }
+    public static void glShaderSource(int id, CharSequence src) { GLBackendHolder.current().shaderSource(id, src); }
+    public static void glCompileShader(int id)                { GLBackendHolder.current().compileShader(id); }
+    public static int  glGetShaderi(int id, int pname)        { return GLBackendHolder.current().getShaderi(id, pname); }
+    public static String glGetShaderInfoLog(int id)           { return GLBackendHolder.current().getShaderInfoLog(id); }
+
+    public static int  glCreateProgram()                      { return GLBackendHolder.current().createProgram(); }
+    public static void glDeleteProgram(int id)                { GLBackendHolder.current().deleteProgram(id); }
+    public static void glAttachShader(int p, int s)           { GLBackendHolder.current().attachShader(p, s); }
+    public static void glLinkProgram(int p)                   { GLBackendHolder.current().linkProgram(p); }
+    public static void glUseProgram(int p)                    { GLBackendHolder.current().useProgram(p); }
+    public static int  glGetProgrami(int id, int pname)       { return GLBackendHolder.current().getProgrami(id, pname); }
+    public static String glGetProgramInfoLog(int id)          { return GLBackendHolder.current().getProgramInfoLog(id); }
+    public static int  glGetUniformLocation(int p, CharSequence name) { return GLBackendHolder.current().getUniformLocation(p, name); }
+    public static int  glGetAttribLocation(int p, CharSequence name)  { return GLBackendHolder.current().getAttribLocation(p, name); }
+
+    public static void glUniform1i(int loc, int v)            { GLBackendHolder.current().uniform1i(loc, v); }
+    public static void glUniform1f(int loc, float v)          { GLBackendHolder.current().uniform1f(loc, v); }
+    public static void glUniform2f(int loc, float a, float b) { GLBackendHolder.current().uniform2f(loc, a, b); }
+    public static void glUniform3f(int loc, float a, float b, float c) { GLBackendHolder.current().uniform3f(loc, a, b, c); }
+    public static void glUniform4f(int loc, float a, float b, float c, float d) { GLBackendHolder.current().uniform4f(loc, a, b, c, d); }
+    public static void glUniformMatrix4fv(int loc, boolean transpose, FloatBuffer mat) { GLBackendHolder.current().uniformMatrix4fv(loc, transpose, mat); }
+
+    public static void glEnableVertexAttribArray(int i)       { GLBackendHolder.current().enableVertexAttribArray(i); }
+    public static void glDisableVertexAttribArray(int i)      { GLBackendHolder.current().disableVertexAttribArray(i); }
+    public static void glVertexAttribPointer(int i, int size, int type, boolean normalized, int stride, long offset) {
+        GLBackendHolder.current().vertexAttribPointer(i, size, type, normalized, stride, offset);
+    }
+    public static void glBlendEquation(int mode) { GLBackendHolder.current().blendEquation(mode); }
+    public static void glBlendFuncSeparate(int srcRGB, int dstRGB, int srcA, int dstA) {
+        GLBackendHolder.current().blendFuncSeparate(srcRGB, dstRGB, srcA, dstA);
+    }
+
+    // Bulk uniform setters used by Blaze3D
+    public static void glUniform1iv(int loc, java.nio.IntBuffer v)   { /* no-op */ }
+    public static void glUniform2iv(int loc, java.nio.IntBuffer v)   { /* no-op */ }
+    public static void glUniform3iv(int loc, java.nio.IntBuffer v)   { /* no-op */ }
+    public static void glUniform4iv(int loc, java.nio.IntBuffer v)   { /* no-op */ }
+    public static void glUniform1fv(int loc, java.nio.FloatBuffer v) { /* no-op */ }
+    public static void glUniform2fv(int loc, java.nio.FloatBuffer v) { /* no-op */ }
+    public static void glUniform3fv(int loc, java.nio.FloatBuffer v) { /* no-op */ }
+    public static void glUniform4fv(int loc, java.nio.FloatBuffer v) { /* no-op */ }
+    public static void glUniformMatrix2fv(int loc, boolean t, java.nio.FloatBuffer v) { /* no-op */ }
+    public static void glUniformMatrix3fv(int loc, boolean t, java.nio.FloatBuffer v) { /* no-op */ }
+
+    public static void glBindAttribLocation(int program, int index, CharSequence name) { /* no-op */ }
+    public static void glScissor(int x, int y, int w, int h)         { GL11.glScissor(x, y, w, h); }
+    public static String glGetShaderInfoLog(int shader, int maxLen)  { return GLBackendHolder.current().getShaderInfoLog(shader); }
+    public static String glGetProgramInfoLog(int program, int maxLen) { return GLBackendHolder.current().getProgramInfoLog(program); }
+
+    private GL20() {}
+}

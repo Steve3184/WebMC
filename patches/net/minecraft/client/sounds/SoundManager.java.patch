@@ -1,0 +1,38 @@
+--- a/net/minecraft/client/sounds/SoundManager.java
++++ b/net/minecraft/client/sounds/SoundManager.java
+@@ -54,7 +54,9 @@ public class SoundManager extends SimplePreparableReloadListener<SoundManager.Pr
+     static final Logger LOGGER = LogUtils.getLogger();
+     private static final String SOUNDS_PATH = "sounds.json";
+     private static final Gson GSON = new GsonBuilder().registerTypeAdapter(SoundEventRegistration.class, new SoundEventRegistrationSerializer()).create();
+-    private static final TypeToken<Map<String, SoundEventRegistration>> SOUND_EVENT_REGISTRATION_TYPE = new TypeToken<Map<String, SoundEventRegistration>>() {};
++    private static final TypeToken<Map<String, SoundEventRegistration>> SOUND_EVENT_REGISTRATION_TYPE =
++        (TypeToken<Map<String, SoundEventRegistration>>)(TypeToken<?>)
++            TypeToken.get(top.steve3184.webmc.util.WebTypes.parameterized(Map.class, String.class, SoundEventRegistration.class));
+     private final Map<ResourceLocation, WeighedSoundEvents> registry = Maps.newHashMap();
+     private final SoundEngine soundEngine;
+     private final Map<ResourceLocation, Resource> soundCache = new HashMap<>();
+@@ -129,13 +131,10 @@ public class SoundManager extends SimplePreparableReloadListener<SoundManager.Pr
+     }
+ 
+     static boolean validateSoundResource(Sound p_250396_, ResourceLocation p_250879_, ResourceProvider p_248737_) {
+-        ResourceLocation resourcelocation = p_250396_.getPath();
+-        if (p_248737_.getResource(resourcelocation).isEmpty()) {
+-            LOGGER.warn("File {} does not exist, cannot add it to event {}", resourcelocation, p_250879_);
+-            return false;
+-        } else {
+-            return true;
+-        }
++        // mc-web: assets blob currently carries no .ogg files. Treat every sound
++        // as "present" to avoid thousands of warn-level console.log entries
++        // during resource reload (which themselves stall the event loop).
++        return true;
+     }
+ 
+     @Nullable
+@@ -312,4 +311,4 @@ public class SoundManager extends SimplePreparableReloadListener<SoundManager.Pr
+             }
+         }
+     }
+-}
+\ No newline at end of file
++}

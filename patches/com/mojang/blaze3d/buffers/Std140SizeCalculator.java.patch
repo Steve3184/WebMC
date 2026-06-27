@@ -1,0 +1,27 @@
+--- a/com/mojang/blaze3d/buffers/Std140SizeCalculator.java
++++ b/com/mojang/blaze3d/buffers/Std140SizeCalculator.java
+@@ -1,7 +1,6 @@
+ package com.mojang.blaze3d.buffers;
+ 
+ import com.mojang.blaze3d.DontObfuscate;
+-import net.minecraft.util.Mth;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ 
+@@ -15,7 +14,8 @@
+     }
+ 
+     public Std140SizeCalculator align(int p_407765_) {
+-        this.size = Mth.roundToward(this.size, p_407765_);
++        int alignment = p_407765_ <= 0 ? 1 : p_407765_;
++        this.size = ((this.size + alignment - 1) / alignment) * alignment;
+         return this;
+     }
+ 
+@@ -72,4 +72,4 @@
+         this.size += 64;
+         return this;
+     }
+-}
+\ No newline at end of file
++}

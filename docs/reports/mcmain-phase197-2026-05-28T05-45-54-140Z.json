@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-28T05:45:54.140Z",
+  "finishedAt": "2026-05-28T05:45:54.140Z",
+  "port": 58080,
+  "url": "http://localhost:58080/?boot=mcMain&t=1779945883228",
+  "root": "M:\\Users\\l\\Desktop\\webmc1\\work\\build\\web-run",
+  "waitMs": 700000,
+  "stallMs": 80000,
+  "playableTickMin": 3,
+  "soakMs": 600000,
+  "elapsedMs": null,
+  "endReason": "terminal-condition",
+  "terminal": "playable-loop",
+  "status": {
+    "lastStatus": "WebGL2 OK: WebGL 2.0 (OpenGL ES 3.0 Chromium) / WebKit / WebKit WebGL",
+    "lastError": ""
+  },
+  "classification": "playable-loop",
+  "failureCategory": null,
+  "pass": true,
+  "progress": {
+    "lastKind": "frontier-log",
+    "sinceLastMs": 109171
+  },
+  "scenario": {
+    "mode": "rc",
+    "repeatCount": 3,
+    "soakMs": 600000,
+    "currentStep": "complete",
+    "attempt": 1,
+    "maxAttempts": 1,
+    "completed": true,
+    "fullChainCompleted": true,
+    "failureCategory": null,
+    "steps": [
+      {
+        "name": "rc-smoke-1",
+        "mode": "smoke",
+        "pass": true,
+        "classification": "playable-loop",
+        "failureCategory": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T04-47-37-330Z.json",
+        "attempts": [
+          {
+            "attempt": 1,
+            "waitMs": 700000,
+            "pass": true,
+            "classification": "playable-loop",
+            "failureCategory": null,
+            "terminal": "playable-loop",
+            "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T04-47-36-676Z.json"
+          }
+        ]
+      },
+      {
+        "name": "rc-smoke-2",
+        "mode": "smoke",
+        "pass": true,
+        "classification": "playable-loop",
+        "failureCategory": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T04-57-27-687Z.json",
+        "attempts": [
+          {
+            "attempt": 1,
+            "waitMs": 700000,
+            "pass": true,
+            "classification": "playable-loop",
+            "failureCategory": null,
+            "terminal": "playable-loop",
+            "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T04-57-26-240Z.json"
+          }
+        ]
+      },
+      {
+        "name": "rc-smoke-3",
+        "mode": "smoke",
+        "pass": true,
+        "classification": "playable-loop",
+        "failureCategory": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-06-27-936Z.json",
+        "attempts": [
+          {
+            "attempt": 1,
+            "waitMs": 700000,
+            "pass": true,
+            "classification": "playable-loop",
+            "failureCategory": null,
+            "terminal": "playable-loop",
+            "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-06-27-694Z.json"
+          }
+        ]
+      },
+      {
+        "name": "rc-soak",
+        "mode": "soak",
+        "pass": true,
+        "classification": "playable-loop",
+        "failureCategory": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-24-42-620Z.json",
+        "attempts": [
+          {
+            "attempt": 1,
+            "waitMs": 700000,
+            "pass": true,
+            "classification": "playable-loop",
+            "failureCategory": null,
+            "terminal": "playable-loop",
+            "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-24-40-630Z.json"
+          }
+        ]
+      },
+      {
+        "name": "rc-save-reload",
+        "mode": "save-reload",
+        "pass": true,
+        "classification": "playable-loop",
+        "failureCategory": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-45-54-138Z.json",
+        "attempts": [
+          {
+            "attempt": 1,
+            "waitMs": 700000,
+            "pass": true,
+            "classification": "playable-loop",
+            "failureCategory": null,
+            "terminal": "playable-loop",
+            "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-45-52-744Z.json"
+          }
+        ]
+      }
+    ],
+    "smokeAttemptCount": null,
+    "smokeMaxAttempts": 2,
+    "smokePassedAttempt": null,
+    "smokeAttempts": []
+  },
+  "phase": {
+    "worldloadRequestedAtMs": 40957,
+    "worldloadSuccessAtMs": 384381,
+    "serverReadyBeginAtMs": 46663,
+    "serverReadyEndAtMs": 47343,
+    "loopbackAtMs": 47343,
+    "playableLoopAtMs": 13807,
+    "serverConfigBeforeNewPlayerAtMs": 47826,
+    "serverConfigBeforePlaceCallAtMs": 47883,
+    "placeNewPlayerEnterAtMs": 47886,
+    "placeNewPlayerAfterLoginPacketAtMs": 171083,
+    "serverConfigAfterPlaceNewPlayerAtMs": 171159,
+    "maxPersistentTick": 2500,
+    "requireWorldloadSuccess": true,
+    "hasWorldload": true,
+    "hasWorldloadRequested": true,
+    "hasWorldloadSuccess": true,
+    "hasServerReady": true,
+    "hasLoopback": true,
+    "hasPlacedPlayer": true,
+    "firstWorldloadSuccessAtMs": 384381,
+    "pauseOpenedAtMs": 475068,
+    "quitToTitleAtMs": 506102,
+    "titleReturnedAtMs": 509663,
+    "reloadRequestedAtMs": 743034,
+    "reloadWorldloadSuccessAtMs": 1161266,
+    "soakCompletedAtMs": null
+  },
+  "evidence": {
+    "screenshot": {
+      "ok": true,
+      "width": 1280,
+      "height": 720,
+      "latestPath": null,
+      "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\output\\playwright\\mcmain-phase197-rc-save-reload-worldready-attempt-1-2026-05-28T05-31-08-476Z.png"
+    },
+    "stages": {
+      "firstWorld": {
+        "ok": true,
+        "width": 1280,
+        "height": 720,
+        "latestPath": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\output\\playwright\\mcmain-phase197-rc-save-reload-worldready-attempt-1-2026-05-28T05-31-08-476Z.png"
+      },
+      "pauseMenu": {
+        "ok": true,
+        "width": 1280,
+        "height": 720,
+        "latestPath": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\output\\playwright\\mcmain-phase197-rc-save-reload-pause-menu-attempt-1-2026-05-28T05-32-40-317Z.png"
+      },
+      "titleReturn": {
+        "ok": true,
+        "width": 1280,
+        "height": 720,
+        "latestPath": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\output\\playwright\\mcmain-phase197-rc-save-reload-title-return-attempt-1-2026-05-28T05-33-14-908Z.png"
+      },
+      "reloadWorld": {
+        "ok": true,
+        "width": 1280,
+        "height": 720,
+        "latestPath": null,
+        "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\output\\playwright\\mcmain-phase197-rc-save-reload-reload-worldready-attempt-1-2026-05-28T05-44-04-654Z.png"
+      }
+    }
+  },
+  "frontier": {
+    "count": 174712,
+    "counts": [
+      "[mc-web] WebMain.main start=1",
+      "[mc-web] WebGL2 init:=1",
+      "[mc-web] MC main call begin=1",
+      "[mc-web] MC main call end=0",
+      "[mc-web] MC main skipped in webSafeBoot mode=0",
+      "[mc-web] MC main returned normally=0",
+      "[mc-web] MC main threw:=0",
+      "[mc-probe] Main.main:=17",
+      "[mc-main-stage]=8",
+      "[mc-probe] init game caught:=0",
+      "[mc-web/vfs] WebFs.preload: fetch failed=0",
+      "[mc-probe] Minecraft.run: web persistent tick =133",
+      "[mc-web/createfresh] doWorldLoad begin=1",
+      "[mc-web/doworld] begin=2",
+      "[mc-web/doworld] MinecraftServer.spin begin=2",
+      "[mc-web/doworld] MinecraftServer.spin end=2",
+      "[mc-web/doworld] wait progressListener begin=2",
+      "[mc-web/doworld] wait progressListener elapsedMs==0",
+      "[mc-web/doworld] wait progressListener end=2",
+      "[mc-web/doworld] wait server ready begin=2",
+      "[mc-web/doworld] wait server ready elapsedMs==0",
+      "[mc-web/doworld] wait server ready end=2",
+      "[mc-web/loopback]=20478",
+      "[mc-web/server]=262",
+      "[mc-web/servergame]=40",
+      "[mc-web/configpacks]=14",
+      "[mc-web/chunkgen]=0",
+      "[mc-web/clientlogin]=160",
+      "[mc-web/clienttick]=102969",
+      "[mc-web/clientpkt]=136",
+      "[mc-web/packetutils]=4786",
+      "[mc-web/level]=26",
+      "[mc-web/gameload]=4",
+      "[mc-web/renderGate]=108",
+      "[mc-web/renderGate/state]=15",
+      "[mc-web/render]=43892",
+      "[mc-web/renderLevel]=0",
+      "[mc-web/setupRender]=80",
+      "[mc-web/compileSections]=617",
+      "[mc-web/render/state]=40",
+      "[mc-web/renderGraph/v2]=0",
+      "[mc-web/mainpass]=0",
+      "[mc-web/skypass]=0",
+      "[mc-web/entityRenderers]=1",
+      "[mc-web/collectVisibleEntities]=0",
+      "[mc-web/ctor]=841",
+      "[mc-web/worldloader] stage==26",
+      "[mc-web/worldloader] failed early:=0",
+      "[mc-web/worldload] experimental start requested:=1",
+      "[mc-web/worldload] probe success:=2",
+      "[mc-web/worldload] probe failed:=0",
+      "[mc-web/worldload] probe blocked:=0",
+      "[mc-probe] ctor-watchdog:=2",
+      "[mc-probe] BlockableEventLoop.<init>:=10",
+      "[mc-web/pause] init showPauseMenu==0",
+      "[mc-web/pause] disconnectButton=0",
+      "[mc-web/pause] disconnect.click=0",
+      "[mc-web/pause] disconnect.hotkey=1",
+      "[mc-web/pause] disconnect.haltIntegratedServer=0",
+      "[mc-web/pause] disconnect.web-automation=3",
+      "[mc-web] setScreen:=22"
+    ],
+    "last": [
+      "[mc-web/loopback] directSend from=SERVERBOUND toListener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket",
+      "[mc-web/packetutils] bypass same-thread check listener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket",
+      "[mc-web/loopback] tick listener=net.minecraft.server.network.ServerGamePacketListenerImpl",
+      "[mc-web/loopback] directSend from=SERVERBOUND toListener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket",
+      "[mc-web/packetutils] bypass same-thread check listener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket",
+      "[mc-web/loopback] tick listener=net.minecraft.server.network.ServerGamePacketListenerImpl",
+      "[mc-web/loopback] tick listener=net.minecraft.server.network.ServerGamePacketListenerImpl",
+      "[mc-web/loopback] directSend from=SERVERBOUND toListener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundMoveEntityPacket$Pos",
+      "[mc-web/packetutils] bypass same-thread check listener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundMoveEntityPacket$Pos",
+      "[mc-web/loopback] tick listener=net.minecraft.server.network.ServerGamePacketListenerImpl",
+      "[mc-web/loopback] directSend from=SERVERBOUND toListener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundSetTimePacket",
+      "[mc-web/packetutils] bypass same-thread check listener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundSetTimePacket",
+      "[mc-web/loopback] directSend from=SERVERBOUND toListener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket",
+      "[mc-web/packetutils] bypass same-thread check listener=net.minecraft.client.multiplayer.ClientPacketListener packet=net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket",
+      "[mc-web/loopback] tick listener=net.minecraft.server.network.ServerGamePacketListenerImpl"
+    ],
+    "maxPersistentTick": 2500,
+    "stageFlags": {
+      "sawMcMainCallBegin": true,
+      "sawMcMainCallEnd": false,
+      "sawMainMainProbe": true,
+      "enteredDoWorldLoad": true,
+      "enteredWaitServerReadyBegin": true,
+      "enteredWaitServerReadyEnd": true,
+      "sawLoopback": true,
+      "sawWorldloaderStage": true
+    },
+    "postReturn": {
+      "sawAnyLogAfterReturn": false,
+      "sawMainMainProbeAfterReturn": false,
+      "sawPersistentTickAfterReturn": false,
+      "sawLoopbackAfterReturn": false,
+      "sawWorldloaderAfterReturn": false,
+      "sawDoWorldLoadAfterReturn": false,
+      "sawWaitServerReadyAfterReturn": false,
+      "logsAfterReturnCount": 0
+    }
+  },
+  "logPath": "M:\\Users\\l\\Desktop\\webmc1\\work\\playwright-webmc-latest.log",
+  "reportPaths": {
+    "ok": true,
+    "latestPath": null,
+    "archivePath": "M:\\Users\\l\\Desktop\\webmc1\\docs\\reports\\mcmain-phase197-2026-05-28T05-45-54-138Z.json"
+  }
+}

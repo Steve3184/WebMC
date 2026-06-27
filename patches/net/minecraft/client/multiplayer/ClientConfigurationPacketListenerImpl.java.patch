@@ -1,0 +1,116 @@
+--- a/net/minecraft/client/multiplayer/ClientConfigurationPacketListenerImpl.java
++++ b/net/minecraft/client/multiplayer/ClientConfigurationPacketListenerImpl.java
+@@ -6,12 +6,15 @@
+ import java.util.Optional;
+ import java.util.function.Function;
+ import javax.annotation.Nullable;
++import net.minecraft.ReportType;
++import net.minecraft.ReportedException;
+ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.gui.components.ChatComponent;
+ import net.minecraft.client.gui.screens.Screen;
+ import net.minecraft.client.gui.screens.dialog.DialogConnectionAccess;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.RegistryAccess;
++import net.minecraft.core.registries.Registries;
+ import net.minecraft.nbt.Tag;
+ import net.minecraft.network.Connection;
+ import net.minecraft.network.DisconnectionDetails;
+@@ -42,6 +45,7 @@
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class ClientConfigurationPacketListenerImpl extends ClientCommonPacketListenerImpl implements ClientConfigurationPacketListener, TickablePacketListener {
+@@ -96,7 +100,13 @@
+ 
+     @Override
+     public void handleSelectKnownPacks(ClientboundSelectKnownPacks p_333075_) {
++        System.out.println("[mc-web/loopback] clientConfig.handleSelectKnownPacks count=" + p_333075_.knownPacks().size());
+         PacketUtils.ensureRunningOnSameThread(p_333075_, this, this.minecraft);
++        if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++            System.out.println("[mc-web/loopback] clientConfig.handleSelectKnownPacks web sendEmpty");
++            this.send(new ServerboundSelectKnownPacks(List.of()));
++            return;
++        }
+         if (this.knownPacks == null) {
+             this.knownPacks = new KnownPacksManager();
+         }
+@@ -125,10 +135,49 @@
+ 
+     @Override
+     public void handleConfigurationFinished(ClientboundFinishConfigurationPacket p_299280_) {
++        System.out.println("[mc-web/loopback] clientConfig.handleConfigurationFinished");
+         PacketUtils.ensureRunningOnSameThread(p_299280_, this, this.minecraft);
+-        RegistryAccess.Frozen registryaccess$frozen = this.runWithResources(
+-            p_357775_ -> this.registryDataCollector.collectGameRegistries(p_357775_, this.receivedRegistries, this.connection.isMemoryConnection())
+-        );
++        RegistryAccess.Frozen registryaccess$frozen;
++        if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection() && this.minecraft.getSingleplayerServer() != null) {
++            registryaccess$frozen = this.minecraft.getSingleplayerServer().registryAccess();
++            System.out.println(
++                "[mc-web/loopback] clientConfig.handleConfigurationFinished web useServerRegistries biomePresent="
++                    + registryaccess$frozen.lookup(Registries.BIOME).isPresent()
++            );
++        } else {
++            if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++                System.out.println("[mc-web/loopback] clientConfig.handleConfigurationFinished web collect begin");
++            }
++            try {
++                registryaccess$frozen = this.runWithResources(
++                    p_357775_ -> this.registryDataCollector.collectGameRegistries(p_357775_, this.receivedRegistries, this.connection.isMemoryConnection())
++                );
++            } catch (Throwable throwable) {
++                if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++                    System.out.println(
++                        "[mc-web/loopback] clientConfig.handleConfigurationFinished web collect failed "
++                            + throwable.getClass().getName()
++                            + ": "
++                            + throwable.getMessage()
++                    );
++                    if (throwable instanceof ReportedException reportedexception) {
++                        try {
++                            System.out.println(reportedexception.getReport().getFriendlyReport(ReportType.CRASH));
++                        } catch (Throwable reportThrowable) {
++                            System.out.println("[mc-web/loopback] failed to print registry crash report " + reportThrowable);
++                        }
++                    }
++                    throwable.printStackTrace();
++                }
++                throw throwable;
++            }
++            if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++                System.out.println(
++                    "[mc-web/loopback] clientConfig.handleConfigurationFinished web collect end biomePresent="
++                        + registryaccess$frozen.lookup(Registries.BIOME).isPresent()
++                );
++            }
++        }
+         this.connection
+             .setupInboundProtocol(
+                 GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(registryaccess$frozen)),
+@@ -150,13 +199,22 @@
+                     )
+                 )
+             );
++        if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++            System.out.println("[mc-web/loopback] clientConfig.handleConfigurationFinished web fast path afterInbound");
++        }
+         this.connection.send(ServerboundFinishConfigurationPacket.INSTANCE);
++        if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++            System.out.println("[mc-web/loopback] clientConfig.handleConfigurationFinished web fast path sent finish");
++        }
+         this.connection.setupOutboundProtocol(GameProtocols.SERVERBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(registryaccess$frozen), new GameProtocols.Context() {
+             @Override
+             public boolean hasInfiniteMaterials() {
+                 return true;
+             }
+         }));
++        if (BuildFlags.WEB_RUNTIME && this.connection.isMemoryConnection()) {
++            System.out.println("[mc-web/loopback] clientConfig.handleConfigurationFinished web fast path afterOutbound");
++        }
+     }
+ 
+     @Override

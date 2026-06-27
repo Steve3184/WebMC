@@ -1,0 +1,21 @@
+--- a/com/mojang/blaze3d/audio/Library.java
++++ b/com/mojang/blaze3d/audio/Library.java
+@@ -70,6 +70,18 @@
+     }
+ 
+     public void init(@Nullable String p_231085_, boolean p_231086_) {
++        // NO-OP (phase-1 stub) — Library.init: OpenAL not wired yet. Routing
++        // for real audio goes through top.steve3184.webmc.teavm.al (WebAudio
++        // backend, TBD). For now we leave staticChannels/streamingChannels at
++        // their EMPTY defaults so SoundEngine.loaded stays false and audio is
++        // silently disabled — the SoundEngine path tolerates this.
++    }
++
++    public boolean isAvailable() {
++        return this.staticChannels != EMPTY || this.streamingChannels != EMPTY;
++    }
++
++    public void initReal(@Nullable String p_231085_, boolean p_231086_) {
+         this.currentDevice = openDeviceOrFallback(p_231085_);
+         this.supportsDisconnections = false;
+         ALCCapabilities alccapabilities = ALC.createCapabilities(this.currentDevice);

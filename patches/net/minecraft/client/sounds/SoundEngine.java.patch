@@ -1,0 +1,108 @@
+diff --git a/net/minecraft/client/sounds/SoundEngine.java b/net/minecraft/client/sounds/SoundEngine.java
+index 7b9d755..2791919 100644
+--- a/net/minecraft/client/sounds/SoundEngine.java
++++ b/net/minecraft/client/sounds/SoundEngine.java
+@@ -38,6 +38,7 @@ import net.minecraft.world.phys.Vec3;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ import org.slf4j.Marker;
+ import org.slf4j.MarkerFactory;
+ 
+@@ -84,6 +85,14 @@ public class SoundEngine {
+     }
+ 
+     public void reload() {
++        if (BuildFlags.WEB_RUNTIME) {
++            this.destroy();
++            this.loaded = false;
++            this.preloadQueue.clear();
++            LOGGER.info(MARKER, "Sound engine disabled in web runtime");
++            return;
++        }
++
+         ONLY_WARN_ONCE.clear();
+ 
+         for (SoundEvent soundevent : BuiltInRegistries.SOUND_EVENT) {
+@@ -101,10 +110,21 @@ public class SoundEngine {
+     }
+ 
+     private synchronized void loadLibrary() {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
+         if (!this.loaded) {
+             try {
+                 String s = this.options.soundDevice().get();
+                 this.library.init("".equals(s) ? null : s, this.options.directionalAudio().get());
++                if (!this.library.isAvailable()) {
++                    if (BuildFlags.WEB_RUNTIME) {
++                        LOGGER.info(MARKER, "Sound engine disabled in web runtime because no audio backend is installed");
++                    }
++                    return;
++                }
++
+                 this.listener.reset();
+                 this.listener.setGain(this.options.getSoundSourceVolume(SoundSource.MASTER));
+                 this.soundBuffers.preload(this.preloadQueue).thenRun(this.preloadQueue::clear);
+@@ -224,6 +244,10 @@ public class SoundEngine {
+     }
+ 
+     public void tick(boolean p_120303_) {
++        if (!this.loaded) {
++            return;
++        }
++
+         if (this.shouldChangeDevice()) {
+             this.reload();
+         }
+@@ -347,6 +371,10 @@ public class SoundEngine {
+     }
+ 
+     public SoundEngine.PlayResult play(SoundInstance p_120313_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            return SoundEngine.PlayResult.NOT_STARTED;
++        }
++
+         if (!this.loaded) {
+             return SoundEngine.PlayResult.NOT_STARTED;
+         } else if (!p_120313_.canPlaySound()) {
+@@ -455,10 +483,18 @@ public class SoundEngine {
+     }
+ 
+     public void queueTickingSound(TickableSoundInstance p_120283_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
+         this.queuedTickableSounds.add(p_120283_);
+     }
+ 
+     public void requestPreload(Sound p_120273_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
+         this.preloadQueue.add(p_120273_);
+     }
+ 
+@@ -491,6 +527,10 @@ public class SoundEngine {
+     }
+ 
+     public void playDelayed(SoundInstance p_120277_, int p_120278_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
+         this.queuedSounds.put(p_120277_, this.tickCount + p_120278_);
+     }
+ 
+@@ -544,4 +584,4 @@ public class SoundEngine {
+         STARTED_SILENTLY,
+         NOT_STARTED;
+     }
+-}
+\ No newline at end of file
++}

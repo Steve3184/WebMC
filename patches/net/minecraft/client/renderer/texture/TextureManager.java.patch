@@ -1,0 +1,35 @@
+diff --git a/net/minecraft/client/renderer/texture/TextureManager.java b/net/minecraft/client/renderer/texture/TextureManager.java
+index b7b7a4f..28fde4c 100644
+--- a/net/minecraft/client/renderer/texture/TextureManager.java
++++ b/net/minecraft/client/renderer/texture/TextureManager.java
+@@ -25,14 +25,20 @@ import net.minecraft.server.packs.resources.ResourceManager;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.util.LruCache;
+ import top.steve3184.webmc.web.BuildFlags;
+
+ @OnlyIn(Dist.CLIENT)
+ public class TextureManager implements PreparableReloadListener, Tickable, AutoCloseable {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     public static final ResourceLocation INTENTIONAL_MISSING_TEXTURE = ResourceLocation.withDefaultNamespace("");
+     private static final int WEB_TICKABLE_TEXTURES_PER_TICK = 1;
++    private static final int TEXTURE_CONTENTS_CACHE_SIZE = 256;
+     private final Map<ResourceLocation, AbstractTexture> byPath = new HashMap<>();
+     private final Set<Tickable> tickableTextures = new HashSet<>();
+     private final ResourceManager resourceManager;
++    private final LruCache<ResourceLocation, TextureContents> textureContentsCache;
+     private int webTickableTextureCursor;
+
+     public TextureManager(ResourceManager p_118474_) {
+@@ -41,6 +47,12 @@ public class TextureManager implements PreparableReloadListener, Tickable, AutoC
+         NativeImage nativeimage = MissingTextureAtlasSprite.generateMissingImage();
+         this.register(MissingTextureAtlasSprite.getLocation(), new DynamicTexture(() -> "(intentionally-)Missing Texture", nativeimage));
++        if (BuildFlags.WEB_RUNTIME) {
++            this.textureContentsCache = new LruCache<>(TEXTURE_CONTENTS_CACHE_SIZE);
++        } else {
++            this.textureContentsCache = null;
++        }
+     }
+
+     public void registerAndLoad(ResourceLocation p_377323_, ReloadableTexture p_376843_) {

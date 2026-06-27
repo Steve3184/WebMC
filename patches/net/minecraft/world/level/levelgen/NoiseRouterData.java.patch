@@ -1,0 +1,136 @@
+--- a/net/minecraft/world/level/levelgen/NoiseRouterData.java
++++ b/net/minecraft/world/level/levelgen/NoiseRouterData.java
+@@ -64,53 +64,79 @@
+     }
+ 
+     public static Holder<? extends DensityFunction> bootstrap(BootstrapContext<DensityFunction> p_335193_) {
++        System.out.println("[mc-web/density-bootstrap] begin");
+         HolderGetter<NormalNoise.NoiseParameters> holdergetter = p_335193_.lookup(Registries.NOISE);
+         HolderGetter<DensityFunction> holdergetter1 = p_335193_.lookup(Registries.DENSITY_FUNCTION);
+         p_335193_.register(ZERO, DensityFunctions.zero());
++        System.out.println("[mc-web/density-bootstrap] ZERO");
+         int i = DimensionType.MIN_Y * 2;
+         int j = DimensionType.MAX_Y * 2;
+         p_335193_.register(Y, DensityFunctions.yClampedGradient(i, j, i, j));
++        System.out.println("[mc-web/density-bootstrap] Y");
+         DensityFunction densityfunction = registerAndWrap(
+             p_335193_, SHIFT_X, DensityFunctions.flatCache(DensityFunctions.cache2d(DensityFunctions.shiftA(holdergetter.getOrThrow(Noises.SHIFT))))
+         );
++        System.out.println("[mc-web/density-bootstrap] SHIFT_X");
+         DensityFunction densityfunction1 = registerAndWrap(
+             p_335193_, SHIFT_Z, DensityFunctions.flatCache(DensityFunctions.cache2d(DensityFunctions.shiftB(holdergetter.getOrThrow(Noises.SHIFT))))
+         );
++        System.out.println("[mc-web/density-bootstrap] SHIFT_Z");
+         p_335193_.register(BASE_3D_NOISE_OVERWORLD, BlendedNoise.createUnseeded(0.25, 0.125, 80.0, 160.0, 8.0));
+         p_335193_.register(BASE_3D_NOISE_NETHER, BlendedNoise.createUnseeded(0.25, 0.375, 80.0, 60.0, 8.0));
+         p_335193_.register(BASE_3D_NOISE_END, BlendedNoise.createUnseeded(0.25, 0.25, 80.0, 160.0, 4.0));
++        System.out.println("[mc-web/density-bootstrap] BASE_3D_NOISE");
+         Holder<DensityFunction> holder = p_335193_.register(
+             CONTINENTS,
+             DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(densityfunction, densityfunction1, 0.25, holdergetter.getOrThrow(Noises.CONTINENTALNESS)))
+         );
++        System.out.println("[mc-web/density-bootstrap] CONTINENTS");
+         Holder<DensityFunction> holder1 = p_335193_.register(
+             EROSION,
+             DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(densityfunction, densityfunction1, 0.25, holdergetter.getOrThrow(Noises.EROSION)))
+         );
++        System.out.println("[mc-web/density-bootstrap] EROSION");
+         DensityFunction densityfunction2 = registerAndWrap(
+             p_335193_,
+             RIDGES,
+             DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(densityfunction, densityfunction1, 0.25, holdergetter.getOrThrow(Noises.RIDGE)))
+         );
++        System.out.println("[mc-web/density-bootstrap] RIDGES");
+         p_335193_.register(RIDGES_FOLDED, peaksAndValleys(densityfunction2));
++        System.out.println("[mc-web/density-bootstrap] RIDGES_FOLDED");
+         DensityFunction densityfunction3 = DensityFunctions.noise(holdergetter.getOrThrow(Noises.JAGGED), 1500.0, 0.0);
++        System.out.println("[mc-web/density-bootstrap] JAGGED_NOISE");
++        System.out.println("[mc-web/density-bootstrap] registerTerrainNoises overworld begin");
+         registerTerrainNoises(p_335193_, holdergetter1, densityfunction3, holder, holder1, OFFSET, FACTOR, JAGGEDNESS, DEPTH, SLOPED_CHEESE, false);
++        System.out.println("[mc-web/density-bootstrap] registerTerrainNoises overworld end");
+         Holder<DensityFunction> holder2 = p_335193_.register(
+             CONTINENTS_LARGE,
+             DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(densityfunction, densityfunction1, 0.25, holdergetter.getOrThrow(Noises.CONTINENTALNESS_LARGE)))
+         );
++        System.out.println("[mc-web/density-bootstrap] CONTINENTS_LARGE");
+         Holder<DensityFunction> holder3 = p_335193_.register(
+             EROSION_LARGE,
+             DensityFunctions.flatCache(DensityFunctions.shiftedNoise2d(densityfunction, densityfunction1, 0.25, holdergetter.getOrThrow(Noises.EROSION_LARGE)))
+         );
++        System.out.println("[mc-web/density-bootstrap] EROSION_LARGE");
++        System.out.println("[mc-web/density-bootstrap] registerTerrainNoises large begin");
+         registerTerrainNoises(p_335193_, holdergetter1, densityfunction3, holder2, holder3, OFFSET_LARGE, FACTOR_LARGE, JAGGEDNESS_LARGE, DEPTH_LARGE, SLOPED_CHEESE_LARGE, false);
++        System.out.println("[mc-web/density-bootstrap] registerTerrainNoises large end");
++        System.out.println("[mc-web/density-bootstrap] registerTerrainNoises amplified begin");
+         registerTerrainNoises(p_335193_, holdergetter1, densityfunction3, holder, holder1, OFFSET_AMPLIFIED, FACTOR_AMPLIFIED, JAGGEDNESS_AMPLIFIED, DEPTH_AMPLIFIED, SLOPED_CHEESE_AMPLIFIED, true);
++        System.out.println("[mc-web/density-bootstrap] registerTerrainNoises amplified end");
+         p_335193_.register(SLOPED_CHEESE_END, DensityFunctions.add(DensityFunctions.endIslands(0L), getFunction(holdergetter1, BASE_3D_NOISE_END)));
++        System.out.println("[mc-web/density-bootstrap] SLOPED_CHEESE_END");
+         p_335193_.register(SPAGHETTI_ROUGHNESS_FUNCTION, spaghettiRoughnessFunction(holdergetter));
++        System.out.println("[mc-web/density-bootstrap] SPAGHETTI_ROUGHNESS_FUNCTION");
+         p_335193_.register(SPAGHETTI_2D_THICKNESS_MODULATOR, DensityFunctions.cacheOnce(DensityFunctions.mappedNoise(holdergetter.getOrThrow(Noises.SPAGHETTI_2D_THICKNESS), 2.0, 1.0, -0.6, -1.3)));
++        System.out.println("[mc-web/density-bootstrap] SPAGHETTI_2D_THICKNESS_MODULATOR");
+         p_335193_.register(SPAGHETTI_2D, spaghetti2D(holdergetter1, holdergetter));
++        System.out.println("[mc-web/density-bootstrap] SPAGHETTI_2D");
+         p_335193_.register(ENTRANCES, entrances(holdergetter1, holdergetter));
++        System.out.println("[mc-web/density-bootstrap] ENTRANCES");
+         p_335193_.register(NOODLE, noodle(holdergetter1, holdergetter));
++        System.out.println("[mc-web/density-bootstrap] NOODLE");
++        System.out.println("[mc-web/density-bootstrap] PILLARS begin");
+         return p_335193_.register(PILLARS, pillars(holdergetter));
+     }
+ 
+@@ -127,10 +153,12 @@
+         ResourceKey<DensityFunction> p_224483_,
+         boolean p_224484_
+     ) {
++        System.out.println("[mc-web/density-bootstrap] terrain coords begin " + p_224479_.location());
+         DensityFunctions.Spline.Coordinate densityfunctions$spline$coordinate = new DensityFunctions.Spline.Coordinate(p_224477_);
+         DensityFunctions.Spline.Coordinate densityfunctions$spline$coordinate1 = new DensityFunctions.Spline.Coordinate(p_224478_);
+         DensityFunctions.Spline.Coordinate densityfunctions$spline$coordinate2 = new DensityFunctions.Spline.Coordinate(p_256393_.getOrThrow(RIDGES));
+         DensityFunctions.Spline.Coordinate densityfunctions$spline$coordinate3 = new DensityFunctions.Spline.Coordinate(p_256393_.getOrThrow(RIDGES_FOLDED));
++        System.out.println("[mc-web/density-bootstrap] terrain coords end " + p_224479_.location());
+         DensityFunction densityfunction = registerAndWrap(
+             p_330992_,
+             p_224479_,
+@@ -146,6 +174,7 @@
+                 DensityFunctions.blendOffset()
+             )
+         );
++        System.out.println("[mc-web/density-bootstrap] terrain offset end " + p_224479_.location());
+         DensityFunction densityfunction1 = registerAndWrap(
+             p_330992_,
+             p_224480_,
+@@ -162,9 +191,11 @@
+                 BLENDING_FACTOR
+             )
+         );
++        System.out.println("[mc-web/density-bootstrap] terrain factor end " + p_224480_.location());
+         DensityFunction densityfunction2 = registerAndWrap(
+             p_330992_, p_224482_, DensityFunctions.add(DensityFunctions.yClampedGradient(-64, 320, 1.5, -1.5), densityfunction)
+         );
++        System.out.println("[mc-web/density-bootstrap] terrain depth end " + p_224482_.location());
+         DensityFunction densityfunction3 = registerAndWrap(
+             p_330992_,
+             p_224481_,
+@@ -181,9 +212,13 @@
+                 BLENDING_JAGGEDNESS
+             )
+         );
++        System.out.println("[mc-web/density-bootstrap] terrain jaggedness end " + p_224481_.location());
+         DensityFunction densityfunction4 = DensityFunctions.mul(densityfunction3, p_224476_.halfNegative());
++        System.out.println("[mc-web/density-bootstrap] terrain mul end " + p_224481_.location());
+         DensityFunction densityfunction5 = noiseGradientDensity(densityfunction1, DensityFunctions.add(densityfunction2, densityfunction4));
++        System.out.println("[mc-web/density-bootstrap] terrain gradient end " + p_224483_.location());
+         p_330992_.register(p_224483_, DensityFunctions.add(densityfunction5, getFunction(p_256393_, BASE_3D_NOISE_OVERWORLD)));
++        System.out.println("[mc-web/density-bootstrap] terrain sloped_cheese end " + p_224483_.location());
+     }
+ 
+     private static DensityFunction registerAndWrap(BootstrapContext<DensityFunction> p_331307_, ResourceKey<DensityFunction> p_255905_, DensityFunction p_255856_) {
+@@ -517,4 +552,4 @@
+             }
+         }
+     }
+-}
+\ No newline at end of file
++}

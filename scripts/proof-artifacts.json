@@ -1,0 +1,9 @@
+{
+  "proofArtifacts": [
+    "output/playwright/main-menu-click-smoothness-glsl-translator-float-int-scanner-normal-20260609.json",
+    "output/playwright/main-menu-click-smoothness-glsl-translator-float-int-scanner-normal-20260609.png",
+    "output/playwright/main-menu-click-smoothness-glsl-translator-float-int-scanner-normal-rerun-20260609.json",
+    "output/playwright/main-menu-click-smoothness-glsl-translator-float-int-scanner-normal-rerun-20260609.png",
+    "output/playwright/main-menu-click-smoothness-glsl-translator-float-int-scanner-normal-comparison-20260609.json"
+  ]
+}

@@ -1,0 +1,150 @@
+diff --git a/net/minecraft/util/ClassTreeIdRegistry.java b/net/minecraft/util/ClassTreeIdRegistry.java
+index 43c18e1..f732cc3 100644
+--- a/net/minecraft/util/ClassTreeIdRegistry.java
++++ b/net/minecraft/util/ClassTreeIdRegistry.java
+@@ -2,21 +2,114 @@ package net.minecraft.util;
+ 
+ import it.unimi.dsi.fastutil.objects.Object2IntMap;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
++import java.lang.reflect.Field;
++import java.lang.reflect.Modifier;
++import net.minecraft.network.syncher.EntityDataAccessor;
+ import net.minecraft.Util;
+ 
+ public class ClassTreeIdRegistry {
+     public static final int NO_ID_VALUE = -1;
+-    private final Object2IntMap<Class<?>> classToLastIdCache = Util.make(new Object2IntOpenHashMap<>(), p_327761_ -> p_327761_.defaultReturnValue(-1));
++    private final Object2IntMap<String> classToLastIdCache = Util.make(new Object2IntOpenHashMap<>(), p_327761_ -> p_327761_.defaultReturnValue(-1));
++
++    private static String safeClassKey(Class<?> type) {
++        try {
++            return type.getName();
++        } catch (Throwable throwable) {
++            return "<class@" + Integer.toHexString(System.identityHashCode(type)) + ">";
++        }
++    }
++
++    private static Class<?> safeSuperclass(Class<?> type) {
++        try {
++            return type == null ? null : type.getSuperclass();
++        } catch (Throwable throwable) {
++            return null;
++        }
++    }
++
++    private static int getReflectiveParentLastIdFor(Class<?> type) {
++        int maxId = NO_ID_VALUE;
++
++        for (Class<?> current = safeSuperclass(type); current != null && current != Object.class; current = safeSuperclass(current)) {
++            Field[] fields;
++            try {
++                fields = current.getDeclaredFields();
++            } catch (Throwable throwable) {
++                continue;
++            }
++
++            for (Field field : fields) {
++                if (!Modifier.isStatic(field.getModifiers()) || !EntityDataAccessor.class.isAssignableFrom(field.getType())) {
++                    continue;
++                }
++
++                try {
++                    field.setAccessible(true);
++                    Object value = field.get(null);
++                    if (value instanceof EntityDataAccessor<?> accessor) {
++                        maxId = Math.max(maxId, accessor.id());
++                    }
++                } catch (Throwable ignored) {
++                }
++            }
++        }
++
++        return maxId;
++    }
++
++    private static boolean hasSuperclassNamed(Class<?> type, String expectedName) {
++        for (Class<?> current = safeSuperclass(type); current != null && current != Object.class; current = safeSuperclass(current)) {
++            if (expectedName.equals(safeClassKey(current))) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++
++    private static int getKnownVanillaParentLastIdFor(Class<?> type) {
++        String className = safeClassKey(type);
++
++        if ("net.minecraft.world.entity.animal.wolf.Wolf".equals(className) || "net.minecraft.world.entity.animal.Cat".equals(className)) {
++            return 18;
++        }
++
++        if (hasSuperclassNamed(type, "net.minecraft.world.entity.TamableAnimal")) {
++            return 18;
++        }
++
++        if ("net.minecraft.world.entity.animal.Chicken".equals(className)
++            || "net.minecraft.world.entity.animal.Cow".equals(className)
++            || "net.minecraft.world.entity.animal.Pig".equals(className)
++            || "net.minecraft.world.entity.animal.sheep.Sheep".equals(className)
++            || hasSuperclassNamed(type, "net.minecraft.world.entity.AgeableMob")) {
++            return 16;
++        }
++
++        if (hasSuperclassNamed(type, "net.minecraft.world.entity.Mob")) {
++            return 15;
++        }
++
++        if (hasSuperclassNamed(type, "net.minecraft.world.entity.LivingEntity")) {
++            return 14;
++        }
++
++        if (hasSuperclassNamed(type, "net.minecraft.world.entity.Entity")) {
++            return 7;
++        }
++
++        return NO_ID_VALUE;
++    }
+ 
+     public int getLastIdFor(Class<?> p_330417_) {
+-        int i = this.classToLastIdCache.getInt(p_330417_);
++        int i = this.classToLastIdCache.getInt(safeClassKey(p_330417_));
+         if (i != -1) {
+             return i;
+         } else {
+             Class<?> oclass = p_330417_;
+ 
+-            while ((oclass = oclass.getSuperclass()) != Object.class) {
+-                int j = this.classToLastIdCache.getInt(oclass);
++            while ((oclass = safeSuperclass(oclass)) != null && oclass != Object.class) {
++                int j = this.classToLastIdCache.getInt(safeClassKey(oclass));
+                 if (j != -1) {
+                     return j;
+                 }
+@@ -26,14 +119,22 @@ public class ClassTreeIdRegistry {
+         }
+     }
+ 
++    public int getLocalLastIdFor(Class<?> p_408469_) {
++        return this.classToLastIdCache.getInt(safeClassKey(p_408469_));
++    }
++
+     public int getCount(Class<?> p_335504_) {
+         return this.getLastIdFor(p_335504_) + 1;
+     }
+ 
+     public int define(Class<?> p_334105_) {
+-        int i = this.getLastIdFor(p_334105_);
++        int i = Math.max(Math.max(this.getLastIdFor(p_334105_), getReflectiveParentLastIdFor(p_334105_)), getKnownVanillaParentLastIdFor(p_334105_));
+         int j = i == -1 ? 0 : i + 1;
+-        this.classToLastIdCache.put(p_334105_, j);
++        this.classToLastIdCache.put(safeClassKey(p_334105_), j);
+         return j;
+     }
+-}
+\ No newline at end of file
++
++    public void setLastIdFor(Class<?> p_407746_, int p_407577_) {
++        this.classToLastIdCache.put(safeClassKey(p_407746_), p_407577_);
++    }
++}

@@ -1,0 +1,13 @@
+--- a/net/minecraft/server/packs/resources/FallbackResourceManager.java
++++ b/net/minecraft/server/packs/resources/FallbackResourceManager.java
+@@ -289,7 +289,9 @@
+ 
+         TreeMap<ResourceLocation, List<Resource>> treemap = Maps.newTreeMap();
+ 
+-        for (FallbackResourceManager.EntryStack fallbackresourcemanager$entrystack : map.values()) {
++        for (ResourceLocation _k : map.keySet()) {
++            FallbackResourceManager.EntryStack fallbackresourcemanager$entrystack = map.get(_k);
++            if (fallbackresourcemanager$entrystack == null) continue;
+             if (!fallbackresourcemanager$entrystack.fileSources.isEmpty()) {
+                 List<Resource> list = new ArrayList<>();
+ 

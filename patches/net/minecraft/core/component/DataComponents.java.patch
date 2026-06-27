@@ -1,0 +1,32 @@
+--- a/net/minecraft/core/component/DataComponents.java
++++ b/net/minecraft/core/component/DataComponents.java
+@@ -90,6 +90,9 @@
+ import net.minecraft.world.level.saveddata.maps.MapId;
+ 
+ public class DataComponents {
++    static {
++        System.err.println("[mc-probe] DataComponents.<clinit> entering field-init phase");
++    }
+     static final EncoderCache ENCODER_CACHE = new EncoderCache(512);
+     public static final DataComponentType<CustomData> CUSTOM_DATA = register("custom_data", p_333248_ -> p_333248_.persistent(CustomData.CODEC));
+     public static final DataComponentType<Integer> MAX_STACK_SIZE = register(
+@@ -383,7 +386,17 @@
+         return CUSTOM_DATA;
+     }
+ 
++    private static int probeDcCounter = 0;
+     private static <T> DataComponentType<T> register(String p_335254_, UnaryOperator<DataComponentType.Builder<T>> p_329979_) {
+-        return Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE, p_335254_, p_329979_.apply(DataComponentType.builder()).build());
++        int idx = probeDcCounter++;
++        if ((idx & 15) == 0) {
++            System.err.println("[mc-probe] DataComponents.register #" + idx + ": " + p_335254_);
++        }
++        try {
++            return Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE, p_335254_, p_329979_.apply(DataComponentType.builder()).build());
++        } catch (Throwable t) {
++            System.err.println("[mc-probe] DataComponents.register #" + idx + " FAIL: " + p_335254_ + " err=" + t);
++            throw t;
++        }
+     }
+ }
+\ No newline at end of file

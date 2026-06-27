@@ -1,0 +1,117 @@
+--- a/net/minecraft/server/Bootstrap.java
++++ b/net/minecraft/server/Bootstrap.java
+@@ -43,60 +43,53 @@
+     public static void bootStrap() {
+         if (!isBootstrapped) {
+             isBootstrapped = true;
++            System.err.println("[mc-probe] Bootstrap.bootStrap: start");
+             Instant instant = Instant.now();
++            try {
++            System.err.println("[mc-probe] Bootstrap: BuiltInRegistries.REGISTRY access");
+             if (BuiltInRegistries.REGISTRY.keySet().isEmpty()) {
+                 throw new IllegalStateException("Unable to load registries");
+             } else {
++                System.err.println("[mc-probe] Bootstrap: FireBlock.bootStrap");
+                 FireBlock.bootStrap();
++                System.err.println("[mc-probe] Bootstrap: ComposterBlock.bootStrap");
+                 ComposterBlock.bootStrap();
++                System.err.println("[mc-probe] Bootstrap: EntityType.PLAYER lookup");
+                 if (EntityType.getKey(EntityType.PLAYER) == null) {
+                     throw new IllegalStateException("Failed loading EntityTypes");
+                 } else {
++                    System.err.println("[mc-probe] Bootstrap: EntitySelectorOptions");
+                     EntitySelectorOptions.bootStrap();
++                    System.err.println("[mc-probe] Bootstrap: DispenseItemBehavior");
+                     DispenseItemBehavior.bootStrap();
++                    System.err.println("[mc-probe] Bootstrap: CauldronInteraction");
+                     CauldronInteraction.bootStrap();
++                    System.err.println("[mc-probe] Bootstrap: BuiltInRegistries.bootStrap");
+                     BuiltInRegistries.bootStrap();
++                    System.err.println("[mc-probe] Bootstrap: CreativeModeTabs.validate");
+                     CreativeModeTabs.validate();
++                    System.err.println("[mc-probe] Bootstrap: wrapStreams");
+                     wrapStreams();
+                     bootstrapDuration.set(Duration.between(instant, Instant.now()).toMillis());
++                    System.err.println("[mc-probe] Bootstrap: done");
+                 }
+             }
++            } catch (Throwable t) {
++                System.err.println("[mc-probe] Bootstrap caught: " + t);
++                t.printStackTrace();
++                throw t;
++            }
+         }
+     }
+ 
+     private static <T> void checkTranslations(Iterable<T> p_135872_, Function<T, String> p_135873_, Set<String> p_135874_) {
+-        Language language = Language.getInstance();
+-        p_135872_.forEach(p_135883_ -> {
+-            String s = p_135873_.apply((T)p_135883_);
+-            if (!language.has(s)) {
+-                p_135874_.add(s);
+-            }
+-        });
+     }
+ 
+     private static void checkGameruleTranslations(final Set<String> p_135878_) {
+-        final Language language = Language.getInstance();
+-        GameRules gamerules = new GameRules(FeatureFlags.REGISTRY.allFlags());
+-        gamerules.visitGameRuleTypes(new GameRules.GameRuleTypeVisitor() {
+-            @Override
+-            public <T extends GameRules.Value<T>> void visit(GameRules.Key<T> p_135897_, GameRules.Type<T> p_135898_) {
+-                if (!language.has(p_135897_.getDescriptionId())) {
+-                    p_135878_.add(p_135897_.getId());
+-                }
+-            }
+-        });
+     }
+ 
+     public static Set<String> getMissingTranslations() {
+-        Set<String> set = new TreeSet<>();
+-        checkTranslations(BuiltInRegistries.ATTRIBUTE, Attribute::getDescriptionId, set);
+-        checkTranslations(BuiltInRegistries.ENTITY_TYPE, EntityType::getDescriptionId, set);
+-        checkTranslations(BuiltInRegistries.MOB_EFFECT, MobEffect::getDescriptionId, set);
+-        checkTranslations(BuiltInRegistries.ITEM, Item::getDescriptionId, set);
+-        checkTranslations(BuiltInRegistries.BLOCK, BlockBehaviour::getDescriptionId, set);
+-        checkTranslations(BuiltInRegistries.CUSTOM_STAT, p_135885_ -> "stat." + p_135885_.toString().replace(':', '.'), set);
+-        checkGameruleTranslations(set);
+-        return set;
++        return Set.of();
+     }
+ 
+     public static void checkBootstrapCalled(Supplier<String> p_179913_) {
+@@ -118,21 +111,23 @@
+ 
+     public static void validate() {
+         checkBootstrapCalled(() -> "validate");
+-        if (SharedConstants.IS_RUNNING_IN_IDE) {
+-            getMissingTranslations().forEach(p_179915_ -> LOGGER.error("Missing translations: {}", p_179915_));
+-            Commands.validate();
+-        }
+-
+         DefaultAttributes.validate();
+     }
+ 
+     private static void wrapStreams() {
+-        if (LOGGER.isDebugEnabled()) {
+-            System.setErr(new DebugLoggedPrintStream("STDERR", System.err));
+-            System.setOut(new DebugLoggedPrintStream("STDOUT", STDOUT));
+-        } else {
+-            System.setErr(new LoggedPrintStream("STDERR", System.err));
+-            System.setOut(new LoggedPrintStream("STDOUT", STDOUT));
++        // mc-web: original code wraps System.err/out in LoggedPrintStream so
++        // stray println calls show up in the slf4j log. In the browser our
++        // ConsoleLogger emits via System.err.println itself, so wrapping it
++        // creates infinite recursion (println → LOGGER.info → emit → println).
++        // The redirection is purely cosmetic for crash reports; skip it.
++        if (false) {
++            if (LOGGER.isDebugEnabled()) {
++                System.setErr(new DebugLoggedPrintStream("STDERR", System.err));
++                System.setOut(new DebugLoggedPrintStream("STDOUT", STDOUT));
++            } else {
++                System.setErr(new LoggedPrintStream("STDERR", System.err));
++                System.setOut(new LoggedPrintStream("STDOUT", STDOUT));
++            }
+         }
+     }
+ 

@@ -1,0 +1,27 @@
+--- a/com/mojang/realmsclient/client/worldupload/RealmsUploadWorldPacker.java
++++ b/com/mojang/realmsclient/client/worldupload/RealmsUploadWorldPacker.java
+@@ -12,6 +12,7 @@
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class RealmsUploadWorldPacker {
+@@ -21,6 +22,9 @@
+     private final Path directoryToPack;
+ 
+     public static File pack(Path p_363835_, BooleanSupplier p_361418_) throws IOException {
++        if (BuildFlags.WEB_RUNTIME) {
++            throw new IOException("Realms world packing is disabled in browser runtime");
++        }
+         return new RealmsUploadWorldPacker(p_363835_, p_361418_).tarGzipArchive();
+     }
+ 
+@@ -86,4 +90,4 @@
+             throw new RealmsUploadTooLargeException(5368709120L);
+         }
+     }
+-}
+\ No newline at end of file
++}

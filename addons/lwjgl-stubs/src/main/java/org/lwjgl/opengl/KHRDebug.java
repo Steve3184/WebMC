@@ -1,0 +1,27 @@
+package org.lwjgl.opengl;
+
+/** Stub of KHR_debug. Used for GL debug callbacks; WebGL2 has WEBGL_debug_renderer_info instead. */
+public final class KHRDebug {
+    public static final int GL_DEBUG_OUTPUT             = 0x92E0;
+    public static final int GL_DEBUG_OUTPUT_SYNCHRONOUS = 0x8242;
+    public static final int GL_DEBUG_SOURCE_API         = 0x8246;
+    public static final int GL_DEBUG_TYPE_ERROR         = 0x824C;
+    public static final int GL_DEBUG_SEVERITY_HIGH      = 0x9146;
+    public static final int GL_DEBUG_SEVERITY_MEDIUM    = 0x9147;
+    public static final int GL_DEBUG_SEVERITY_LOW       = 0x9148;
+    public static final int GL_DEBUG_SEVERITY_NOTIFICATION = 0x826B;
+
+    public static final int GL_BUFFER          = 0x82E0;
+    public static final int GL_SHADER          = 0x82E1;
+    public static final int GL_PROGRAM         = 0x82E2;
+    public static final int GL_VERTEX_ARRAY    = 0x8074;
+    public static final int GL_TEXTURE         = 0x1702;
+    public static final int GL_FRAMEBUFFER     = 0x8D40;
+
+    public static void glDebugMessageControl(int source, int type, int severity, int[] ids, boolean enabled) {}
+    public static void glDebugMessageCallback(GLDebugMessageCallback cb, long userParam) {}
+    public static void glObjectLabel(int identifier, int name, CharSequence label) {}
+    public static void glPushDebugGroup(int source, int id, CharSequence message) {}
+    public static void glPopDebugGroup() {}
+    private KHRDebug() {}
+}

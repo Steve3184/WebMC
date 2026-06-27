@@ -1,0 +1,48 @@
+--- a/net/minecraft/client/renderer/texture/Stitcher.java
++++ b/net/minecraft/client/renderer/texture/Stitcher.java
+@@ -45,11 +45,20 @@
+     public void stitch() {
+         List<Stitcher.Holder<T>> list = new ArrayList<>(this.texturesToBeStitched);
+         list.sort(HOLDER_COMPARATOR);
++        int total = list.size();
++        System.err.println("[mc-probe] Stitcher.stitch begin, " + total + " holders, max=" + this.maxWidth + "x" + this.maxHeight);
++        long t0 = System.currentTimeMillis();
++        int idx = 0;
+ 
+         for (Stitcher.Holder<T> holder : list) {
+             if (!this.addToStorage(holder)) {
+                 throw new StitcherException(holder.entry, list.stream().map(p_247946_ -> p_247946_.entry).collect(ImmutableList.toImmutableList()));
+             }
++            idx++;
++            if (idx % 50 == 0 || idx == total) {
++                System.err.println("[mc-probe] Stitcher.stitch " + idx + "/" + total + " regions=" + this.storage.size()
++                    + " canvas=" + this.storageX + "x" + this.storageY + " ms=" + (System.currentTimeMillis() - t0));
++            }
+         }
+     }
+ 
+@@ -64,13 +73,23 @@
+     }
+ 
+     private boolean addToStorage(Stitcher.Holder<T> p_118179_) {
++        long t0 = System.currentTimeMillis();
+         for (Stitcher.Region<T> region : this.storage) {
+             if (region.add(p_118179_)) {
++                long dt = System.currentTimeMillis() - t0;
++                if (dt > 250) {
++                    System.err.println("[mc-probe] Stitcher.addToStorage slow fit " + dt + "ms regions=" + this.storage.size());
++                }
+                 return true;
+             }
+         }
+ 
+-        return this.expand(p_118179_);
++        boolean r = this.expand(p_118179_);
++        long dt = System.currentTimeMillis() - t0;
++        if (dt > 250) {
++            System.err.println("[mc-probe] Stitcher.addToStorage slow expand " + dt + "ms regions=" + this.storage.size());
++        }
++        return r;
+     }
+ 
+     private boolean expand(Stitcher.Holder<T> p_118192_) {

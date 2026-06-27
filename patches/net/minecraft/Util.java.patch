@@ -1,0 +1,201 @@
+--- a/net/minecraft/Util.java
++++ b/net/minecraft/Util.java
+@@ -27,16 +27,11 @@
+ import it.unimi.dsi.fastutil.objects.ReferenceList;
+ import java.io.File;
+ import java.io.IOException;
+-import java.lang.management.ManagementFactory;
+-import java.lang.management.RuntimeMXBean;
+ import java.net.URI;
+ import java.net.URISyntaxException;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.nio.file.spi.FileSystemProvider;
+-import java.security.AccessController;
+-import java.security.PrivilegedActionException;
+-import java.security.PrivilegedExceptionAction;
+ import java.time.Duration;
+ import java.time.Instant;
+ import java.time.ZonedDateTime;
+@@ -87,32 +82,42 @@
+ import net.minecraft.util.datafix.DataFixers;
+ import net.minecraft.world.level.block.state.properties.Property;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class Util {
++    // mc-web: several vanilla static initializers assume NIL_UUID is a real UUID,
++    // notably MinecraftServer.ANONYMOUS_PLAYER_PROFILE. Leaving this null breaks
++    // class initialization long before world bootstrap reaches its own web guards.
++    // Move NIL_UUID to the very top of static initializers to prevent TeaVM from reading
++    // it as null if the class initializer is suspended early during subsequent field setup.
++    public static final UUID NIL_UUID = new UUID(0L, 0L);
+     static final Logger LOGGER = LogUtils.getLogger();
+     private static final int DEFAULT_MAX_THREADS = 255;
+     private static final int DEFAULT_SAFE_FILE_OPERATION_RETRIES = 10;
+     private static final String MAX_THREADS_SYSTEM_PROPERTY = "max.bg.threads";
+-    private static final TracingExecutor BACKGROUND_EXECUTOR = makeExecutor("Main");
+-    private static final TracingExecutor IO_POOL = makeIoExecutor("IO-Worker-", false);
+-    private static final TracingExecutor DOWNLOAD_POOL = makeIoExecutor("Download-", true);
++    private static final TracingExecutor BACKGROUND_EXECUTOR = BuildFlags.WEB_RUNTIME ? null : makeExecutor("Main");
++    private static final TracingExecutor IO_POOL = BuildFlags.WEB_RUNTIME ? null : makeIoExecutor("IO-Worker-", false);
++    private static final TracingExecutor DOWNLOAD_POOL = BuildFlags.WEB_RUNTIME ? null : makeIoExecutor("Download-", true);
+     private static final DateTimeFormatter FILENAME_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", Locale.ROOT);
+     public static final int LINEAR_LOOKUP_THRESHOLD = 8;
+     private static final Set<String> ALLOWED_UNTRUSTED_LINK_PROTOCOLS = Set.of("http", "https");
+     public static final long NANOS_PER_MILLI = 1000000L;
+-    public static TimeSource.NanoTimeSource timeSource = System::nanoTime;
++    public static TimeSource.NanoTimeSource timeSource = BuildFlags.WEB_RUNTIME ? top.steve3184.webmc.teavm.runtime.WebTime::nanoTime : System::nanoTime;
+     public static final Ticker TICKER = new Ticker() {
+         @Override
+         public long read() {
+             return Util.timeSource.getAsLong();
+         }
+     };
+-    public static final UUID NIL_UUID = new UUID(0L, 0L);
++    // Browser: TeaVM has no FileSystemProvider service entries — installedProviders()
++    // returns empty list. Skip the throw at class load so Util.<clinit> doesn't blow
++    // up before MC even reaches main(). MC's actual zip access goes through other
++    // paths in browser deployment (resources via fetch).
+     public static final FileSystemProvider ZIP_FILE_SYSTEM_PROVIDER = FileSystemProvider.installedProviders()
+         .stream()
+         .filter(p_201865_ -> p_201865_.getScheme().equalsIgnoreCase("jar"))
+         .findFirst()
+-        .orElseThrow(() -> new IllegalStateException("No jar file system provider found"));
++        .orElse(null);
+     private static Consumer<String> thePauser = p_201905_ -> {};
+ 
+     public static <K, V> Collector<Entry<? extends K, ? extends V>, ?, Map<K, V>> toMap() {
+@@ -150,38 +155,12 @@
+     }
+ 
+     private static TracingExecutor makeExecutor(String p_137478_) {
+-        int i = maxAllowedExecutorThreads();
+-        ExecutorService executorservice;
+-        if (i <= 0) {
+-            executorservice = MoreExecutors.newDirectExecutorService();
+-        } else {
+-            AtomicInteger atomicinteger = new AtomicInteger(1);
+-            executorservice = new ForkJoinPool(i, p_357604_ -> {
+-                final String s = "Worker-" + p_137478_ + "-" + atomicinteger.getAndIncrement();
+-                ForkJoinWorkerThread forkjoinworkerthread = new ForkJoinWorkerThread(p_357604_) {
+-                    @Override
+-                    protected void onStart() {
+-                        TracyClient.setThreadName(s, p_137478_.hashCode());
+-                        super.onStart();
+-                    }
+-
+-                    @Override
+-                    protected void onTermination(Throwable p_211561_) {
+-                        if (p_211561_ != null) {
+-                            Util.LOGGER.warn("{} died", this.getName(), p_211561_);
+-                        } else {
+-                            Util.LOGGER.debug("{} shutdown", this.getName());
+-                        }
+-
+-                        super.onTermination(p_211561_);
+-                    }
+-                };
+-                forkjoinworkerthread.setName(s);
+-                return forkjoinworkerthread;
+-            }, Util::onThreadException, true);
+-        }
+-
+-        return new TracingExecutor(executorservice);
++        // mc-web: single-threaded browser — use a yielding ExecutorService that
++        // defers each task to setTimeout(…, 0), so every CompletableFuture stage
++        // runs in its own JS event-loop tick. Without this the resource reload
++        // runs ~20 listeners in a single setTimeout handler that takes 8+
++        // seconds and the tab appears frozen (Eaglercraft uses the same trick).
++        return new TracingExecutor(new top.steve3184.webmc.teavm.runtime.YieldingExecutorService());
+     }
+ 
+     public static int maxAllowedExecutorThreads() {
+@@ -207,33 +186,29 @@
+     }
+ 
+     public static TracingExecutor backgroundExecutor() {
+-        return BACKGROUND_EXECUTOR;
++        return BACKGROUND_EXECUTOR == null ? makeExecutor("Main") : BACKGROUND_EXECUTOR;
+     }
+ 
+     public static TracingExecutor ioPool() {
+-        return IO_POOL;
++        return IO_POOL == null ? makeIoExecutor("IO-Worker-", false) : IO_POOL;
+     }
+ 
+     public static TracingExecutor nonCriticalIoPool() {
+-        return DOWNLOAD_POOL;
++        return DOWNLOAD_POOL == null ? makeIoExecutor("Download-", true) : DOWNLOAD_POOL;
+     }
+ 
+     public static void shutdownExecutors() {
+-        BACKGROUND_EXECUTOR.shutdownAndAwait(3L, TimeUnit.SECONDS);
+-        IO_POOL.shutdownAndAwait(3L, TimeUnit.SECONDS);
++        if (BACKGROUND_EXECUTOR != null) {
++            BACKGROUND_EXECUTOR.shutdownAndAwait(3L, TimeUnit.SECONDS);
++        }
++        if (IO_POOL != null) {
++            IO_POOL.shutdownAndAwait(3L, TimeUnit.SECONDS);
++        }
+     }
+ 
+     private static TracingExecutor makeIoExecutor(String p_309722_, boolean p_310621_) {
+-        AtomicInteger atomicinteger = new AtomicInteger(1);
+-        return new TracingExecutor(Executors.newCachedThreadPool(p_357582_ -> {
+-            Thread thread = new Thread(p_357582_);
+-            String s = p_309722_ + atomicinteger.getAndIncrement();
+-            TracyClient.setThreadName(s, p_309722_.hashCode());
+-            thread.setName(s);
+-            thread.setDaemon(p_310621_);
+-            thread.setUncaughtExceptionHandler(Util::onThreadException);
+-            return thread;
+-        }));
++        // mc-web: see makeExecutor — same yielding single-threaded executor.
++        return new TracingExecutor(new top.steve3184.webmc.teavm.runtime.YieldingExecutorService());
+     }
+ 
+     public static void throwAsRuntime(Throwable p_137560_) {
+@@ -513,8 +488,7 @@
+     }
+ 
+     public static Stream<String> getVmArguments() {
+-        RuntimeMXBean runtimemxbean = ManagementFactory.getRuntimeMXBean();
+-        return runtimemxbean.getInputArguments().stream().filter(p_201903_ -> p_201903_.startsWith("-X"));
++        return Stream.empty();
+     }
+ 
+     public static <T> T lastOf(List<T> p_137510_) {
+@@ -594,7 +568,13 @@
+             return p_137568_.get(0).thenApply(List::of);
+         } else {
+             CompletableFuture<Void> completablefuture = CompletableFuture.allOf(p_137568_.toArray(new CompletableFuture[0]));
+-            return completablefuture.thenApply(p_203746_ -> p_137568_.stream().map(CompletableFuture::join).toList());
++            return completablefuture.thenApply(p_203746_ -> {
++                List<V> list = Lists.newArrayListWithCapacity(p_137568_.size());
++                for (CompletableFuture<V> future : p_137568_) {
++                    list.add(future.join());
++                }
++                return list;
++            });
+         }
+     }
+ 
+@@ -1099,16 +1079,7 @@
+         }
+ 
+         public void openUri(URI p_137649_) {
+-            try {
+-                Process process = AccessController.doPrivileged(
+-                    (PrivilegedExceptionAction<Process>)(() -> Runtime.getRuntime().exec(this.getOpenUriArguments(p_137649_)))
+-                );
+-                process.getInputStream().close();
+-                process.getErrorStream().close();
+-                process.getOutputStream().close();
+-            } catch (IOException | PrivilegedActionException privilegedactionexception) {
+-                Util.LOGGER.error("Couldn't open location '{}'", p_137649_, privilegedactionexception);
+-            }
++            // browser: external open is a no-op for now (window.open could go here later)
+         }
+ 
+         public void openFile(File p_137645_) {

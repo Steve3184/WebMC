@@ -1,0 +1,34 @@
+diff --git a/net/minecraft/server/PlayerAdvancements.java b/net/minecraft/server/PlayerAdvancements.java
+index 459706e..04a82c6 100644
+--- a/net/minecraft/server/PlayerAdvancements.java
++++ b/net/minecraft/server/PlayerAdvancements.java
+@@ -45,6 +45,7 @@ import net.minecraft.util.StrictJsonParser;
+ import net.minecraft.util.datafix.DataFixTypes;
+ import net.minecraft.world.level.GameRules;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class PlayerAdvancements {
+     private static final Logger LOGGER = LogUtils.getLogger();
+@@ -245,6 +246,14 @@ public class PlayerAdvancements {
+     }
+ 
+     public void flushDirty(ServerPlayer p_135993_, boolean p_393372_) {
++        if (BuildFlags.WEB_RUNTIME && this.isFirstPacket) {
++            this.rootsToUpdate.clear();
++            this.progressChanged.clear();
++            this.isFirstPacket = false;
++            System.out.println("[mc-web/advancements] skipInitialFlush");
++            return;
++        }
++
+         if (this.isFirstPacket || !this.rootsToUpdate.isEmpty() || !this.progressChanged.isEmpty()) {
+             Map<ResourceLocation, AdvancementProgress> map = new HashMap<>();
+             Set<AdvancementHolder> set = new HashSet<>();
+@@ -327,4 +336,4 @@ public class PlayerAdvancements {
+                 .forEach(p_300025_ -> p_298170_.accept(p_300025_.getKey(), p_300025_.getValue()));
+         }
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/level/chunk/LevelChunk.java
++++ b/net/minecraft/world/level/chunk/LevelChunk.java
+@@ -545,6 +545,13 @@ public class LevelChunk extends ChunkAccess {
+         }
+     }
+ 
++    public void replaceWithWebPacketData(
++        LevelChunk p_410113_, Map<Heightmap.Types, long[]> p_408721_, Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> p_407949_
++    ) {
++        ClientboundLevelChunkPacketData clientboundlevelchunkpacketdata = new ClientboundLevelChunkPacketData(p_410113_);
++        this.replaceWithPacketData(clientboundlevelchunkpacketdata.getReadBuffer(), p_408721_, p_407949_);
++    }
++
+     public void replaceBiomes(FriendlyByteBuf p_275574_) {
+         for (LevelChunkSection levelchunksection : this.sections) {
+             levelchunksection.readBiomes(p_275574_);

@@ -1,0 +1,790 @@
+diff --git a/net/minecraft/client/multiplayer/ClientPacketListener.java b/net/minecraft/client/multiplayer/ClientPacketListener.java
+index e327df2..ee0ddae 100644
+--- a/net/minecraft/client/multiplayer/ClientPacketListener.java
++++ b/net/minecraft/client/multiplayer/ClientPacketListener.java
+@@ -333,6 +333,7 @@ import net.minecraft.world.level.chunk.DataLayer;
+ import net.minecraft.world.level.chunk.LevelChunk;
+ import net.minecraft.world.level.chunk.LevelChunkSection;
+ import net.minecraft.world.level.dimension.DimensionType;
++import net.minecraft.world.level.levelgen.Heightmap;
+ import net.minecraft.world.level.lighting.LevelLightEngine;
+ import net.minecraft.world.level.saveddata.maps.MapId;
+ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+@@ -347,6 +348,8 @@ import net.minecraft.world.scores.criteria.ObjectiveCriteria;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class ClientPacketListener extends ClientCommonPacketListenerImpl implements ClientGamePacketListener, TickablePacketListener {
+@@ -394,6 +397,7 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     private ClientLevel level;
+     private ClientLevel.ClientLevelData levelData;
+     private final Map<UUID, PlayerInfo> playerInfoMap = Maps.newHashMap();
++    private final Map<String, PlayerInfo> webPlayerInfoMap = Maps.newHashMap();
+     private final Set<PlayerInfo> listedPlayers = new ReferenceOpenHashSet<>();
+     private final ClientAdvancements advancements;
+     private final ClientSuggestionProvider suggestionsProvider;
+@@ -429,15 +433,27 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     private LevelLoadStatusManager levelLoadStatusManager;
+     private boolean serverEnforcesSecureChat;
+     private boolean seenInsecureChatWarning = false;
++    private int webNullPlayerTickLogs;
+     private volatile boolean closed;
+     private final Scoreboard scoreboard = new Scoreboard();
+     private final ClientWaypointManager waypointManager = new ClientWaypointManager();
+     private final SessionSearchTrees searchTrees = new SessionSearchTrees();
+     private final List<WeakReference<CacheSlot<?, ?>>> cacheSlots = new ArrayList<>();
++    private int webChunkPacketLogs;
++    private int webChunkBatchLogs;
++    private int webChunkContentLogs;
++    private int webRecipeSyncSkipLogs;
++    private int webAdvancementSyncSkipLogs;
+ 
+     public ClientPacketListener(Minecraft p_253924_, Connection p_253614_, CommonListenerCookie p_298329_) {
+         super(p_253924_, p_253614_, p_298329_);
+-        this.localGameProfile = p_298329_.localGameProfile();
++        GameProfile gameprofile = p_298329_.localGameProfile();
++        if (BuildFlags.WEB_RUNTIME && gameprofile.getId() == null) {
++            UUID syntheticUuid = new UUID(0x434c495f5745424cL, gameprofile.getName() == null ? 0L : (long)gameprofile.getName().hashCode());
++            System.out.println("[mc-web/clientlogin] localGameProfile synthetic UUID " + syntheticUuid + " for " + gameprofile.getName());
++            gameprofile = new GameProfile(syntheticUuid, gameprofile.getName());
++        }
++        this.localGameProfile = gameprofile;
+         this.registryAccess = p_298329_.receivedRegistries();
+         RegistryOps<HashCode> registryops = this.registryAccess.createSerializationContext(HashOps.CRC32C_INSTANCE);
+         this.decoratedHashOpsGenerator = p_389339_ -> p_389339_.encodeValue(registryops)
+@@ -491,6 +507,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleLogin(ClientboundLoginPacket p_105030_) {
+         PacketUtils.ensureRunningOnSameThread(p_105030_, this, this.minecraft);
++        boolean webDiagnostics = WebDiagnostics.enabled();
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.begin playerNull=" + (this.minecraft.player == null));
++        }
+         this.minecraft.gameMode = new MultiPlayerGameMode(this.minecraft, this);
+         CommonPlayerSpawnInfo commonplayerspawninfo = p_105030_.commonPlayerSpawnInfo();
+         List<ResourceKey<Level>> list = Lists.newArrayList(p_105030_.levels());
+@@ -505,6 +525,9 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         int i = commonplayerspawninfo.seaLevel();
+         ClientLevel.ClientLevelData clientlevel$clientleveldata = new ClientLevel.ClientLevelData(Difficulty.NORMAL, p_105030_.hardcore(), flag1);
+         this.levelData = clientlevel$clientleveldata;
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.beforeNewClientLevel");
++        }
+         this.level = new ClientLevel(
+             this,
+             clientlevel$clientleveldata,
+@@ -517,23 +540,98 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+             commonplayerspawninfo.seed(),
+             i
+         );
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterNewClientLevel");
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.beforeSetLevel");
++        }
+         this.minecraft.setLevel(this.level, ReceivingLevelScreen.Reason.OTHER);
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterSetLevel playerNull=" + (this.minecraft.player == null));
++        }
+         if (this.minecraft.player == null) {
+             this.minecraft.player = this.minecraft.gameMode.createPlayer(this.level, new StatsCounter(), new ClientRecipeBook());
++            if (BuildFlags.WEB_RUNTIME && this.minecraft.player.getUUID() == null) {
++                UUID syntheticUuid = new UUID(0x434c495f504c5252L, this.localGameProfile.getName() == null ? 0L : (long)this.localGameProfile.getName().hashCode());
++                this.minecraft.player.setUUID(syntheticUuid);
++                if (webDiagnostics) {
++                    WebDiagnostics.log("[mc-web/clientlogin] handleLogin.syntheticPlayerUUID " + syntheticUuid);
++                }
++            }
+             this.minecraft.player.setYRot(-180.0F);
+             if (this.minecraft.getSingleplayerServer() != null) {
+                 this.minecraft.getSingleplayerServer().setUUID(this.minecraft.player.getUUID());
+             }
++            if (webDiagnostics) {
++                WebDiagnostics.log(
++                    "[mc-web/clientlogin] handleLogin.createdPlayer uuidIsNull="
++                        + (this.minecraft.player.getUUID() == null)
++                        + " uuid="
++                        + this.minecraft.player.getUUID()
++                        + " profileIdIsNull="
++                        + (this.getLocalGameProfile().getId() == null)
++                );
++            }
+         }
+ 
+         this.minecraft.debugRenderer.clear();
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.beforeResetPos");
++        }
+         this.minecraft.player.resetPos();
+-        this.minecraft.player.setId(p_105030_.playerId());
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            this.minecraft.player.setYRot(-180.0F);
++            this.minecraft.player.setXRot(45.0F);
++            this.minecraft.player.setOldRot();
++        }
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterResetPos");
++        }
++        if (webDiagnostics) {
++            WebDiagnostics.log(
++                "[mc-web/clientlogin] handleLogin.beforeReadPlayerId playerNull="
++                    + (this.minecraft.player == null)
++                    + " packetNull="
++                    + (p_105030_ == null)
++            );
++        }
++        int webPlayerId = p_105030_.playerId();
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterReadPlayerId id=" + webPlayerId);
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.beforeSetId");
++        }
++        try {
++            this.minecraft.player.setId(webPlayerId);
++        } catch (Throwable throwable) {
++            if (webDiagnostics) {
++                WebDiagnostics.log("[mc-web/clientlogin] handleLogin.setId failed: " + throwable);
++            }
++            throw throwable;
++        }
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterSetId");
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.beforeAddEntity");
++        }
+         this.level.addEntity(this.minecraft.player);
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterAddEntity");
++        }
+         this.minecraft.player.input = new KeyboardInput(this.minecraft.options);
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterInput");
++        }
+         this.minecraft.gameMode.adjustPlayer(this.minecraft.player);
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterAdjustPlayer");
++        }
+         this.minecraft.cameraEntity = this.minecraft.player;
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterCameraEntity");
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.beforeStartWaitingForNewLevel");
++        }
+         this.startWaitingForNewLevel(this.minecraft.player, this.level, ReceivingLevelScreen.Reason.OTHER);
++        if (webDiagnostics) {
++            WebDiagnostics.log("[mc-web/clientlogin] handleLogin.afterStartWaitingForNewLevel");
++        }
+         this.minecraft.player.setReducedDebugInfo(p_105030_.reducedDebugInfo());
+         this.minecraft.player.setShowDeathScreen(p_105030_.showDeathScreen());
+         this.minecraft.player.setDoLimitedCrafting(p_105030_.doLimitedCrafting());
+@@ -550,7 +648,9 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+             this.prepareKeyPair();
+         }
+ 
+-        this.telemetryManager.onPlayerInfoReceived(commonplayerspawninfo.gameType(), p_105030_.hardcore());
++        if (this.telemetryManager != null) {
++            this.telemetryManager.onPlayerInfoReceived(commonplayerspawninfo.gameType(), p_105030_.hardcore());
++        }
+         this.minecraft.quickPlayLog().log(this.minecraft);
+         this.serverEnforcesSecureChat = p_105030_.enforcesSecureChat();
+         if (this.serverData != null && !this.seenInsecureChatWarning && !this.enforcesSecureChat()) {
+@@ -558,6 +658,16 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+             this.minecraft.getToastManager().addToast(systemtoast);
+             this.seenInsecureChatWarning = true;
+         }
++        if (webDiagnostics) {
++            WebDiagnostics.log(
++                "[mc-web/clientlogin] handleLogin.end playerNull="
++                    + (this.minecraft.player == null)
++                    + " levelNull="
++                    + (this.minecraft.level == null)
++                    + " screen="
++                    + (this.minecraft.screen == null ? "null" : this.minecraft.screen.getClass().getSimpleName())
++            );
++        }
+     }
+ 
+     @Override
+@@ -791,6 +901,11 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         if (!player.isPassenger()) {
+             setValuesFromPositionPacket(p_105056_.change(), p_105056_.relatives(), player, false);
+         }
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            player.setYRot(-180.0F);
++            player.setXRot(45.0F);
++            player.setOldRot();
++        }
+ 
+         this.connection.send(new ServerboundAcceptTeleportationPacket(p_105056_.id()));
+         this.connection
+@@ -827,6 +942,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         Player player = this.minecraft.player;
+         player.setYRot(p_367721_.yRot());
+         player.setXRot(p_367721_.xRot());
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            player.setYRot(-180.0F);
++            player.setXRot(45.0F);
++        }
+         player.setOldRot();
+         this.connection.send(new ServerboundMovePlayerPacket.Rot(player.getYRot(), player.getXRot(), false, false));
+     }
+@@ -840,16 +959,44 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleLevelChunkWithLight(ClientboundLevelChunkWithLightPacket p_194241_) {
+         PacketUtils.ensureRunningOnSameThread(p_194241_, this, this.minecraft);
++        this.ensureLevelLoadPacketsReceived("chunk-with-light");
+         int i = p_194241_.getX();
+         int j = p_194241_.getZ();
+-        this.updateLevelChunk(i, j, p_194241_.getChunkData());
++        if (BuildFlags.WEB_RUNTIME && this.webChunkPacketLogs < 6) {
++            this.webChunkPacketLogs++;
++            System.out.println(
++                "[mc-web/clientpkt] handleLevelChunkWithLight chunk="
++                    + i
++                    + ","
++                    + j
++                    + " batchSize="
++                    + this.chunkBatchSizeCalculator.getDesiredChunksPerTick()
++            );
++        }
++        LevelChunk levelchunk = this.updateLevelChunk(i, j, p_194241_.getChunkData());
++        if (BuildFlags.WEB_RUNTIME && levelchunk != null && this.webChunkContentLogs < 4) {
++            this.webChunkContentLogs++;
++            System.out.println(
++                "[mc-web/clientpkt] chunk.summary chunk="
++                    + i
++                    + ","
++                    + j
++                    + " "
++                    + describeChunk(levelchunk)
++                    + " webChunkPath="
++                    + (p_194241_.getChunkData().getWebChunk() != null)
++            );
++        }
+         ClientboundLightUpdatePacketData clientboundlightupdatepacketdata = p_194241_.getLightData();
+         this.level.queueLightUpdate(() -> {
+             this.applyLightData(i, j, clientboundlightupdatepacketdata, false);
+-            LevelChunk levelchunk = this.level.getChunkSource().getChunk(i, j, false);
+-            if (levelchunk != null) {
+-                this.enableChunkLight(levelchunk, i, j);
+-                this.minecraft.levelRenderer.onChunkReadyToRender(levelchunk.getPos());
++            LevelChunk levelchunk1 = this.level.getChunkSource().getChunk(i, j, false);
++            if (levelchunk1 != null) {
++                this.enableChunkLight(levelchunk1, i, j);
++                this.minecraft.levelRenderer.onChunkReadyToRender(levelchunk1.getPos());
++                if (BuildFlags.WEB_RUNTIME) {
++                    this.minecraft.webQueueForcedReceivingLevelRender("chunk-with-light");
++                }
+             }
+         });
+     }
+@@ -857,6 +1004,11 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleChunksBiomes(ClientboundChunksBiomesPacket p_275437_) {
+         PacketUtils.ensureRunningOnSameThread(p_275437_, this, this.minecraft);
++        this.ensureLevelLoadPacketsReceived("chunks-biomes");
++        if (BuildFlags.WEB_RUNTIME && this.webChunkPacketLogs < 6) {
++            this.webChunkPacketLogs++;
++            System.out.println("[mc-web/clientpkt] handleChunksBiomes chunks=" + p_275437_.chunkBiomeData().size());
++        }
+ 
+         for (ClientboundChunksBiomesPacket.ChunkBiomeData clientboundchunksbiomespacket$chunkbiomedata : p_275437_.chunkBiomeData()) {
+             this.level
+@@ -894,8 +1046,21 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         }
+     }
+ 
+-    private void updateLevelChunk(int p_194199_, int p_194200_, ClientboundLevelChunkPacketData p_194201_) {
+-        this.level.getChunkSource().replaceWithPacketData(p_194199_, p_194200_, p_194201_.getReadBuffer(), p_194201_.getHeightmaps(), p_194201_.getBlockEntitiesTagsConsumer(p_194199_, p_194200_));
++    @Nullable
++    private LevelChunk updateLevelChunk(int p_194199_, int p_194200_, ClientboundLevelChunkPacketData p_194201_) {
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && p_194201_.getWebChunk() != null) {
++            return this.level
++                .getChunkSource()
++                .replaceWithWebPacketData(
++                    p_194199_, p_194200_, p_194201_.getWebChunk(), p_194201_.getHeightmaps(), p_194201_.getBlockEntitiesTagsConsumer(p_194199_, p_194200_)
++                );
++        }
++
++        return this.level
++            .getChunkSource()
++            .replaceWithPacketData(
++                p_194199_, p_194200_, p_194201_.getReadBuffer(), p_194201_.getHeightmaps(), p_194201_.getBlockEntitiesTagsConsumer(p_194199_, p_194200_)
++            );
+     }
+ 
+     private void enableChunkLight(LevelChunk p_194213_, int p_194214_, int p_194215_) {
+@@ -912,6 +1077,45 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         this.level.setSectionRangeDirty(p_194214_ - 1, this.level.getMinSectionY(), p_194215_ - 1, p_194214_ + 1, this.level.getMaxSectionY(), p_194215_ + 1);
+     }
+ 
++    private void ensureLevelLoadPacketsReceived(String source) {
++        if (this.levelLoadStatusManager == null) {
++            return;
++        }
++        this.levelLoadStatusManager.loadingPacketsReceived();
++        if (BuildFlags.WEB_RUNTIME && this.webChunkPacketLogs < 6) {
++            this.webChunkPacketLogs++;
++            System.out.println("[mc-web/clientpkt] levelLoadStatusManager.loadingPacketsReceived source=" + source);
++        }
++    }
++
++    private static String describeChunk(LevelChunk p_409336_) {
++        int nonEmptySections = 0;
++        int minSectionY = Integer.MAX_VALUE;
++        int maxSectionY = Integer.MIN_VALUE;
++
++        for (int i = 0; i < p_409336_.getSections().length; i++) {
++            LevelChunkSection levelchunksection = p_409336_.getSections()[i];
++            if (!levelchunksection.hasOnlyAir()) {
++                nonEmptySections++;
++                int j = p_409336_.getSectionYFromSectionIndex(i);
++                minSectionY = Math.min(minSectionY, j);
++                maxSectionY = Math.max(maxSectionY, j);
++            }
++        }
++
++        int centerSurface = p_409336_.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE) ? p_409336_.getHeight(Heightmap.Types.WORLD_SURFACE, 8, 8) : Integer.MIN_VALUE;
++        return "nonEmptySections="
++            + nonEmptySections
++            + " minSectionY="
++            + (nonEmptySections == 0 ? "none" : Integer.toString(minSectionY))
++            + " maxSectionY="
++            + (nonEmptySections == 0 ? "none" : Integer.toString(maxSectionY))
++            + " centerSurfaceY="
++            + centerSurface
++            + " lightCorrect="
++            + p_409336_.isLightCorrect();
++    }
++
+     @Override
+     public void handleForgetLevelChunk(ClientboundForgetLevelChunkPacket p_105014_) {
+         PacketUtils.ensureRunningOnSameThread(p_105014_, this, this.minecraft);
+@@ -1130,7 +1334,9 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     public void handleSetTime(ClientboundSetTimePacket p_105108_) {
+         PacketUtils.ensureRunningOnSameThread(p_105108_, this, this.minecraft);
+         this.level.setTimeFromServer(p_105108_.gameTime(), p_105108_.dayTime(), p_105108_.tickDayTime());
+-        this.telemetryManager.setTime(p_105108_.gameTime());
++        if (this.telemetryManager != null) {
++            this.telemetryManager.setTime(p_105108_.gameTime());
++        }
+     }
+ 
+     @Override
+@@ -1229,15 +1435,53 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleSetHealth(ClientboundSetHealthPacket p_105098_) {
+         PacketUtils.ensureRunningOnSameThread(p_105098_, this, this.minecraft);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println(
++                "[mc-web/clientpkt] handleSetHealth playerNull="
++                    + (this.minecraft.player == null)
++                    + " health="
++                    + p_105098_.getHealth()
++                    + " food="
++                    + p_105098_.getFood()
++                    + " saturation="
++                    + p_105098_.getSaturation()
++            );
++            if (this.minecraft.player == null) {
++                System.out.println("[mc-web/clientpkt] handleSetHealth skippedUntilPlayerReady");
++                return;
++            }
++        }
+         this.minecraft.player.hurtTo(p_105098_.getHealth());
+         this.minecraft.player.getFoodData().setFoodLevel(p_105098_.getFood());
+         this.minecraft.player.getFoodData().setSaturation(p_105098_.getSaturation());
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/clientpkt] handleSetHealth done");
++        }
+     }
+ 
+     @Override
+     public void handleSetExperience(ClientboundSetExperiencePacket p_105096_) {
+         PacketUtils.ensureRunningOnSameThread(p_105096_, this, this.minecraft);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println(
++                "[mc-web/clientpkt] handleSetExperience playerNull="
++                    + (this.minecraft.player == null)
++                    + " progress="
++                    + p_105096_.getExperienceProgress()
++                    + " total="
++                    + p_105096_.getTotalExperience()
++                    + " level="
++                    + p_105096_.getExperienceLevel()
++            );
++            if (this.minecraft.player == null) {
++                System.out.println("[mc-web/clientpkt] handleSetExperience skippedUntilPlayerReady");
++                return;
++            }
++        }
+         this.minecraft.player.setExperienceValues(p_105096_.getExperienceProgress(), p_105096_.getTotalExperience(), p_105096_.getExperienceLevel());
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/clientpkt] handleSetExperience done");
++        }
+     }
+ 
+     @Override
+@@ -1612,6 +1856,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleUpdateAdvancementsPacket(ClientboundUpdateAdvancementsPacket p_105126_) {
+         PacketUtils.ensureRunningOnSameThread(p_105126_, this, this.minecraft);
++        if (this.shouldSkipWebInitialAdvancementSync(p_105126_)) {
++            return;
++        }
++
+         this.advancements.update(p_105126_);
+     }
+ 
+@@ -1648,6 +1896,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleUpdateRecipes(ClientboundUpdateRecipesPacket p_105132_) {
+         PacketUtils.ensureRunningOnSameThread(p_105132_, this, this.minecraft);
++        if (this.shouldSkipWebInitialRecipeSync("updateRecipes")) {
++            return;
++        }
++
+         this.recipes = new ClientRecipeContainer(p_105132_.itemSets(), p_105132_.stonecutterRecipes());
+     }
+ 
+@@ -1686,6 +1938,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleRecipeBookAdd(ClientboundRecipeBookAddPacket p_365432_) {
+         PacketUtils.ensureRunningOnSameThread(p_365432_, this, this.minecraft);
++        if (this.shouldSkipWebInitialRecipeSync("recipeBookAdd")) {
++            return;
++        }
++
+         ClientRecipeBook clientrecipebook = this.minecraft.player.getRecipeBook();
+         if (p_365432_.replace()) {
+             clientrecipebook.clear();
+@@ -1708,6 +1964,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleRecipeBookRemove(ClientboundRecipeBookRemovePacket p_364792_) {
+         PacketUtils.ensureRunningOnSameThread(p_364792_, this, this.minecraft);
++        if (this.shouldSkipWebInitialRecipeSync("recipeBookRemove")) {
++            return;
++        }
++
+         ClientRecipeBook clientrecipebook = this.minecraft.player.getRecipeBook();
+ 
+         for (RecipeDisplayId recipedisplayid : p_364792_.recipes()) {
+@@ -1720,6 +1980,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handleRecipeBookSettings(ClientboundRecipeBookSettingsPacket p_365706_) {
+         PacketUtils.ensureRunningOnSameThread(p_365706_, this, this.minecraft);
++        if (this.shouldSkipWebInitialRecipeSync("recipeBookSettings")) {
++            return;
++        }
++
+         ClientRecipeBook clientrecipebook = this.minecraft.player.getRecipeBook();
+         clientrecipebook.setBookSettings(p_365706_.bookSettings());
+         this.refreshRecipeBook(clientrecipebook);
+@@ -1733,6 +1997,50 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         }
+     }
+ 
++    private boolean shouldSkipWebInitialRecipeSync(String p_410280_) {
++        if (!BuildFlags.WEB_RUNTIME || (this.minecraft.player != null && !(this.minecraft.screen instanceof ReceivingLevelScreen))) {
++            return false;
++        }
++
++        if (this.webRecipeSyncSkipLogs < 4) {
++            this.webRecipeSyncSkipLogs++;
++            System.out.println(
++                "[mc-web/recipes] skipInitial "
++                    + p_410280_
++                    + " screen="
++                    + (this.minecraft.screen == null ? "null" : this.minecraft.screen.getClass().getSimpleName())
++                    + " playerNull="
++                    + (this.minecraft.player == null)
++            );
++        }
++
++        return true;
++    }
++
++    private boolean shouldSkipWebInitialAdvancementSync(ClientboundUpdateAdvancementsPacket p_410281_) {
++        if (!BuildFlags.WEB_RUNTIME
++            || !p_410281_.shouldReset()
++            || (this.minecraft.player != null && !(this.minecraft.screen instanceof ReceivingLevelScreen))) {
++            return false;
++        }
++
++        if (this.webAdvancementSyncSkipLogs < 2) {
++            this.webAdvancementSyncSkipLogs++;
++            System.out.println(
++                "[mc-web/advancements] skipInitialPacket added="
++                    + p_410281_.getAdded().size()
++                    + " progress="
++                    + p_410281_.getProgress().size()
++                    + " screen="
++                    + (this.minecraft.screen == null ? "null" : this.minecraft.screen.getClass().getSimpleName())
++                    + " playerNull="
++                    + (this.minecraft.player == null)
++            );
++        }
++
++        return true;
++    }
++
+     @Override
+     public void handleUpdateMobEffect(ClientboundUpdateMobEffectPacket p_105130_) {
+         PacketUtils.ensureRunningOnSameThread(p_105130_, this, this.minecraft);
+@@ -1922,6 +2230,26 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handlePlayerInfoRemove(ClientboundPlayerInfoRemovePacket p_248731_) {
+         PacketUtils.ensureRunningOnSameThread(p_248731_, this, this.minecraft);
++        if (BuildFlags.WEB_RUNTIME) {
++            net.minecraft.client.gui.screens.social.PlayerSocialManager playersocialmanager = this.minecraft.getPlayerSocialManager();
++            for (UUID uuid : p_248731_.profileIds()) {
++                if (playersocialmanager != null) {
++                    playersocialmanager.removePlayer(uuid);
++                }
++                Iterator<Map.Entry<String, PlayerInfo>> iterator = this.webPlayerInfoMap.entrySet().iterator();
++                while (iterator.hasNext()) {
++                    PlayerInfo playerinfo = iterator.next().getValue();
++                    UUID uuid1 = playerinfo.getProfile().getId();
++                    if (uuid != null && uuid.equals(uuid1)) {
++                        iterator.remove();
++                        this.listedPlayers.remove(playerinfo);
++                        break;
++                    }
++                }
++            }
++
++            return;
++        }
+ 
+         for (UUID uuid : p_248731_.profileIds()) {
+             this.minecraft.getPlayerSocialManager().removePlayer(uuid);
+@@ -1935,15 +2263,60 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     @Override
+     public void handlePlayerInfoUpdate(ClientboundPlayerInfoUpdatePacket p_250115_) {
+         PacketUtils.ensureRunningOnSameThread(p_250115_, this, this.minecraft);
++        if (BuildFlags.WEB_RUNTIME) {
++            net.minecraft.client.gui.screens.social.PlayerSocialManager playersocialmanager = this.minecraft.getPlayerSocialManager();
++            for (ClientboundPlayerInfoUpdatePacket.Entry clientboundplayerinfoupdatepacket$entry : p_250115_.newEntries()) {
++                GameProfile gameprofile = clientboundplayerinfoupdatepacket$entry.profile();
++                String s = gameprofile != null ? gameprofile.getName() : null;
++                if (s == null || s.isEmpty()) {
++                    continue;
++                }
++
++                PlayerInfo playerinfo = new PlayerInfo(gameprofile, this.enforcesSecureChat());
++                if (this.webPlayerInfoMap.putIfAbsent(s, playerinfo) == null) {
++                    if (playersocialmanager != null) {
++                        playersocialmanager.addPlayer(playerinfo);
++                    }
++                }
++            }
++
++            for (ClientboundPlayerInfoUpdatePacket.Entry clientboundplayerinfoupdatepacket$entry1 : p_250115_.entries()) {
++                GameProfile gameprofile1 = clientboundplayerinfoupdatepacket$entry1.profile();
++                String s1 = gameprofile1 != null ? gameprofile1.getName() : null;
++                if (s1 == null || s1.isEmpty()) {
++                    continue;
++                }
++
++                PlayerInfo playerinfo1 = this.webPlayerInfoMap.get(s1);
++                if (playerinfo1 == null) {
++                    LOGGER.warn("Ignoring player info update for unknown player {} ({})", s1, p_250115_.actions());
++                } else {
++                    for (ClientboundPlayerInfoUpdatePacket.Action clientboundplayerinfoupdatepacket$action : p_250115_.actions()) {
++                        this.applyPlayerInfoUpdate(clientboundplayerinfoupdatepacket$action, clientboundplayerinfoupdatepacket$entry1, playerinfo1);
++                    }
++                }
++            }
++
++            return;
++        }
+ 
+         for (ClientboundPlayerInfoUpdatePacket.Entry clientboundplayerinfoupdatepacket$entry : p_250115_.newEntries()) {
++            if (BuildFlags.WEB_RUNTIME && clientboundplayerinfoupdatepacket$entry.profileId() == null) {
++                continue;
++            }
+             PlayerInfo playerinfo = new PlayerInfo(Objects.requireNonNull(clientboundplayerinfoupdatepacket$entry.profile()), this.enforcesSecureChat());
+             if (this.playerInfoMap.putIfAbsent(clientboundplayerinfoupdatepacket$entry.profileId(), playerinfo) == null) {
+-                this.minecraft.getPlayerSocialManager().addPlayer(playerinfo);
++                net.minecraft.client.gui.screens.social.PlayerSocialManager playersocialmanager1 = this.minecraft.getPlayerSocialManager();
++                if (playersocialmanager1 != null) {
++                    playersocialmanager1.addPlayer(playerinfo);
++                }
+             }
+         }
+ 
+         for (ClientboundPlayerInfoUpdatePacket.Entry clientboundplayerinfoupdatepacket$entry1 : p_250115_.entries()) {
++            if (BuildFlags.WEB_RUNTIME && clientboundplayerinfoupdatepacket$entry1.profileId() == null) {
++                continue;
++            }
+             PlayerInfo playerinfo1 = this.playerInfoMap.get(clientboundplayerinfoupdatepacket$entry1.profileId());
+             if (playerinfo1 == null) {
+                 LOGGER.warn(
+@@ -1965,7 +2338,7 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+             case UPDATE_GAME_MODE:
+                 if (p_251146_.getGameMode() != p_251310_.gameMode()
+                     && this.minecraft.player != null
+-                    && this.minecraft.player.getUUID().equals(p_251310_.profileId())) {
++                    && java.util.Objects.equals(this.minecraft.player.getUUID(), p_251310_.profileId())) {
+                     this.minecraft.player.onGameModeChanged(p_251310_.gameMode());
+                 }
+ 
+@@ -2476,13 +2849,24 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+ 
+     @Override
+     public void handleChunkBatchStart(ClientboundChunkBatchStartPacket p_297740_) {
++        if (BuildFlags.WEB_RUNTIME && this.webChunkBatchLogs < 6) {
++            this.webChunkBatchLogs++;
++            System.out.println("[mc-web/clientpkt] handleChunkBatchStart");
++        }
+         this.chunkBatchSizeCalculator.onBatchStart();
+     }
+ 
+     @Override
+     public void handleChunkBatchFinished(ClientboundChunkBatchFinishedPacket p_300262_) {
++        if (BuildFlags.WEB_RUNTIME && this.webChunkBatchLogs < 6) {
++            this.webChunkBatchLogs++;
++            System.out.println("[mc-web/clientpkt] handleChunkBatchFinished batchSize=" + p_300262_.batchSize());
++        }
+         this.chunkBatchSizeCalculator.onBatchFinished(p_300262_.batchSize());
+         this.send(new ServerboundChunkBatchReceivedPacket(this.chunkBatchSizeCalculator.getDesiredChunksPerTick()));
++        if (BuildFlags.WEB_RUNTIME) {
++            this.minecraft.webQueueForcedReceivingLevelRender("chunk-batch-finished");
++        }
+     }
+ 
+     @Override
+@@ -2548,20 +2932,57 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     }
+ 
+     public Collection<PlayerInfo> getOnlinePlayers() {
++        if (BuildFlags.WEB_RUNTIME) {
++            return this.webPlayerInfoMap.values();
++        }
++
+         return this.playerInfoMap.values();
+     }
+ 
+     public Collection<UUID> getOnlinePlayerIds() {
++        if (BuildFlags.WEB_RUNTIME) {
++            ArrayList<UUID> arraylist = new ArrayList<>();
++            for (PlayerInfo playerinfo : this.webPlayerInfoMap.values()) {
++                UUID uuid = playerinfo.getProfile().getId();
++                if (uuid != null) {
++                    arraylist.add(uuid);
++                }
++            }
++
++            return arraylist;
++        }
++
+         return this.playerInfoMap.keySet();
+     }
+ 
+     @Nullable
+     public PlayerInfo getPlayerInfo(UUID p_104950_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            if (p_104950_ == null) {
++                return null;
++            }
++
++            for (PlayerInfo playerinfo : this.webPlayerInfoMap.values()) {
++                if (p_104950_.equals(playerinfo.getProfile().getId())) {
++                    return playerinfo;
++                }
++            }
++
++            return null;
++        }
++
+         return this.playerInfoMap.get(p_104950_);
+     }
+ 
+     @Nullable
+     public PlayerInfo getPlayerInfo(String p_104939_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            PlayerInfo playerinfo = this.webPlayerInfoMap.get(p_104939_);
++            if (playerinfo != null) {
++                return playerinfo;
++            }
++        }
++
+         for (PlayerInfo playerinfo : this.playerInfoMap.values()) {
+             if (playerinfo.getProfile().getName().equals(p_104939_)) {
+                 return playerinfo;
+@@ -2572,6 +2993,10 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     }
+ 
+     public GameProfile getLocalGameProfile() {
++        if (BuildFlags.WEB_RUNTIME && this.localGameProfile.getId() == null) {
++            UUID syntheticUuid = new UUID(0x434c495f5052464cL, this.localGameProfile.getName() == null ? 0L : (long)this.localGameProfile.getName().hashCode());
++            return new GameProfile(syntheticUuid, this.localGameProfile.getName());
++        }
+         return this.localGameProfile;
+     }
+ 
+@@ -2712,14 +3137,45 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+         }
+ 
+         this.debugSampleSubscriber.tick();
+-        this.telemetryManager.tick();
++        if (this.telemetryManager != null) {
++            this.telemetryManager.tick();
++        }
+         if (this.levelLoadStatusManager != null) {
+-            this.levelLoadStatusManager.tick();
+-            if (this.levelLoadStatusManager.levelReady() && !this.minecraft.player.hasClientLoaded()) {
+-                this.connection.send(new ServerboundPlayerLoadedPacket());
+-                this.minecraft.player.setClientLoaded(true);
++            if (BuildFlags.WEB_RUNTIME && this.minecraft.player == null && this.webNullPlayerTickLogs < 10) {
++                this.webNullPlayerTickLogs++;
++                System.out.println("[mc-web/clienttick] levelLoadStatusManager active but player is null log#" + this.webNullPlayerTickLogs);
+             }
++            this.levelLoadStatusManager.tick();
++            this.trySignalPlayerLoaded("client-tick");
++        }
++    }
++
++    public void trySignalPlayerLoaded(String source) {
++        if (this.levelLoadStatusManager == null || this.minecraft.player == null || this.minecraft.player.hasClientLoaded()) {
++            return;
++        }
++        if (!this.levelLoadStatusManager.canSignalPlayerLoaded()) {
++            return;
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/clienttick] beforeServerboundPlayerLoadedSend source=" + source);
++        }
++        this.connection.send(new ServerboundPlayerLoadedPacket());
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/clienttick] afterServerboundPlayerLoadedSend source=" + source);
++        }
++        this.minecraft.player.setClientLoaded(true);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/worldload] probe success: clientReady+playerLoaded source=" + source);
++        }
++    }
++
++    public void trySignalPlayerLoadedFromRenderedContent(String source) {
++        if (this.levelLoadStatusManager == null) {
++            return;
+         }
++        this.levelLoadStatusManager.markReadyFromRenderedContent(source);
++        this.trySignalPlayerLoaded(source);
+     }
+ 
+     public void prepareKeyPair() {
+@@ -2727,10 +3183,11 @@ public class ClientPacketListener extends ClientCommonPacketListenerImpl impleme
+     }
+ 
+     private void setKeyPair(ProfileKeyPair p_261475_) {
+-        if (this.minecraft.isLocalPlayer(this.localGameProfile.getId())) {
++        UUID uuid = this.localGameProfile.getId();
++        if (uuid != null && this.minecraft.isLocalPlayer(uuid)) {
+             if (this.chatSession == null || !this.chatSession.keyPair().equals(p_261475_)) {
+                 this.chatSession = LocalChatSession.create(p_261475_);
+-                this.signedMessageEncoder = this.chatSession.createMessageEncoder(this.localGameProfile.getId());
++                this.signedMessageEncoder = this.chatSession.createMessageEncoder(uuid);
+                 this.send(new ServerboundChatSessionUpdatePacket(this.chatSession.asRemote().asData()));
+             }
+         }

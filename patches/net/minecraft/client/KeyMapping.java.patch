@@ -1,0 +1,72 @@
+--- a/net/minecraft/client/KeyMapping.java
++++ b/net/minecraft/client/KeyMapping.java
+@@ -8,7 +8,6 @@
+ import java.util.Set;
+ import java.util.function.Supplier;
+ import javax.annotation.Nullable;
+-import net.minecraft.Util;
+ import net.minecraft.client.resources.language.I18n;
+ import net.minecraft.network.chat.Component;
+ import net.minecraftforge.api.distmarker.Dist;
+@@ -26,15 +25,7 @@
+     public static final String CATEGORY_INVENTORY = "key.categories.inventory";
+     public static final String CATEGORY_INTERFACE = "key.categories.ui";
+     public static final String CATEGORY_CREATIVE = "key.categories.creative";
+-    private static final Map<String, Integer> CATEGORY_SORT_ORDER = Util.make(Maps.newHashMap(), p_90845_ -> {
+-        p_90845_.put("key.categories.movement", 1);
+-        p_90845_.put("key.categories.gameplay", 2);
+-        p_90845_.put("key.categories.inventory", 3);
+-        p_90845_.put("key.categories.creative", 4);
+-        p_90845_.put("key.categories.multiplayer", 5);
+-        p_90845_.put("key.categories.ui", 6);
+-        p_90845_.put("key.categories.misc", 7);
+-    });
++    private static final Map<String, Integer> CATEGORY_SORT_ORDER = createCategorySortOrder();
+     private final String name;
+     private final InputConstants.Key defaultKey;
+     private final String category;
+@@ -87,10 +79,11 @@
+     }
+ 
+     public KeyMapping(String p_90821_, int p_90822_, String p_90823_) {
+-        this(p_90821_, InputConstants.Type.KEYSYM, p_90822_, p_90823_);
++        this(p_90821_, InputConstants.Type.KEYSYM, p_90822_, p_90823_);
+     }
+ 
+     public KeyMapping(String p_90825_, InputConstants.Type p_90826_, int p_90827_, String p_90828_) {
++        InputConstants.Type inputconstants$type = p_90826_ != null ? p_90826_ : InputConstants.Type.KEYSYM;
+         this.name = p_90825_;
+-        this.key = p_90826_.getOrCreate(p_90827_);
++        this.key = inputconstants$type.getOrCreate(p_90827_);
+         this.defaultKey = this.key;
+@@ -124,7 +117,7 @@
+     }
+ 
+     public void setKey(InputConstants.Key p_90849_) {
+-        this.key = p_90849_;
++        this.key = p_90849_ != null ? p_90849_ : InputConstants.UNKNOWN;
+     }
+ 
+     public int compareTo(KeyMapping p_90841_) {
+@@ -183,4 +176,19 @@
+     public static KeyMapping get(String p_378660_) {
+         return ALL.get(p_378660_);
+     }
+-}
+\ No newline at end of file
++
++    private static Map<String, Integer> createCategorySortOrder() {
++        if (top.steve3184.webmc.web.BuildFlags.WEB_RUNTIME && top.steve3184.webmc.web.BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            return new HashMap<>();
++        }
++        Map<String, Integer> map = Maps.newHashMap();
++        map.put("key.categories.movement", 1);
++        map.put("key.categories.gameplay", 2);
++        map.put("key.categories.inventory", 3);
++        map.put("key.categories.creative", 4);
++        map.put("key.categories.multiplayer", 5);
++        map.put("key.categories.ui", 6);
++        map.put("key.categories.misc", 7);
++        return map;
++    }
++}

@@ -1,0 +1,52 @@
+$:
+  vscode:
+    - runner:
+        tags: cnb:arch:amd64:gpu
+        cpus: 16
+      docker:
+        image: nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+      services:
+        - vscode
+        - docker
+      stages:
+        - name: init-python
+          script:
+            - apt-get update
+            - DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv git wget curl unzip
+            - python3 --version
+            - pip3 --version
+        - name: init-workspace
+          script:
+            - mkdir -p output/lora_output
+            - mkdir -p output/smoke_test
+            - mkdir -p models/Stable-diffusion
+            - mkdir -p stable-diffusion-webui/models/Stable-diffusion
+            - mkdir -p dataset
+            - echo "CNB GPU workspace ready"
+        - name: prepare-training-assets
+          script:
+            - |
+              if [ -f output/cnb_dataset_upload.zip ]; then
+                rm -rf dataset
+                mkdir -p dataset
+                unzip -o output/cnb_dataset_upload.zip -d dataset
+                echo "CNB dataset prepared from output/cnb_dataset_upload.zip"
+              else
+                echo "CNB dataset zip not found, skip dataset bootstrap"
+              fi
+            - |
+              if [ ! -f stable-diffusion-webui/models/Stable-diffusion/v1-5-pruned-emaonly.safetensors ]; then
+                python3 download_sd15.py
+              else
+                echo "CNB base model already exists"
+              fi
+        - name: install-kohya-ss
+          script:
+            - git clone --depth 1 https://github.com/bmaltais/kohya_ss.git /workspace/kohya_ss || true
+            - python3 -m pip install --upgrade pip
+            - python3 -m pip install -r /workspace/kohya_ss/requirements_linux.txt
+        - name: run-lora-training
+          script:
+            - python3 /workspace/train_lora.py --preset quick --model-path /workspace/stable-diffusion-webui/models/Stable-diffusion/v1-5-pruned-emaonly.safetensors --dataset-dir /workspace/dataset --output-dir /workspace/output/lora_output --kohya-dir /workspace/kohya_ss --action run
+            - ls -lh /workspace/output/lora_output
+            - find /workspace/output/lora_output -name "*.safetensors" | head -5

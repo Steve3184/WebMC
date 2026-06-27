@@ -1,0 +1,12 @@
+--- a/net/minecraft/world/level/block/FireBlock.java
++++ b/net/minecraft/world/level/block/FireBlock.java
+@@ -313,7 +313,9 @@
+     }
+ 
+     public static void bootStrap() {
++        System.err.println("[mc-probe] FireBlock.bootStrap entered");
+         FireBlock fireblock = (FireBlock)Blocks.FIRE;
++        System.err.println("[mc-probe] FireBlock.bootStrap got Blocks.FIRE");
+         fireblock.setFlammable(Blocks.OAK_PLANKS, 5, 20);
+         fireblock.setFlammable(Blocks.SPRUCE_PLANKS, 5, 20);
+         fireblock.setFlammable(Blocks.BIRCH_PLANKS, 5, 20);

@@ -1,0 +1,32 @@
+--- a/net/minecraft/world/level/levelgen/XoroshiroRandomSource.java
++++ b/net/minecraft/world/level/levelgen/XoroshiroRandomSource.java
+@@ -55,18 +55,10 @@
+         if (p_190118_ <= 0) {
+             throw new IllegalArgumentException("Bound must be positive");
+         } else {
+-            long i = Integer.toUnsignedLong(this.nextInt());
+-            long j = i * p_190118_;
+-            long k = j & 4294967295L;
+-            if (k < p_190118_) {
+-                for (int l = Integer.remainderUnsigned(~p_190118_ + 1, p_190118_); k < l; k = j & 4294967295L) {
+-                    i = Integer.toUnsignedLong(this.nextInt());
+-                    j = i * p_190118_;
+-                }
+-            }
+-
+-            long i1 = j >> 32;
+-            return (int)i1;
++            // TeaVM/JS long lowering has proven fragile on the unsigned multiply/rejection
++            // path here during heavy worldgen noise initialization. Use a bounded modulo path
++            // instead so browser builds keep progressing through noise bootstrap.
++            return (int)Math.floorMod(this.randomNumberGenerator.nextLong(), (long)p_190118_);
+         }
+     }
+ 
+@@ -139,4 +131,4 @@
+             p_190136_.append("seedLo: ").append(this.seedLo).append(", seedHi: ").append(this.seedHi);
+         }
+     }
+-}
+\ No newline at end of file
++}

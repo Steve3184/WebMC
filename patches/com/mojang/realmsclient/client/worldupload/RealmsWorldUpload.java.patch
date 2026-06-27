@@ -1,0 +1,28 @@
+--- a/com/mojang/realmsclient/client/worldupload/RealmsWorldUpload.java
++++ b/com/mojang/realmsclient/client/worldupload/RealmsWorldUpload.java
+@@ -21,6 +21,7 @@
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class RealmsWorldUpload {
+@@ -45,6 +46,10 @@
+     }
+ 
+     public CompletableFuture<?> packAndUpload() {
++        if (BuildFlags.WEB_RUNTIME) {
++            LOGGER.warn("Realms world upload is disabled in browser runtime");
++            return CompletableFuture.completedFuture(null);
++        }
+         return CompletableFuture.runAsync(
+             () -> {
+                 File file1 = null;
+@@ -119,4 +124,4 @@
+ 
+         throw new RealmsUploadWorldNotClosedException();
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,111 @@
+diff --git a/net/minecraft/client/resources/model/BlockStateModelLoader.java b/net/minecraft/client/resources/model/BlockStateModelLoader.java
+index cdbee7a..7d8b476 100644
+--- a/net/minecraft/client/resources/model/BlockStateModelLoader.java
++++ b/net/minecraft/client/resources/model/BlockStateModelLoader.java
+@@ -27,17 +27,59 @@ import net.minecraft.world.level.block.state.StateDefinition;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class BlockStateModelLoader {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final FileToIdConverter BLOCKSTATE_LISTER = FileToIdConverter.json("blockstates");
++    private static final int WEB_BLOCKSTATE_BATCH_SIZE = 64;
+ 
+     public static CompletableFuture<BlockStateModelLoader.LoadedModels> loadBlockStates(ResourceManager p_378230_, Executor p_378682_) {
+         Function<ResourceLocation, StateDefinition<Block, BlockState>> function = BlockStateDefinitions.definitionLocationToBlockStateMapper();
+         return CompletableFuture.<Map<ResourceLocation, List<Resource>>>supplyAsync(() -> BLOCKSTATE_LISTER.listMatchingResourceStacks(p_378230_), p_378682_)
+             .thenCompose(
+                 p_389570_ -> {
++                    if (BuildFlags.WEB_RUNTIME) {
++                        List<Entry<ResourceLocation, List<Resource>>> entries = new ArrayList<>(p_389570_.entrySet());
++                        List<CompletableFuture<Map<BlockState, BlockStateModel.UnbakedRoot>>> list = new ArrayList<>(
++                            (entries.size() + WEB_BLOCKSTATE_BATCH_SIZE - 1) / WEB_BLOCKSTATE_BATCH_SIZE
++                        );
++
++                        for (int batchStart = 0; batchStart < entries.size(); batchStart += WEB_BLOCKSTATE_BATCH_SIZE) {
++                            final int start = batchStart;
++                            final int end = Math.min(entries.size(), start + WEB_BLOCKSTATE_BATCH_SIZE);
++                            list.add(
++                                CompletableFuture.supplyAsync(
++                                    () -> {
++                                        Map<BlockState, BlockStateModel.UnbakedRoot> map = new IdentityHashMap<>();
++
++                                        for (int i = start; i < end; i++) {
++                                            Entry<ResourceLocation, List<Resource>> entry = entries.get(i);
++                                            BlockStateModelLoader.LoadedModels loadedmodels = loadBlockStateDefinitionStack(entry, function);
++                                            if (loadedmodels != null) {
++                                                map.putAll(loadedmodels.models());
++                                            }
++                                        }
++
++                                        return map;
++                                    },
++                                    p_378682_
++                                )
++                            );
++                        }
++
++                        return Util.sequence(list).thenApply(p_398003_ -> {
++                            Map<BlockState, BlockStateModel.UnbakedRoot> map = new IdentityHashMap<>();
++
++                            for (Map<BlockState, BlockStateModel.UnbakedRoot> map1 : p_398003_) {
++                                map.putAll(map1);
++                            }
++
++                            return new BlockStateModelLoader.LoadedModels(map);
++                        });
++                    }
++
+                     List<CompletableFuture<BlockStateModelLoader.LoadedModels>> list = new ArrayList<>(p_389570_.size());
+ 
+                     for (Entry<ResourceLocation, List<Resource>> entry : p_389570_.entrySet()) {
+@@ -95,6 +137,39 @@ public class BlockStateModelLoader {
+             );
+     }
+ 
++    private static BlockStateModelLoader.LoadedModels loadBlockStateDefinitionStack(
++        Entry<ResourceLocation, List<Resource>> p_398004_, Function<ResourceLocation, StateDefinition<Block, BlockState>> p_398005_
++    ) {
++        ResourceLocation resourcelocation = BLOCKSTATE_LISTER.fileToId(p_398004_.getKey());
++        StateDefinition<Block, BlockState> statedefinition = p_398005_.apply(resourcelocation);
++        if (statedefinition == null) {
++            LOGGER.debug("Discovered unknown block state definition {}, ignoring", resourcelocation);
++            return null;
++        } else {
++            List<Resource> list = p_398004_.getValue();
++            List<BlockStateModelLoader.LoadedBlockModelDefinition> list1 = new ArrayList<>(list.size());
++
++            for (Resource resource : list) {
++                try (Reader reader = resource.openAsReader()) {
++                    JsonElement jsonelement = StrictJsonParser.parse(reader);
++                    BlockModelDefinition blockmodeldefinition = BlockModelDefinition.CODEC
++                        .parse(JsonOps.INSTANCE, jsonelement)
++                        .getOrThrow(JsonParseException::new);
++                    list1.add(new BlockStateModelLoader.LoadedBlockModelDefinition(resource.sourcePackId(), blockmodeldefinition));
++                } catch (Exception exception1) {
++                    LOGGER.error("Failed to load blockstate definition {} from pack {}", resourcelocation, resource.sourcePackId(), exception1);
++                }
++            }
++
++            try {
++                return loadBlockStateDefinitionStack(resourcelocation, statedefinition, list1);
++            } catch (Exception exception) {
++                LOGGER.error("Failed to load blockstate definition {}", resourcelocation, exception);
++                return null;
++            }
++        }
++    }
++
+     private static BlockStateModelLoader.LoadedModels loadBlockStateDefinitionStack(
+         ResourceLocation p_367866_, StateDefinition<Block, BlockState> p_361140_, List<BlockStateModelLoader.LoadedBlockModelDefinition> p_367255_
+     ) {
+@@ -117,4 +192,4 @@ public class BlockStateModelLoader {
+     @OnlyIn(Dist.CLIENT)
+     public record LoadedModels(Map<BlockState, BlockStateModel.UnbakedRoot> models) {
+     }
+-}
+\ No newline at end of file
++}

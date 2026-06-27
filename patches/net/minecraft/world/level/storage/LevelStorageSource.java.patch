@@ -1,0 +1,27 @@
+--- a/net/minecraft/world/level/storage/LevelStorageSource.java
++++ b/net/minecraft/world/level/storage/LevelStorageSource.java
+@@ -75,6 +75,7 @@
+ import net.minecraft.world.level.validation.ForbiddenSymlinkInfo;
+ import net.minecraft.world.level.validation.PathAllowList;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class LevelStorageSource {
+     static final Logger LOGGER = LogUtils.getLogger();
+@@ -104,6 +105,9 @@
+     }
+ 
+     public static DirectoryValidator parseValidator(Path p_289968_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            return new DirectoryValidator(NO_SYMLINKS_ALLOWED);
++        }
+         if (Files.exists(p_289968_)) {
+             try {
+                 DirectoryValidator directoryvalidator;
+@@ -633,4 +637,4 @@
+             return LevelStorageSource.getFileModificationTime(p_311251_ ? this.levelDirectory.oldDataFile() : this.levelDirectory.dataFile());
+         }
+     }
+-}
+\ No newline at end of file
++}

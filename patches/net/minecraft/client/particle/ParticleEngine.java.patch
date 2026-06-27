@@ -1,0 +1,75 @@
+diff --git a/net/minecraft/client/particle/ParticleEngine.java b/net/minecraft/client/particle/ParticleEngine.java
+index 10e6c7a..7bacaa6 100644
+--- a/net/minecraft/client/particle/ParticleEngine.java
++++ b/net/minecraft/client/particle/ParticleEngine.java
+@@ -64,11 +64,13 @@ import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class ParticleEngine implements PreparableReloadListener {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final FileToIdConverter PARTICLE_LISTER = FileToIdConverter.json("particles");
++    private static final int WEB_PARTICLE_DEFINITION_BATCH_SIZE = 32;
+     private static final int MAX_PARTICLES_PER_LAYER = 16384;
+     private static final List<ParticleRenderType> RENDER_ORDER = List.of(ParticleRenderType.TERRAIN_SHEET, ParticleRenderType.PARTICLE_SHEET_OPAQUE, ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT);
+     protected ClientLevel level;
+@@ -244,6 +246,49 @@ public class ParticleEngine implements PreparableReloadListener {
+             )
+             .thenCompose(
+                 p_247914_ -> {
++                    if (BuildFlags.WEB_RUNTIME) {
++                        List<Map.Entry<ResourceLocation, Resource>> entries = new ArrayList<>(p_247914_.entrySet());
++                        List<CompletableFuture<List<ParticleDefinition>>> list = new ArrayList<>(
++                            (entries.size() + WEB_PARTICLE_DEFINITION_BATCH_SIZE - 1) / WEB_PARTICLE_DEFINITION_BATCH_SIZE
++                        );
++
++                        for (int batchStart = 0; batchStart < entries.size(); batchStart += WEB_PARTICLE_DEFINITION_BATCH_SIZE) {
++                            final int start = batchStart;
++                            final int end = Math.min(entries.size(), start + WEB_PARTICLE_DEFINITION_BATCH_SIZE);
++                            list.add(
++                                CompletableFuture.supplyAsync(
++                                    () -> {
++                                        List<ParticleDefinition> list1 = new ArrayList<>(end - start);
++
++                                        for (int i = start; i < end; i++) {
++                                            Map.Entry<ResourceLocation, Resource> entry = entries.get(i);
++                                            ResourceLocation resourcelocation = PARTICLE_LISTER.fileToId(entry.getKey());
++                                            list1.add(
++                                                new ParticleDefinition(
++                                                    resourcelocation,
++                                                    this.loadParticleDescription(resourcelocation, entry.getValue())
++                                                )
++                                            );
++                                        }
++
++                                        return list1;
++                                    },
++                                    p_107309_
++                                )
++                            );
++                        }
++
++                        return Util.sequence(list).thenApply(p_398012_ -> {
++                            List<ParticleDefinition> list1 = new ArrayList<>();
++
++                            for (List<ParticleDefinition> list2 : p_398012_) {
++                                list1.addAll(list2);
++                            }
++
++                            return list1;
++                        });
++                    }
++
+                     List<CompletableFuture<ParticleDefinition>> list = new ArrayList<>(p_247914_.size());
+                     p_247914_.forEach(
+                         (p_247903_, p_247904_) -> {
+@@ -601,4 +646,4 @@ public class ParticleEngine implements PreparableReloadListener {
+     interface SpriteParticleRegistration<T extends ParticleOptions> {
+         ParticleProvider<T> create(SpriteSet p_107420_);
+     }
+-}
+\ No newline at end of file
++}

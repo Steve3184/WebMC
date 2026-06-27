@@ -1,0 +1,91 @@
+--- a/net/minecraft/server/packs/VanillaPackResources.java
++++ b/net/minecraft/server/packs/VanillaPackResources.java
+@@ -47,8 +47,13 @@
+ 
+         for (Path path : this.rootPaths) {
+             Path path1 = FileUtil.resolvePath(path, list);
+-            if (Files.exists(path1) && PathPackResources.validatePath(path1)) {
+-                return IoSupplier.create(path1);
++            final String absPath = path1.toAbsolutePath().normalize().toString().replace('\\', '/');
++            if (top.steve3184.webmc.vfs.WebFs.exists(absPath)) {
++                return () -> {
++                    InputStream is = top.steve3184.webmc.vfs.WebFs.openRead(absPath);
++                    if (is == null) throw new java.io.FileNotFoundException(absPath);
++                    return is;
++                };
+             }
+         }
+ 
+@@ -61,7 +66,7 @@
+ 
+             for (Path path : this.pathsForType.get(p_252103_)) {
+                 Path path1 = path.resolve(s);
+-                p_251968_.accept(FileUtil.resolvePath(path1, (List<String>)p_248238_));
++                p_251968_.accept(FileUtil.resolvePath(path1, (List<String>)p_248238_).toAbsolutePath().normalize());
+             }
+         }).ifError(p_326467_ -> LOGGER.error("Invalid path {}: {}", p_250441_, p_326467_.message()));
+     }
+@@ -72,15 +77,15 @@
+             List<Path> list = this.pathsForType.get(p_248974_);
+             int i = list.size();
+             if (i == 1) {
+-                getResources(p_249668_, p_248703_, list.get(0), (List<String>)p_248228_);
++                getResources(p_249668_, p_248703_, list.get(0).toAbsolutePath().normalize(), (List<String>)p_248228_);
+             } else if (i > 1) {
+                 Map<ResourceLocation, IoSupplier<InputStream>> map = new HashMap<>();
+ 
+                 for (int j = 0; j < i - 1; j++) {
+-                    getResources(map::putIfAbsent, p_248703_, list.get(j), (List<String>)p_248228_);
++                    getResources(map::putIfAbsent, p_248703_, list.get(j).toAbsolutePath().normalize(), (List<String>)p_248228_);
+                 }
+ 
+-                Path path = list.get(i - 1);
++                Path path = list.get(i - 1).toAbsolutePath().normalize();
+                 if (map.isEmpty()) {
+                     getResources(p_249668_, p_248703_, path, (List<String>)p_248228_);
+                 } else {
+@@ -104,8 +109,35 @@
+ 
+             for (Path path : this.pathsForType.get(p_250512_)) {
+                 Path path1 = FileUtil.resolvePath(path.resolve(s), (List<String>)p_248224_);
+-                if (Files.exists(path1) && PathPackResources.validatePath(path1)) {
+-                    return IoSupplier.create(path1);
++                final String absPath = path1.toAbsolutePath().normalize().toString().replace('\\', '/');
++                if (top.steve3184.webmc.vfs.WebFs.exists(absPath)) {
++                    return () -> {
++                        InputStream is = top.steve3184.webmc.vfs.WebFs.openRead(absPath);
++                        if (is == null) throw new java.io.FileNotFoundException(absPath);
++                        return is;
++                    };
++                }
++                boolean found = Files.exists(path1);
++                if (p_251554_.getPath().contains("font") || p_251554_.getPath().contains("menu_background") || p_251554_.getPath().contains("sounds.json")) {
++                    LOGGER.info("[mc-web-dbg] getResource {} -> path={} found={}", p_251554_, path1, found);
++                }
++                if (found) {
++                    // mc-web: TeaVM's TFiles has no newByteChannel and TFileSystemProvider's
++                    // default newInputStream throws UOE — so LinkFSProvider's newByteChannel
++                    // (which delegates to Files.newByteChannel) doesn't compile/run.
++                    // For non-default FS (LinkFileSystem), unwrap to the target path on the
++                    // default FS via toFile(); LinkFSPath.toFile() returns the underlying
++                    // target file. Then Files.newInputStream works (TDefaultFileSystemProvider
++                    // does override it).
++                    return () -> {
++                        Path target = path1;
++                        if (path1.getFileSystem() != java.nio.file.FileSystems.getDefault()) {
++                            java.io.File f = path1.toFile();
++                            if (f == null) throw new java.io.FileNotFoundException(path1.toString());
++                            target = java.nio.file.Paths.get(f.getPath());
++                        }
++                        return Files.newInputStream(target);
++                    };
+                 }
+             }
+ 
+@@ -153,4 +185,4 @@
+         return p_248239_ -> Optional.ofNullable(this.getResource(PackType.CLIENT_RESOURCES, p_248239_))
+             .map(p_248221_ -> new Resource(this, (IoSupplier<InputStream>)p_248221_));
+     }
+-}
+\ No newline at end of file
++}

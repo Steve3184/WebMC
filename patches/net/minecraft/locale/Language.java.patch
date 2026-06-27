@@ -1,0 +1,45 @@
+--- a/net/minecraft/locale/Language.java
++++ b/net/minecraft/locale/Language.java
+@@ -68,10 +68,34 @@
+ 
+     private static void parseTranslations(BiConsumer<String, String> p_282031_, String p_283638_) {
+         try (InputStream inputstream = Language.class.getResourceAsStream(p_283638_)) {
+-            loadFromJson(inputstream, p_282031_);
++            if (inputstream != null) {
++                loadFromJson(inputstream, p_282031_);
++                return;
++            }
+         } catch (JsonParseException | IOException ioexception) {
+             LOGGER.error("Couldn't read strings from {}", p_283638_, ioexception);
++            return;
+         }
++
++        // mc-web: TeaVM has no jar resources; try loading from the VFS instead.
++        // The asset path "/assets/minecraft/lang/en_us.json" maps directly to
++        // a file in game.vfs preloaded by WebFs.
++        try {
++            InputStream vfsStream = top.steve3184.webmc.vfs.WebFs.openRead(p_283638_);
++            if (vfsStream != null) {
++                try {
++                    loadFromJson(vfsStream, p_282031_);
++                    LOGGER.info("Loaded translations from VFS: {}", p_283638_);
++                } finally {
++                    vfsStream.close();
++                }
++                return;
++            }
++        } catch (Throwable t) {
++            LOGGER.warn("VFS fallback failed for translations: {}", p_283638_, t);
++        }
++
++        LOGGER.warn("Translation resource not available (browser): {}", p_283638_);
+     }
+ 
+     public static void loadFromJson(InputStream p_128109_, BiConsumer<String, String> p_128110_) {
+@@ -106,4 +130,4 @@
+     public List<FormattedCharSequence> getVisualOrder(List<FormattedText> p_128113_) {
+         return p_128113_.stream().map(this::getVisualOrder).collect(ImmutableList.toImmutableList());
+     }
+-}
+\ No newline at end of file
++}

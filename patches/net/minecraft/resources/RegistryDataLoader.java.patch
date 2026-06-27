@@ -1,0 +1,231 @@
+--- a/net/minecraft/resources/RegistryDataLoader.java
++++ b/net/minecraft/resources/RegistryDataLoader.java
+@@ -25,6 +25,8 @@
+ import net.minecraft.CrashReportCategory;
+ import net.minecraft.ReportedException;
+ import net.minecraft.Util;
++import net.minecraft.core.Holder;
++import net.minecraft.core.HolderGetter;
+ import net.minecraft.core.HolderLookup;
+ import net.minecraft.core.MappedRegistry;
+ import net.minecraft.core.RegistrationInfo;
+@@ -33,6 +35,7 @@
+ import net.minecraft.core.RegistrySynchronization;
+ import net.minecraft.core.WritableRegistry;
+ import net.minecraft.core.registries.Registries;
++import net.minecraft.data.worldgen.BootstrapContext;
+ import net.minecraft.gametest.framework.GameTestInstance;
+ import net.minecraft.gametest.framework.TestEnvironmentDefinition;
+ import net.minecraft.nbt.NbtOps;
+@@ -68,6 +71,7 @@
+ import net.minecraft.world.level.dimension.DimensionType;
+ import net.minecraft.world.level.dimension.LevelStem;
+ import net.minecraft.world.level.levelgen.DensityFunction;
++import net.minecraft.world.level.levelgen.NoiseRouterData;
+ import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+ import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
+ import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+@@ -80,6 +84,7 @@
+ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureProcessorType;
+ import net.minecraft.world.level.levelgen.synth.NormalNoise;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class RegistryDataLoader {
+     private static final Logger LOGGER = LogUtils.getLogger();
+@@ -157,7 +162,57 @@
+     public static RegistryAccess.Frozen load(
+         ResourceManager p_252046_, List<HolderLookup.RegistryLookup<?>> p_250344_, List<RegistryDataLoader.RegistryData<?>> p_366741_
+     ) {
+-        return load((p_326156_, p_326157_) -> p_326156_.loadFromResources(p_252046_, p_326157_), p_250344_, p_366741_);
++        Map<ResourceKey<?>, Exception> map = new HashMap<>();
++        List<RegistryDataLoader.Loader<?>> list = p_366741_.stream()
++            .map(p_326168_ -> p_326168_.create(Lifecycle.stable(), map))
++            .collect(Collectors.toUnmodifiableList());
++        RegistryOps.RegistryInfoLookup registryops$registryinfolookup = createContext(p_250344_, list);
++
++        for (RegistryDataLoader.Loader<?> registrydataloader$loader : list) {
++            String s = registrydataloader$loader.registry().key().location().toString();
++            long i = Util.getMillis();
++            System.out.println("[mc-web/registry] load begin " + s);
++            if (s.equals("minecraft:worldgen/density_function")) {
++                System.out.println("[mc-web/density] apply begin");
++                if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++                    try {
++                        System.out.println("[mc-web/density] direct web bootstrap begin");
++                        bootstrapWebDensityFunctions((WritableRegistry<DensityFunction>)registrydataloader$loader.registry(), registryops$registryinfolookup);
++                        TagLoader.loadTagsForRegistry(p_252046_, (WritableRegistry<DensityFunction>)registrydataloader$loader.registry());
++                        System.out.println("[mc-web/density] direct web bootstrap end size=" + registrydataloader$loader.registry().size());
++                    } catch (Exception exception) {
++                        throw new RuntimeException("Web density bootstrap failed", exception);
++                    }
++                } else {
++                    registrydataloader$loader.loadFromResources(p_252046_, registryops$registryinfolookup);
++                }
++                System.out.println("[mc-web/density] apply end");
++            } else {
++                registrydataloader$loader.loadFromResources(p_252046_, registryops$registryinfolookup);
++            }
++            System.out.println(
++                "[mc-web/registry] load end " + s + " size=" + registrydataloader$loader.registry().size() + " ms=" + (Util.getMillis() - i)
++            );
++        }
++
++        list.forEach(p_389942_ -> {
++            Registry<?> registry = p_389942_.registry();
++
++            try {
++                registry.freeze();
++            } catch (Exception exception) {
++                map.put(registry.key(), exception);
++            }
++
++            if (p_389942_.data.requiredNonEmpty && registry.size() == 0) {
++                map.put(registry.key(), new IllegalStateException("Registry must be non-empty: " + registry.key().location()));
++            }
++        });
++        if (!map.isEmpty()) {
++            throw logErrors(map);
++        } else {
++            return new RegistryAccess.ImmutableRegistryAccess(list.stream().map(RegistryDataLoader.Loader::registry).toList()).freeze();
++        }
+     }
+ 
+     public static RegistryAccess.Frozen load(
+@@ -177,7 +232,21 @@
+             .map(p_326168_ -> p_326168_.create(Lifecycle.stable(), map))
+             .collect(Collectors.toUnmodifiableList());
+         RegistryOps.RegistryInfoLookup registryops$registryinfolookup = createContext(p_333463_, list);
+-        list.forEach(p_326160_ -> p_332256_.apply((RegistryDataLoader.Loader<?>)p_326160_, registryops$registryinfolookup));
++        for (RegistryDataLoader.Loader<?> registrydataloader$loader : list) {
++            String s = registrydataloader$loader.registry().key().location().toString();
++            long i = Util.getMillis();
++            System.out.println("[mc-web/registry] load begin " + s);
++            if (s.equals("minecraft:worldgen/density_function")) {
++                System.out.println("[mc-web/density] apply begin");
++            }
++            p_332256_.apply((RegistryDataLoader.Loader<?>)registrydataloader$loader, registryops$registryinfolookup);
++            if (s.equals("minecraft:worldgen/density_function")) {
++                System.out.println("[mc-web/density] apply end");
++            }
++            System.out.println(
++                "[mc-web/registry] load end " + s + " size=" + registrydataloader$loader.registry().size() + " ms=" + (Util.getMillis() - i)
++            );
++        }
+         list.forEach(p_389942_ -> {
+             Registry<?> registry = p_389942_.registry();
+ 
+@@ -291,18 +360,59 @@
+         Decoder<E> p_329404_,
+         Map<ResourceKey<?>, Exception> p_335074_
+     ) {
++        if (BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && p_331358_.key().toString().equals("minecraft:worldgen/density_function")) {
++            System.out.println("[mc-web/density] web bootstrap fallback begin");
++            try {
++                bootstrapWebDensityFunctions((WritableRegistry<DensityFunction>)p_331358_, p_333035_);
++                System.out.println("[mc-web/density] web bootstrap fallback end size=" + p_331358_.size());
++            } catch (Exception exception) {
++                System.out.println(
++                    "[mc-web/density] web bootstrap fallback failed: "
++                        + exception.getClass().getSimpleName()
++                        + ": "
++                        + (exception.getMessage() == null ? "<no message>" : exception.getMessage())
++                );
++                throw exception;
++            }
++            TagLoader.loadTagsForRegistry(p_335634_, p_331358_);
++            return;
++        }
++
+         FileToIdConverter filetoidconverter = FileToIdConverter.registry(p_331358_.key());
+         RegistryOps<JsonElement> registryops = RegistryOps.create(JsonOps.INSTANCE, p_333035_);
++        boolean flag = p_331358_.key().toString().equals("minecraft:worldgen/density_function");
++        int i = 0;
++        Map<ResourceLocation, Resource> map = null;
++        if (flag) {
++            long j = Util.getMillis();
++            System.out.println("[mc-web/density] listResources begin");
++            map = filetoidconverter.listMatchingResources(p_335634_);
++            System.out.println("[mc-web/density] listResources end count=" + map.size() + " ms=" + (Util.getMillis() - j));
++        } else {
++            map = filetoidconverter.listMatchingResources(p_335634_);
++        }
+ 
+-        for (Entry<ResourceLocation, Resource> entry : filetoidconverter.listMatchingResources(p_335634_).entrySet()) {
++        for (Entry<ResourceLocation, Resource> entry : map.entrySet()) {
+             ResourceLocation resourcelocation = entry.getKey();
+             ResourceKey<E> resourcekey = ResourceKey.create(p_331358_.key(), filetoidconverter.fileToId(resourcelocation));
+             Resource resource = entry.getValue();
+             RegistrationInfo registrationinfo = REGISTRATION_INFO_CACHE.apply(resource.knownPackInfo());
++            i++;
+ 
+             try {
++                if (flag) {
++                    System.out.println("[mc-web/density] parse begin #" + i + " " + resourcekey.location());
++                }
+                 loadElementFromResource(p_331358_, p_329404_, registryops, resourcekey, resource, registrationinfo);
++                if (flag) {
++                    System.out.println("[mc-web/density] parse end #" + i + " " + resourcekey.location());
++                }
+             } catch (Exception exception) {
++                if (flag) {
++                    System.out.println("[mc-web/density] parse fail #" + i + " " + resourcekey.location() + " " + exception.getClass().getSimpleName() + ": " + exception.getMessage());
++                }
+                 p_335074_.put(
+                     resourcekey,
+                     new IllegalStateException(String.format(Locale.ROOT, "Failed to parse %s from pack %s", resourcelocation, resource.sourcePackId()), exception)
+@@ -313,6 +423,33 @@
+         TagLoader.loadTagsForRegistry(p_335634_, p_331358_);
+     }
+ 
++    private static void bootstrapWebDensityFunctions(
++        WritableRegistry<DensityFunction> p_410500_, RegistryOps.RegistryInfoLookup p_410501_
++    ) {
++        HolderGetter.Provider holdergetter$provider = new HolderGetter.Provider() {
++            @Override
++            public <T> Optional<? extends HolderGetter<T>> lookup(ResourceKey<? extends Registry<? extends T>> p_410510_) {
++                RegistryOps.RegistryInfo<T> registryops$registryinfo = p_410501_.lookup(p_410510_).orElse(null);
++                if (registryops$registryinfo == null) {
++                    return Optional.empty();
++                }
++
++                return Optional.of(registryops$registryinfo.getter());
++            }
++        };
++        NoiseRouterData.bootstrap(new BootstrapContext<>() {
++            @Override
++            public Holder.Reference<DensityFunction> register(ResourceKey<DensityFunction> p_410520_, DensityFunction p_410521_, Lifecycle p_410522_) {
++                return p_410500_.register(p_410520_, p_410521_, RegistrationInfo.BUILT_IN);
++            }
++
++            @Override
++            public <S> HolderGetter<S> lookup(ResourceKey<? extends Registry<? extends S>> p_410524_) {
++                return holdergetter$provider.lookupOrThrow(p_410524_);
++            }
++        });
++    }
++
+     static <E> void loadContentsFromNetwork(
+         Map<ResourceKey<? extends Registry<?>>, RegistryDataLoader.NetworkedRegistryData> p_331925_,
+         ResourceProvider p_332010_,
+@@ -359,7 +496,18 @@
+ 
+     record Loader<T>(RegistryDataLoader.RegistryData<T> data, WritableRegistry<T> registry, Map<ResourceKey<?>, Exception> loadingErrors) {
+         public void loadFromResources(ResourceManager p_328137_, RegistryOps.RegistryInfoLookup p_330371_) {
++            String s = this.registry.key().toString();
++            if (s.equals("minecraft:worldgen/density_function")) {
++                System.out.println("[mc-web/density] loader.loadFromResources entered");
++            }
++            boolean flag = s.equals("minecraft:worldgen/density_function");
++            if (flag) {
++                System.out.println("[mc-web/density] loader.loadFromResources begin");
++            }
+             RegistryDataLoader.loadContentsFromManager(p_328137_, p_330371_, this.registry, this.data.elementCodec, this.loadingErrors);
++            if (flag) {
++                System.out.println("[mc-web/density] loader.loadFromResources end");
++            }
+         }
+ 
+         public void loadFromNetwork(

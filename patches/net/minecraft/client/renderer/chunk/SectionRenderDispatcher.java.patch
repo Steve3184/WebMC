@@ -1,0 +1,537 @@
+diff --git a/net/minecraft/client/renderer/chunk/SectionRenderDispatcher.java b/net/minecraft/client/renderer/chunk/SectionRenderDispatcher.java
+index a2902c4..936b0c6 100644
+--- a/net/minecraft/client/renderer/chunk/SectionRenderDispatcher.java
++++ b/net/minecraft/client/renderer/chunk/SectionRenderDispatcher.java
+@@ -38,9 +38,11 @@ import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.Vec3;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class SectionRenderDispatcher {
++    private static final int WEB_DEFAULT_TASKS_STARTED_PER_FRAME = 2;
+     private final CompileTaskDynamicQueue compileQueue = new CompileTaskDynamicQueue();
+     private final Queue<Runnable> toUpload = Queues.newConcurrentLinkedQueue();
+     final Executor mainThreadUploadExecutor = this.toUpload::add;
+@@ -54,6 +56,12 @@ public class SectionRenderDispatcher {
+     final LevelRenderer renderer;
+     Vec3 cameraPosition = Vec3.ZERO;
+     final SectionCompiler sectionCompiler;
++    private int webCompileLogs;
++    private int webDispatchLogs;
++    private int webTaskCreateLogs;
++    private int webMeshStateLogs;
++    private int webTasksStartedThisFrame;
++    private int webTaskBudgetThisFrame = WEB_DEFAULT_TASKS_STARTED_PER_FRAME;
+ 
+     public SectionRenderDispatcher(
+         ClientLevel p_299878_,
+@@ -77,37 +85,114 @@ public class SectionRenderDispatcher {
+         this.level = p_298968_;
+     }
+ 
++    public void beginWebFrame() {
++        this.beginWebFrame(WEB_DEFAULT_TASKS_STARTED_PER_FRAME);
++    }
++
++    public void beginWebFrame(int p_407452_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            this.webTasksStartedThisFrame = 0;
++            this.webTaskBudgetThisFrame = Math.max(1, p_407452_);
++        }
++    }
++
++    public void runQueuedTasksForWebFrame() {
++        if (BuildFlags.WEB_RUNTIME) {
++            this.runTask();
++        }
++    }
++
+     private void runTask() {
++        if (BuildFlags.WEB_RUNTIME && this.webTasksStartedThisFrame >= this.webTaskBudgetThisFrame) {
++            return;
++        }
+         if (!this.closed && !this.bufferPool.isEmpty()) {
+             SectionRenderDispatcher.RenderSection.CompileTask sectionrenderdispatcher$rendersection$compiletask = this.compileQueue.poll(this.cameraPosition);
+             if (sectionrenderdispatcher$rendersection$compiletask != null) {
++                if (BuildFlags.WEB_RUNTIME) {
++                    this.webTasksStartedThisFrame++;
++                }
++                if (BuildFlags.WEB_RUNTIME && this.webDispatchLogs < 3) {
++                    this.webDispatchLogs++;
++                    System.out.println("[mc-web/sectionDispatch] polled");
++                }
+                 SectionBufferBuilderPack sectionbufferbuilderpack = Objects.requireNonNull(this.bufferPool.acquire());
+-                CompletableFuture.<CompletableFuture<SectionRenderDispatcher.SectionTaskResult>>supplyAsync(
+-                        () -> sectionrenderdispatcher$rendersection$compiletask.doTask(sectionbufferbuilderpack),
+-                        this.executor.forName(sectionrenderdispatcher$rendersection$compiletask.name())
+-                    )
+-                    .thenCompose(p_298155_ -> (CompletionStage<SectionRenderDispatcher.SectionTaskResult>)p_298155_)
+-                    .whenComplete((p_357938_, p_357939_) -> {
+-                        if (p_357939_ != null) {
+-                            Minecraft.getInstance().delayCrash(CrashReport.forThrowable(p_357939_, "Batching sections"));
+-                        } else {
+-                            sectionrenderdispatcher$rendersection$compiletask.isCompleted.set(true);
+-                            this.consecutiveExecutor.schedule(() -> {
+-                                if (p_357938_ == SectionRenderDispatcher.SectionTaskResult.SUCCESSFUL) {
+-                                    sectionbufferbuilderpack.clearAll();
+-                                } else {
+-                                    sectionbufferbuilderpack.discardAll();
+-                                }
+-
+-                                this.bufferPool.release(sectionbufferbuilderpack);
+-                                this.runTask();
+-                            });
+-                        }
+-                    });
++                if (BuildFlags.WEB_RUNTIME && this.webDispatchLogs < 3) {
++                    this.webDispatchLogs++;
++                    System.out.println("[mc-web/sectionDispatch] acquiredBuffer free=" + this.bufferPool.getFreeBufferCount());
++                }
++                if (BuildFlags.WEB_RUNTIME) {
++                    if (this.webDispatchLogs < 3) {
++                        this.webDispatchLogs++;
++                        System.out.println("[mc-web/sectionDispatch] beforeDoTask");
++                    }
++                    this.finishCompileTask(
++                        sectionrenderdispatcher$rendersection$compiletask,
++                        sectionbufferbuilderpack,
++                        sectionrenderdispatcher$rendersection$compiletask.doTask(sectionbufferbuilderpack)
++                    );
++                } else {
++                    this.finishCompileTask(
++                        sectionrenderdispatcher$rendersection$compiletask,
++                        sectionbufferbuilderpack,
++                        CompletableFuture.<CompletableFuture<SectionRenderDispatcher.SectionTaskResult>>supplyAsync(
++                                () -> sectionrenderdispatcher$rendersection$compiletask.doTask(sectionbufferbuilderpack),
++                                this.executor.forName(sectionrenderdispatcher$rendersection$compiletask.name())
++                            )
++                            .thenCompose(p_298155_ -> (CompletionStage<SectionRenderDispatcher.SectionTaskResult>)p_298155_)
++                    );
++                }
+             }
+         }
+     }
+ 
++    private void finishCompileTask(
++        SectionRenderDispatcher.RenderSection.CompileTask p_406860_,
++        SectionBufferBuilderPack p_406494_,
++        CompletableFuture<SectionRenderDispatcher.SectionTaskResult> p_406310_
++    ) {
++        p_406310_.whenComplete((p_357938_, p_357939_) -> {
++            Runnable runnable = () -> {
++                if (p_357939_ == null && p_357938_ == SectionRenderDispatcher.SectionTaskResult.SUCCESSFUL) {
++                    p_406494_.clearAll();
++                } else {
++                    p_406494_.discardAll();
++                }
++
++                p_406860_.isCompleted.set(true);
++                this.bufferPool.release(p_406494_);
++                if (!BuildFlags.WEB_RUNTIME || this.webTasksStartedThisFrame < this.webTaskBudgetThisFrame) {
++                    this.runTask();
++                }
++            };
++            if (p_357939_ != null) {
++                if (BuildFlags.WEB_RUNTIME && this.webDispatchLogs < 4) {
++                    this.webDispatchLogs++;
++                    System.out.println(
++                        "[mc-web/sectionDispatch] taskFailed type="
++                            + p_357939_.getClass().getName()
++                            + " msg="
++                            + p_357939_.getMessage()
++                            + " freeBeforeRelease="
++                            + this.bufferPool.getFreeBufferCount()
++                    );
++                }
++                Minecraft.getInstance().delayCrash(CrashReport.forThrowable(p_357939_, "Batching sections"));
++                if (BuildFlags.WEB_RUNTIME) {
++                    runnable.run();
++                } else {
++                    this.consecutiveExecutor.schedule(runnable);
++                }
++            } else {
++                if (BuildFlags.WEB_RUNTIME) {
++                    runnable.run();
++                } else {
++                    this.consecutiveExecutor.schedule(runnable);
++                }
++            }
++        });
++    }
++
+     public void setCameraPosition(Vec3 p_407405_) {
+         this.cameraPosition = p_407405_;
+     }
+@@ -130,12 +215,25 @@ public class SectionRenderDispatcher {
+ 
+     public void schedule(SectionRenderDispatcher.RenderSection.CompileTask p_297747_) {
+         if (!this.closed) {
+-            this.consecutiveExecutor.schedule(() -> {
+-                if (!this.closed) {
+-                    this.compileQueue.add(p_297747_);
+-                    this.runTask();
++            if (BuildFlags.WEB_RUNTIME) {
++                if (this.webDispatchLogs < 3) {
++                    this.webDispatchLogs++;
++                    System.out.println("[mc-web/sectionDispatch] schedule add");
+                 }
+-            });
++                this.compileQueue.add(p_297747_);
++                if (this.webDispatchLogs < 3) {
++                    this.webDispatchLogs++;
++                    System.out.println("[mc-web/sectionDispatch] schedule runTask");
++                }
++                this.runTask();
++            } else {
++                this.consecutiveExecutor.schedule(() -> {
++                    if (!this.closed) {
++                        this.compileQueue.add(p_297747_);
++                        this.runTask();
++                    }
++                });
++            }
+         }
+     }
+ 
+@@ -200,7 +298,11 @@ public class SectionRenderDispatcher {
+         }
+ 
+         public boolean hasAllNeighbors() {
+-            return this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.WEST))
++            if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++                return true;
++            }
++
++            boolean hasAllNeighbors = this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.WEST))
+                 && this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.NORTH))
+                 && this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.EAST))
+                 && this.doesChunkExistAt(SectionPos.offset(this.sectionNode, Direction.SOUTH))
+@@ -208,6 +310,7 @@ public class SectionRenderDispatcher {
+                 && this.doesChunkExistAt(SectionPos.offset(this.sectionNode, -1, 0, 1))
+                 && this.doesChunkExistAt(SectionPos.offset(this.sectionNode, 1, 0, -1))
+                 && this.doesChunkExistAt(SectionPos.offset(this.sectionNode, 1, 0, 1));
++            return hasAllNeighbors;
+         }
+ 
+         public AABB getBoundingBox() {
+@@ -258,7 +361,21 @@ public class SectionRenderDispatcher {
+ 
+         public void reset() {
+             this.cancelTasks();
+-            this.sectionMesh.getAndSet(CompiledSectionMesh.UNCOMPILED).close();
++            SectionMesh sectionmesh = this.sectionMesh.getAndSet(CompiledSectionMesh.UNCOMPILED);
++            if (BuildFlags.WEB_RUNTIME && sectionmesh != CompiledSectionMesh.UNCOMPILED && SectionRenderDispatcher.this.webMeshStateLogs < 4) {
++                SectionRenderDispatcher.this.webMeshStateLogs++;
++                System.out.println(
++                    "[mc-web/sectionMesh] reset section="
++                        + SectionPos.x(this.sectionNode)
++                        + ","
++                        + SectionPos.y(this.sectionNode)
++                        + ","
++                        + SectionPos.z(this.sectionNode)
++                        + " hadRenderable="
++                        + sectionmesh.hasRenderableLayers()
++                );
++            }
++            sectionmesh.close();
+             this.dirty = true;
+         }
+ 
+@@ -321,16 +438,86 @@ public class SectionRenderDispatcher {
+         }
+ 
+         public SectionRenderDispatcher.RenderSection.CompileTask createCompileTask(RenderRegionCache p_300037_) {
+-            this.cancelTasks();
+-            RenderSectionRegion rendersectionregion = p_300037_.createRegion(SectionRenderDispatcher.this.level, this.sectionNode);
+-            boolean flag = this.sectionMesh.get() != CompiledSectionMesh.UNCOMPILED;
+-            this.lastRebuildTask = new SectionRenderDispatcher.RenderSection.RebuildTask(rendersectionregion, flag);
+-            return this.lastRebuildTask;
++            SectionPos sectionpos = SectionPos.of(this.sectionNode);
++            String webStage = "start";
++            try {
++                if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webTaskCreateLogs < 3) {
++                    SectionRenderDispatcher.this.webTaskCreateLogs++;
++                    System.out.println("[mc-web/sectionTask] create start section=" + sectionpos.x() + "," + sectionpos.y() + "," + sectionpos.z());
++                }
++                webStage = "cancelTasks";
++                this.cancelTasks();
++                webStage = "createRegion";
++                RenderSectionRegion rendersectionregion = p_300037_.createRegion(SectionRenderDispatcher.this.level, this.sectionNode);
++                if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webTaskCreateLogs < 3) {
++                    SectionRenderDispatcher.this.webTaskCreateLogs++;
++                    System.out.println("[mc-web/sectionTask] create regionReady section=" + sectionpos.x() + "," + sectionpos.y() + "," + sectionpos.z());
++                }
++                webStage = "newTask";
++                boolean flag = this.sectionMesh.get() != CompiledSectionMesh.UNCOMPILED;
++                this.lastRebuildTask = new SectionRenderDispatcher.RenderSection.RebuildTask(rendersectionregion, flag);
++                if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webTaskCreateLogs < 3) {
++                    SectionRenderDispatcher.this.webTaskCreateLogs++;
++                    System.out.println("[mc-web/sectionTask] create taskReady section=" + sectionpos.x() + "," + sectionpos.y() + "," + sectionpos.z());
++                }
++                return this.lastRebuildTask;
++            } catch (Throwable throwable) {
++                if (BuildFlags.WEB_RUNTIME) {
++                    System.out.println(
++                        "[mc-web/sectionTask] create fail stage="
++                            + webStage
++                            + " section="
++                            + sectionpos.x()
++                            + ","
++                            + sectionpos.y()
++                            + ","
++                            + sectionpos.z()
++                            + " "
++                            + throwable.getClass().getName()
++                            + ": "
++                            + throwable.getMessage()
++                    );
++                }
++                throw throwable;
++            }
+         }
+ 
+         public void rebuildSectionAsync(RenderRegionCache p_297331_) {
++            if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webTaskCreateLogs < 3) {
++                SectionRenderDispatcher.this.webTaskCreateLogs++;
++                System.out.println(
++                    "[mc-web/sectionTask] rebuildAsync start section="
++                        + SectionPos.x(this.sectionNode)
++                        + ","
++                        + SectionPos.y(this.sectionNode)
++                        + ","
++                        + SectionPos.z(this.sectionNode)
++                );
++            }
+             SectionRenderDispatcher.RenderSection.CompileTask sectionrenderdispatcher$rendersection$compiletask = this.createCompileTask(p_297331_);
++            if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webTaskCreateLogs < 3) {
++                SectionRenderDispatcher.this.webTaskCreateLogs++;
++                System.out.println(
++                    "[mc-web/sectionTask] rebuildAsync taskCreated section="
++                        + SectionPos.x(this.sectionNode)
++                        + ","
++                        + SectionPos.y(this.sectionNode)
++                        + ","
++                        + SectionPos.z(this.sectionNode)
++                );
++            }
+             SectionRenderDispatcher.this.schedule(sectionrenderdispatcher$rendersection$compiletask);
++            if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webTaskCreateLogs < 3) {
++                SectionRenderDispatcher.this.webTaskCreateLogs++;
++                System.out.println(
++                    "[mc-web/sectionTask] rebuildAsync scheduled section="
++                        + SectionPos.x(this.sectionNode)
++                        + ","
++                        + SectionPos.y(this.sectionNode)
++                        + ","
++                        + SectionPos.z(this.sectionNode)
++                );
++            }
+         }
+ 
+         public void compileSync(RenderRegionCache p_298605_) {
+@@ -341,6 +528,21 @@ public class SectionRenderDispatcher {
+         void setSectionMesh(SectionMesh p_408721_) {
+             SectionMesh sectionmesh = this.sectionMesh.getAndSet(p_408721_);
+             SectionRenderDispatcher.this.toClose.add(sectionmesh);
++            if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webMeshStateLogs < 4) {
++                SectionRenderDispatcher.this.webMeshStateLogs++;
++                System.out.println(
++                    "[mc-web/sectionMesh] set section="
++                        + SectionPos.x(this.sectionNode)
++                        + ","
++                        + SectionPos.y(this.sectionNode)
++                        + ","
++                        + SectionPos.z(this.sectionNode)
++                        + " renderable="
++                        + p_408721_.hasRenderableLayers()
++                        + " prevCompiled="
++                        + (sectionmesh != CompiledSectionMesh.UNCOMPILED)
++                );
++            }
+             SectionRenderDispatcher.this.renderer.addRecentlyCompiledSection(this);
+         }
+ 
+@@ -392,11 +594,21 @@ public class SectionRenderDispatcher {
+ 
+             @Override
+             public CompletableFuture<SectionRenderDispatcher.SectionTaskResult> doTask(SectionBufferBuilderPack p_299595_) {
++                if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webCompileLogs < 4) {
++                    SectionRenderDispatcher.this.webCompileLogs++;
++                    System.out.println("[mc-web/sectionCompile] enter");
++                }
+                 if (this.isCancelled.get()) {
+                     return CompletableFuture.completedFuture(SectionRenderDispatcher.SectionTaskResult.CANCELLED);
+                 } else {
+                     long i = RenderSection.this.sectionNode;
+                     SectionPos sectionpos = SectionPos.of(i);
++                    if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webCompileLogs < 4) {
++                        SectionRenderDispatcher.this.webCompileLogs++;
++                        System.out.println(
++                            "[mc-web/sectionCompile] begin section=" + sectionpos.x() + "," + sectionpos.y() + "," + sectionpos.z()
++                        );
++                    }
+                     if (this.isCancelled.get()) {
+                         return CompletableFuture.completedFuture(SectionRenderDispatcher.SectionTaskResult.CANCELLED);
+                     } else {
+@@ -405,6 +617,19 @@ public class SectionRenderDispatcher {
+                             sectioncompiler$results = SectionRenderDispatcher.this.sectionCompiler
+                                 .compile(sectionpos, this.region, RenderSection.this.createVertexSorting(sectionpos), p_299595_);
+                         }
++                        if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webCompileLogs < 4) {
++                            SectionRenderDispatcher.this.webCompileLogs++;
++                            System.out.println(
++                                "[mc-web/sectionCompile] compiled section="
++                                    + sectionpos.x()
++                                    + ","
++                                    + sectionpos.y()
++                                    + ","
++                                    + sectionpos.z()
++                                    + " layers="
++                                    + sectioncompiler$results.renderedLayers.size()
++                            );
++                        }
+ 
+                         TranslucencyPointOfView translucencypointofview = TranslucencyPointOfView.of(SectionRenderDispatcher.this.cameraPosition, i);
+                         if (this.isCancelled.get()) {
+@@ -412,16 +637,61 @@ public class SectionRenderDispatcher {
+                             return CompletableFuture.completedFuture(SectionRenderDispatcher.SectionTaskResult.CANCELLED);
+                         } else {
+                             CompiledSectionMesh compiledsectionmesh = new CompiledSectionMesh(translucencypointofview, sectioncompiler$results);
++                            if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webCompileLogs < 4) {
++                                SectionRenderDispatcher.this.webCompileLogs++;
++                                System.out.println(
++                                        "[mc-web/sectionCompile] meshReady section=" + sectionpos.x() + "," + sectionpos.y() + "," + sectionpos.z()
++                                );
++                            }
++                            if (BuildFlags.WEB_RUNTIME) {
++                                return this.uploadAndApplySectionMesh(sectioncompiler$results.renderedLayers, compiledsectionmesh, sectionpos);
++                            }
+                             CompletableFuture<Void> completablefuture = RenderSection.this.upload(sectioncompiler$results.renderedLayers, compiledsectionmesh);
++                            if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webCompileLogs < 4) {
++                                SectionRenderDispatcher.this.webCompileLogs++;
++                                System.out.println(
++                                    "[mc-web/sectionCompile] uploadFuture section=" + sectionpos.x() + "," + sectionpos.y() + "," + sectionpos.z()
++                                );
++                            }
+                             return completablefuture.handle((p_405000_, p_405001_) -> {
+                                 if (p_405001_ != null && !(p_405001_ instanceof CancellationException) && !(p_405001_ instanceof InterruptedException)) {
+                                     Minecraft.getInstance().delayCrash(CrashReport.forThrowable(p_405001_, "Rendering section"));
+                                 }
+ 
+                                 if (!this.isCancelled.get() && !SectionRenderDispatcher.this.closed) {
++                                    if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webMeshStateLogs < 4) {
++                                        SectionRenderDispatcher.this.webMeshStateLogs++;
++                                        System.out.println(
++                                            "[mc-web/sectionMesh] applySuccess section="
++                                                + sectionpos.x()
++                                                + ","
++                                                + sectionpos.y()
++                                                + ","
++                                                + sectionpos.z()
++                                                + " layers="
++                                                + sectioncompiler$results.renderedLayers.size()
++                                                + " renderable="
++                                                + compiledsectionmesh.hasRenderableLayers()
++                                        );
++                                    }
+                                     RenderSection.this.setSectionMesh(compiledsectionmesh);
+                                     return SectionRenderDispatcher.SectionTaskResult.SUCCESSFUL;
+                                 } else {
++                                    if (BuildFlags.WEB_RUNTIME && SectionRenderDispatcher.this.webMeshStateLogs < 4) {
++                                        SectionRenderDispatcher.this.webMeshStateLogs++;
++                                        System.out.println(
++                                            "[mc-web/sectionMesh] applyCancelled section="
++                                                + sectionpos.x()
++                                                + ","
++                                                + sectionpos.y()
++                                                + ","
++                                                + sectionpos.z()
++                                                + " cancelled="
++                                                + this.isCancelled.get()
++                                                + " closed="
++                                                + SectionRenderDispatcher.this.closed
++                                        );
++                                    }
+                                     SectionRenderDispatcher.this.toClose.add(compiledsectionmesh);
+                                     return SectionRenderDispatcher.SectionTaskResult.CANCELLED;
+                                 }
+@@ -431,6 +701,70 @@ public class SectionRenderDispatcher {
+                 }
+             }
+ 
++            private CompletableFuture<SectionRenderDispatcher.SectionTaskResult> uploadAndApplySectionMesh(
++                Map<ChunkSectionLayer, MeshData> p_407440_, CompiledSectionMesh p_410912_, SectionPos p_410166_
++            ) {
++                CompletableFuture<SectionRenderDispatcher.SectionTaskResult> completablefuture = new CompletableFuture<>();
++                if (SectionRenderDispatcher.this.closed) {
++                    p_407440_.values().forEach(MeshData::close);
++                    completablefuture.complete(SectionRenderDispatcher.SectionTaskResult.CANCELLED);
++                    return completablefuture;
++                } else {
++                    SectionRenderDispatcher.this.mainThreadUploadExecutor.execute(() -> {
++                        try {
++                            p_407440_.forEach((p_406290_, p_406291_) -> {
++                                try (Zone zone = Profiler.get().zone("Upload Section Layer")) {
++                                    p_410912_.uploadMeshLayer(p_406290_, p_406291_, RenderSection.this.sectionNode);
++                                } finally {
++                                    p_406291_.close();
++                                }
++                            });
++                            if (!this.isCancelled.get() && !SectionRenderDispatcher.this.closed) {
++                                if (SectionRenderDispatcher.this.webMeshStateLogs < 4) {
++                                    SectionRenderDispatcher.this.webMeshStateLogs++;
++                                    System.err.println(
++                                        "[mc-web/sectionMesh] applySuccess section="
++                                            + p_410166_.x()
++                                            + ","
++                                            + p_410166_.y()
++                                            + ","
++                                            + p_410166_.z()
++                                            + " layers="
++                                            + p_407440_.size()
++                                            + " renderable="
++                                            + p_410912_.hasRenderableLayers()
++                                    );
++                                }
++                                RenderSection.this.setSectionMesh(p_410912_);
++                                completablefuture.complete(SectionRenderDispatcher.SectionTaskResult.SUCCESSFUL);
++                            } else {
++                                if (SectionRenderDispatcher.this.webMeshStateLogs < 4) {
++                                    SectionRenderDispatcher.this.webMeshStateLogs++;
++                                    System.err.println(
++                                        "[mc-web/sectionMesh] applyCancelled section="
++                                            + p_410166_.x()
++                                            + ","
++                                            + p_410166_.y()
++                                            + ","
++                                            + p_410166_.z()
++                                            + " cancelled="
++                                            + this.isCancelled.get()
++                                            + " closed="
++                                            + SectionRenderDispatcher.this.closed
++                                    );
++                                }
++                                SectionRenderDispatcher.this.toClose.add(p_410912_);
++                                completablefuture.complete(SectionRenderDispatcher.SectionTaskResult.CANCELLED);
++                            }
++                        } catch (Throwable throwable) {
++                            SectionRenderDispatcher.this.toClose.add(p_410912_);
++                            completablefuture.completeExceptionally(throwable);
++                        }
++                    });
++                    return completablefuture;
++                }
++            }
++
+             @Override
+             public void cancel() {
+                 if (this.isCancelled.compareAndSet(false, true)) {
+@@ -510,4 +844,4 @@ public class SectionRenderDispatcher {
+         SUCCESSFUL,
+         CANCELLED;
+     }
+-}
+\ No newline at end of file
++}

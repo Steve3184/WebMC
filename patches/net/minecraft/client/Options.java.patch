@@ -1,0 +1,605 @@
+--- a/net/minecraft/client/Options.java
++++ b/net/minecraft/client/Options.java
+@@ -26,6 +26,7 @@
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.Comparator;
++import java.util.EnumMap;
+ import java.util.EnumSet;
+ import java.util.Iterator;
+ import java.util.List;
+@@ -71,29 +72,38 @@
+ import net.minecraft.world.entity.player.PlayerModelPart;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+-import org.apache.commons.lang3.ArrayUtils;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class Options {
++    static { System.err.println("[mc-probe] Options <clinit>: S0 entered"); }
+     static final Logger LOGGER = LogUtils.getLogger();
+-    static final Gson GSON = new Gson();
+-    private static final TypeToken<List<String>> LIST_OF_STRINGS_TYPE = new TypeToken<List<String>>() {};
++    static { System.err.println("[mc-probe] Options <clinit>: S1 past LOGGER"); }
++    static final Gson GSON = BuildFlags.WEB_RUNTIME ? null : new Gson();
++    static { System.err.println("[mc-probe] Options <clinit>: S2 past GSON"); }
++    private static final TypeToken<List<String>> LIST_OF_STRINGS_TYPE = (TypeToken<List<String>>)(TypeToken<?>)
++        TypeToken.get(top.steve3184.webmc.util.WebTypes.parameterized(List.class, String.class));
++    static { System.err.println("[mc-probe] Options <clinit>: S3 past LIST_OF_STRINGS_TYPE"); }
+     public static final int RENDER_DISTANCE_TINY = 2;
+     public static final int RENDER_DISTANCE_SHORT = 4;
+     public static final int RENDER_DISTANCE_NORMAL = 8;
+     public static final int RENDER_DISTANCE_FAR = 12;
+     public static final int RENDER_DISTANCE_REALLY_FAR = 16;
+     public static final int RENDER_DISTANCE_EXTREME = 32;
+-    private static final Splitter OPTION_SPLITTER = Splitter.on(':').limit(2);
++    private static final Splitter OPTION_SPLITTER = BuildFlags.WEB_RUNTIME ? null : Splitter.on(':').limit(2);
++    static { System.err.println("[mc-probe] Options <clinit>: S4 past OPTION_SPLITTER"); }
+     public static final String DEFAULT_SOUND_DEVICE = "";
+     private static final Component ACCESSIBILITY_TOOLTIP_DARK_MOJANG_BACKGROUND = Component.translatable("options.darkMojangStudiosBackgroundColor.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S5 past ACCESSIBILITY_TOOLTIP_DARK_MOJANG_BACKGROUND (first Component.translatable)"); }
+     private final OptionInstance<Boolean> darkMojangStudiosBackground = OptionInstance.createBoolean(
+         "options.darkMojangStudiosBackgroundColor", OptionInstance.cachedConstantTooltip(ACCESSIBILITY_TOOLTIP_DARK_MOJANG_BACKGROUND), false
+     );
+     private static final Component ACCESSIBILITY_TOOLTIP_HIDE_LIGHTNING_FLASHES = Component.translatable("options.hideLightningFlashes.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S6 past HIDE_LIGHTNING_FLASHES"); }
+     private final OptionInstance<Boolean> hideLightningFlash = OptionInstance.createBoolean("options.hideLightningFlashes", OptionInstance.cachedConstantTooltip(ACCESSIBILITY_TOOLTIP_HIDE_LIGHTNING_FLASHES), false);
+     private static final Component ACCESSIBILITY_TOOLTIP_HIDE_SPLASH_TEXTS = Component.translatable("options.hideSplashTexts.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S7 past HIDE_SPLASH_TEXTS"); }
+     private final OptionInstance<Boolean> hideSplashTexts = OptionInstance.createBoolean("options.hideSplashTexts", OptionInstance.cachedConstantTooltip(ACCESSIBILITY_TOOLTIP_HIDE_SPLASH_TEXTS), false);
+     private final OptionInstance<Double> sensitivity = new OptionInstance<>("options.sensitivity", OptionInstance.noTooltip(), (p_232096_, p_232097_) -> {
+         if (p_232097_ == 0.0) {
+@@ -127,7 +137,9 @@
+         p_357644_ -> Minecraft.getInstance().getFramerateLimitTracker().setFramerateLimit(p_357644_)
+     );
+     private static final Component INACTIVITY_FPS_LIMIT_TOOLTIP_MINIMIZED = Component.translatable("options.inactivityFpsLimit.minimized.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S8 past INACTIVITY_FPS_LIMIT_TOOLTIP_MINIMIZED"); }
+     private static final Component INACTIVITY_FPS_LIMIT_TOOLTIP_AFK = Component.translatable("options.inactivityFpsLimit.afk.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S9 past INACTIVITY_FPS_LIMIT_TOOLTIP_AFK"); }
+     private final OptionInstance<InactivityFpsLimit> inactivityFpsLimit = new OptionInstance<>(
+         "options.inactivityFpsLimit",
+         p_357645_ -> {
+@@ -161,10 +173,13 @@
+         p_404798_ -> Minecraft.getInstance().levelRenderer.getCloudRenderer().markForRebuild()
+     );
+     private static final Component GRAPHICS_TOOLTIP_FAST = Component.translatable("options.graphics.fast.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S10 past GRAPHICS_TOOLTIP_FAST"); }
+     private static final Component GRAPHICS_TOOLTIP_FABULOUS = Component.translatable(
+         "options.graphics.fabulous.tooltip", Component.translatable("options.graphics.fabulous").withStyle(ChatFormatting.ITALIC)
+     );
++    static { System.err.println("[mc-probe] Options <clinit>: S11 past GRAPHICS_TOOLTIP_FABULOUS (Component.translatable with arg + withStyle)"); }
+     private static final Component GRAPHICS_TOOLTIP_FANCY = Component.translatable("options.graphics.fancy.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S12 past GRAPHICS_TOOLTIP_FANCY"); }
+     private final OptionInstance<GraphicsStatus> graphicsMode = new OptionInstance<>(
+         "options.graphics",
+         p_325283_ -> {
+@@ -197,8 +212,11 @@
+         GraphicsStatus.FANCY,
+         p_406694_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F0 past graphicsMode"); }
+     private final OptionInstance<Boolean> ambientOcclusion = OptionInstance.createBoolean("options.ao", true, p_263512_ -> Minecraft.getInstance().levelRenderer.allChanged());
++    { System.err.println("[mc-probe] Options field-init: F0.5 past ambientOcclusion"); }
+     private static final Component PRIORITIZE_CHUNK_TOOLTIP_NONE = Component.translatable("options.prioritizeChunkUpdates.none.tooltip");
++    static { System.err.println("[mc-probe] Options <clinit>: S13 past PRIORITIZE_CHUNK_TOOLTIP_NONE"); }
+     private static final Component PRIORITIZE_CHUNK_TOOLTIP_PLAYER_AFFECTED = Component.translatable("options.prioritizeChunkUpdates.byPlayer.tooltip");
+     private static final Component PRIORITIZE_CHUNK_TOOLTIP_NEARBY = Component.translatable("options.prioritizeChunkUpdates.nearby.tooltip");
+     private final OptionInstance<PrioritizeChunkUpdates> prioritizeChunkUpdates = new OptionInstance<>(
+@@ -217,8 +235,10 @@
+         PrioritizeChunkUpdates.NONE,
+         p_406500_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F1 past prioritizeChunkUpdates"); }
+     public List<String> resourcePacks = Lists.newArrayList();
+     public List<String> incompatibleResourcePacks = Lists.newArrayList();
++    { System.err.println("[mc-probe] Options field-init: F2 past resourcePacks lists"); }
+     private final OptionInstance<ChatVisiblity> chatVisibility = new OptionInstance<>(
+         "options.chat.visibility",
+         OptionInstance.noTooltip(),
+@@ -227,6 +247,7 @@
+         ChatVisiblity.FULL,
+         p_409148_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F3 past chatVisibility"); }
+     private final OptionInstance<Double> chatOpacity = new OptionInstance<>(
+         "options.chat.opacity",
+         OptionInstance.noTooltip(),
+@@ -235,9 +256,11 @@
+         1.0,
+         p_232106_ -> Minecraft.getInstance().gui.getChat().rescaleChat()
+     );
++    { System.err.println("[mc-probe] Options field-init: F4 past chatOpacity"); }
+     private final OptionInstance<Double> chatLineSpacing = new OptionInstance<>(
+         "options.chat.line_spacing", OptionInstance.noTooltip(), Options::percentValueLabel, OptionInstance.UnitDouble.INSTANCE, 0.0, p_407179_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F5 past chatLineSpacing"); }
+     private static final Component MENU_BACKGROUND_BLURRINESS_TOOLTIP = Component.translatable("options.accessibility.menu_background_blurriness.tooltip");
+     private static final int BLURRINESS_DEFAULT_VALUE = 5;
+     private final OptionInstance<Integer> menuBackgroundBlurriness = new OptionInstance<>(
+@@ -248,6 +271,7 @@
+         5,
+         p_409301_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F6 past menuBackgroundBlurriness"); }
+     private final OptionInstance<Double> textBackgroundOpacity = new OptionInstance<>(
+         "options.accessibility.text_background_opacity",
+         OptionInstance.noTooltip(),
+@@ -256,13 +280,18 @@
+         0.5,
+         p_232100_ -> Minecraft.getInstance().gui.getChat().rescaleChat()
+     );
++    { System.err.println("[mc-probe] Options field-init: F7 past textBackgroundOpacity"); }
+     private final OptionInstance<Double> panoramaSpeed = new OptionInstance<>(
+         "options.accessibility.panorama_speed", OptionInstance.noTooltip(), Options::percentValueLabel, OptionInstance.UnitDouble.INSTANCE, 1.0, p_408843_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F8 past panoramaSpeed"); }
+     private static final Component ACCESSIBILITY_TOOLTIP_CONTRAST_MODE = Component.translatable("options.accessibility.high_contrast.tooltip");
+     private final OptionInstance<Boolean> highContrast = OptionInstance.createBoolean(
+         "options.accessibility.high_contrast", OptionInstance.cachedConstantTooltip(ACCESSIBILITY_TOOLTIP_CONTRAST_MODE), false, p_275860_ -> {
+             PackRepository packrepository = Minecraft.getInstance().getResourcePackRepository();
++            if (packrepository == null) {
++                return;
++            }
+             boolean flag1 = packrepository.getSelectedIds().contains("high_contrast");
+             if (!flag1 && p_275860_) {
+                 if (packrepository.addPack("high_contrast")) {
+@@ -273,10 +302,12 @@
+             }
+         }
+     );
++    { System.err.println("[mc-probe] Options field-init: F9 past highContrast"); }
+     private static final Component HIGH_CONTRAST_BLOCK_OUTLINE_TOOLTIP = Component.translatable("options.accessibility.high_contrast_block_outline.tooltip");
+     private final OptionInstance<Boolean> highContrastBlockOutline = OptionInstance.createBoolean(
+         "options.accessibility.high_contrast_block_outline", OptionInstance.cachedConstantTooltip(HIGH_CONTRAST_BLOCK_OUTLINE_TOOLTIP), false
+     );
++    { System.err.println("[mc-probe] Options field-init: F10 past highContrastBlockOutline"); }
+     private final OptionInstance<Boolean> narratorHotkey = OptionInstance.createBoolean(
+         "options.accessibility.narrator_hotkey",
+         OptionInstance.cachedConstantTooltip(
+@@ -286,12 +317,14 @@
+         ),
+         true
+     );
++    { System.err.println("[mc-probe] Options field-init: F11 past narratorHotkey"); }
+     @Nullable
+     public String fullscreenVideoModeString;
+     public boolean hideServerAddress;
+     public boolean advancedItemTooltips;
+     public boolean pauseOnLostFocus = true;
+     private final Set<PlayerModelPart> modelParts = EnumSet.allOf(PlayerModelPart.class);
++    { System.err.println("[mc-probe] Options field-init: F12 past modelParts EnumSet.allOf"); }
+     private final OptionInstance<HumanoidArm> mainHand = new OptionInstance<>(
+         "options.mainHand",
+         OptionInstance.noTooltip(),
+@@ -300,6 +333,7 @@
+         HumanoidArm.RIGHT,
+         p_407732_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F13 past mainHand"); }
+     public int overrideWidth;
+     public int overrideHeight;
+     private final OptionInstance<Double> chatScale = new OptionInstance<>(
+@@ -343,8 +377,14 @@
+         new OptionInstance.IntRange(0, 60).xmap(p_231986_ -> p_231986_ / 10.0, p_232054_ -> (int)(p_232054_ * 10.0)),
+         Codec.doubleRange(0.0, 6.0),
+         0.0,
+-        p_232039_ -> Minecraft.getInstance().getChatListener().setMessageDelay(p_232039_)
++        p_232039_ -> {
++            Minecraft minecraft = Minecraft.getInstance();
++            if (minecraft != null && minecraft.getChatListener() != null) {
++                minecraft.getChatListener().setMessageDelay(p_232039_);
++            }
++        }
+     );
++    { System.err.println("[mc-probe] Options field-init: F14 past chatDelay"); }
+     private static final Component ACCESSIBILITY_TOOLTIP_NOTIFICATION_DISPLAY_TIME = Component.translatable("options.notifications.display_time.tooltip");
+     private final OptionInstance<Double> notificationDisplayTime = new OptionInstance<>(
+         "options.notifications.display_time",
+@@ -374,6 +414,7 @@
+         AttackIndicatorStatus.CROSSHAIR,
+         p_407714_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F15 past attackIndicator"); }
+     public TutorialSteps tutorialStep = TutorialSteps.MOVEMENT;
+     public boolean joinedFirstServer = false;
+     private final OptionInstance<Integer> biomeBlendRadius = new OptionInstance<>("options.biomeBlendRadius", OptionInstance.noTooltip(), (p_232016_, p_232017_) -> {
+@@ -390,11 +431,15 @@
+         p_410500_ -> {}
+     );
+     private final OptionInstance<Boolean> rawMouseInput = OptionInstance.createBoolean("options.rawMouseInput", true, p_232062_ -> {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
+         Window window = Minecraft.getInstance().getWindow();
+         if (window != null) {
+             window.updateRawMouseInput(p_232062_);
+         }
+     });
++    { System.err.println("[mc-probe] Options field-init: F16 past rawMouseInput"); }
+     public int glDebugVerbosity = 1;
+     private final OptionInstance<Boolean> autoJump = OptionInstance.createBoolean("options.autoJump", false);
+     private static final Component ACCESSIBILITY_TOOLTIP_ROTATE_WITH_MINECART = Component.translatable("options.rotateWithMinecart.tooltip");
+@@ -409,6 +454,7 @@
+             Minecraft.getInstance().getWindow().updateVsync(p_232052_);
+         }
+     });
++    { System.err.println("[mc-probe] Options field-init: F17 past enableVsync"); }
+     private final OptionInstance<Boolean> entityShadows = OptionInstance.createBoolean("options.entityShadows", true);
+     private final OptionInstance<Boolean> forceUnicodeFont = OptionInstance.createBoolean("options.forceUnicodeFont", false, p_325286_ -> updateFontOptions());
+     private final OptionInstance<Boolean> japaneseGlyphVariants = OptionInstance.createBoolean(
+@@ -417,19 +463,22 @@
+         japaneseGlyphVariantsDefault(),
+         p_325287_ -> updateFontOptions()
+     );
++    { System.err.println("[mc-probe] Options field-init: F18 past japaneseGlyphVariants"); }
+     private final OptionInstance<Boolean> invertYMouse = OptionInstance.createBoolean("options.invertMouse", false);
+     private final OptionInstance<Boolean> discreteMouseScroll = OptionInstance.createBoolean("options.discrete_mouse_scroll", false);
+     private static final Component REALMS_NOTIFICATIONS_TOOLTIP = Component.translatable("options.realmsNotifications.tooltip");
+     private final OptionInstance<Boolean> realmsNotifications = OptionInstance.createBoolean("options.realmsNotifications", OptionInstance.cachedConstantTooltip(REALMS_NOTIFICATIONS_TOOLTIP), true);
++    { System.err.println("[mc-probe] Options field-init: F19 past realmsNotifications"); }
+     private static final Component ALLOW_SERVER_LISTING_TOOLTIP = Component.translatable("options.allowServerListing.tooltip");
+     private final OptionInstance<Boolean> allowServerListing = OptionInstance.createBoolean(
+         "options.allowServerListing", OptionInstance.cachedConstantTooltip(ALLOW_SERVER_LISTING_TOOLTIP), true, p_362316_ -> {}
+     );
+     private final OptionInstance<Boolean> reducedDebugInfo = OptionInstance.createBoolean("options.reducedDebugInfo", false);
+-    private final Map<SoundSource, OptionInstance<Double>> soundSourceVolumes = Util.makeEnumMap(
+-        SoundSource.class, p_389134_ -> this.createSoundSliderOptionInstance("soundCategory." + p_389134_.getName(), p_389134_)
+-    );
++    { System.err.println("[mc-probe] Options field-init: F20 past reducedDebugInfo"); }
++    private final Map<SoundSource, OptionInstance<Double>> soundSourceVolumes = this.initSoundSourceVolumes();
++    { System.err.println("[mc-probe] Options field-init: F21 past soundSourceVolumes"); }
+     private final OptionInstance<Boolean> showSubtitles = OptionInstance.createBoolean("options.showSubtitles", false);
++    { System.err.println("[mc-probe] Options field-init: F22 past showSubtitles"); }
+     private static final Component DIRECTIONAL_AUDIO_TOOLTIP_ON = Component.translatable("options.directionalAudio.on.tooltip");
+     private static final Component DIRECTIONAL_AUDIO_TOOLTIP_OFF = Component.translatable("options.directionalAudio.off.tooltip");
+     private final OptionInstance<Boolean> directionalAudio = OptionInstance.createBoolean(
+@@ -439,6 +488,7 @@
+             soundmanager.play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+         }
+     );
++    { System.err.println("[mc-probe] Options field-init: F23 past directionalAudio"); }
+     private final OptionInstance<Boolean> backgroundForChatOnly = new OptionInstance<>(
+         "options.accessibility.text_background",
+         OptionInstance.noTooltip(),
+@@ -449,7 +499,9 @@
+         true,
+         p_367178_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F24 past backgroundForChatOnly"); }
+     private final OptionInstance<Boolean> touchscreen = OptionInstance.createBoolean("options.touchscreen", false);
++    { System.err.println("[mc-probe] Options field-init: F25 past touchscreen"); }
+     private final OptionInstance<Boolean> fullscreen = OptionInstance.createBoolean("options.fullscreen", false, p_231970_ -> {
+         Minecraft minecraft = Minecraft.getInstance();
+         if (minecraft.getWindow() != null && minecraft.getWindow().isFullscreen() != p_231970_) {
+@@ -457,15 +509,19 @@
+             this.fullscreen().set(minecraft.getWindow().isFullscreen());
+         }
+     });
++    { System.err.println("[mc-probe] Options field-init: F26 past fullscreen"); }
+     private final OptionInstance<Boolean> bobView = OptionInstance.createBoolean("options.viewBobbing", true);
++    { System.err.println("[mc-probe] Options field-init: F27 past bobView"); }
+     private static final Component MOVEMENT_TOGGLE = Component.translatable("options.key.toggle");
+     private static final Component MOVEMENT_HOLD = Component.translatable("options.key.hold");
+     private final OptionInstance<Boolean> toggleCrouch = new OptionInstance<>(
+         "key.sneak", OptionInstance.noTooltip(), (p_231956_, p_231957_) -> p_231957_ ? MOVEMENT_TOGGLE : MOVEMENT_HOLD, OptionInstance.BOOLEAN_VALUES, false, p_367542_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F28 past toggleCrouch"); }
+     private final OptionInstance<Boolean> toggleSprint = new OptionInstance<>(
+         "key.sprint", OptionInstance.noTooltip(), (p_231910_, p_231911_) -> p_231911_ ? MOVEMENT_TOGGLE : MOVEMENT_HOLD, OptionInstance.BOOLEAN_VALUES, false, p_366394_ -> {}
+     );
++    { System.err.println("[mc-probe] Options field-init: F29 past toggleSprint"); }
+     public boolean skipMultiplayerWarning;
+     private static final Component CHAT_TOOLTIP_HIDE_MATCHED_NAMES = Component.translatable("options.hideMatchedNames.tooltip");
+     private final OptionInstance<Boolean> hideMatchedNames = OptionInstance.createBoolean("options.hideMatchedNames", OptionInstance.cachedConstantTooltip(CHAT_TOOLTIP_HIDE_MATCHED_NAMES), true);
+@@ -477,25 +533,59 @@
+     public final KeyMapping keyDown = new KeyMapping("key.back", 83, "key.categories.movement");
+     public final KeyMapping keyRight = new KeyMapping("key.right", 68, "key.categories.movement");
+     public final KeyMapping keyJump = new KeyMapping("key.jump", 32, "key.categories.movement");
++    { System.err.println("[mc-probe] Options field-init: F29.1 past keyJump, about to keyShift"); }
+     public final KeyMapping keyShift = new ToggleKeyMapping("key.sneak", 340, "key.categories.movement", this.toggleCrouch::get);
++    { System.err.println("[mc-probe] Options field-init: F29.2 past keyShift (ToggleKeyMapping + this.toggleCrouch::get)"); }
+     public final KeyMapping keySprint = new ToggleKeyMapping("key.sprint", 341, "key.categories.movement", this.toggleSprint::get);
++    { System.err.println("[mc-probe] Options field-init: F29.3 past keySprint"); }
+     public final KeyMapping keyInventory = new KeyMapping("key.inventory", 69, "key.categories.inventory");
+     public final KeyMapping keySwapOffhand = new KeyMapping("key.swapOffhand", 70, "key.categories.inventory");
+     public final KeyMapping keyDrop = new KeyMapping("key.drop", 81, "key.categories.inventory");
+-    public final KeyMapping keyUse = new KeyMapping("key.use", InputConstants.Type.MOUSE, 1, "key.categories.gameplay");
+-    public final KeyMapping keyAttack = new KeyMapping("key.attack", InputConstants.Type.MOUSE, 0, "key.categories.gameplay");
+-    public final KeyMapping keyPickItem = new KeyMapping("key.pickItem", InputConstants.Type.MOUSE, 2, "key.categories.gameplay");
++    { System.err.println("[mc-probe] Options field-init: F29.3a past keyDrop"); }
++    public final KeyMapping keyUse = new KeyMapping(
++        "key.use",
++        BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN ? null : InputConstants.Type.MOUSE,
++        1,
++        "key.categories.gameplay"
++    );
++    { System.err.println("[mc-probe] Options field-init: F29.3b past keyUse (InputConstants.Type.MOUSE)"); }
++    public final KeyMapping keyAttack = new KeyMapping(
++        "key.attack",
++        BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN ? null : InputConstants.Type.MOUSE,
++        0,
++        "key.categories.gameplay"
++    );
++    { System.err.println("[mc-probe] Options field-init: F29.3c past keyAttack"); }
++    public final KeyMapping keyPickItem = new KeyMapping(
++        "key.pickItem",
++        BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN ? null : InputConstants.Type.MOUSE,
++        2,
++        "key.categories.gameplay"
++    );
++    { System.err.println("[mc-probe] Options field-init: F29.3d past keyPickItem"); }
+     public final KeyMapping keyChat = new KeyMapping("key.chat", 84, "key.categories.multiplayer");
+     public final KeyMapping keyPlayerList = new KeyMapping("key.playerlist", 258, "key.categories.multiplayer");
+     public final KeyMapping keyCommand = new KeyMapping("key.command", 47, "key.categories.multiplayer");
+     public final KeyMapping keySocialInteractions = new KeyMapping("key.socialInteractions", 80, "key.categories.multiplayer");
+     public final KeyMapping keyScreenshot = new KeyMapping("key.screenshot", 291, "key.categories.misc");
+     public final KeyMapping keyTogglePerspective = new KeyMapping("key.togglePerspective", 294, "key.categories.misc");
+-    public final KeyMapping keySmoothCamera = new KeyMapping("key.smoothCamera", InputConstants.UNKNOWN.getValue(), "key.categories.misc");
++    { System.err.println("[mc-probe] Options field-init: F29.3e past keyTogglePerspective"); }
++    public final KeyMapping keySmoothCamera = new KeyMapping(
++        "key.smoothCamera",
++        BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN ? -1 : InputConstants.UNKNOWN.getValue(),
++        "key.categories.misc"
++    );
++    { System.err.println("[mc-probe] Options field-init: F29.3f past keySmoothCamera (InputConstants.UNKNOWN.getValue())"); }
+     public final KeyMapping keyFullscreen = new KeyMapping("key.fullscreen", 300, "key.categories.misc");
+-    public final KeyMapping keySpectatorOutlines = new KeyMapping("key.spectatorOutlines", InputConstants.UNKNOWN.getValue(), "key.categories.misc");
++    public final KeyMapping keySpectatorOutlines = new KeyMapping(
++        "key.spectatorOutlines",
++        BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN ? -1 : InputConstants.UNKNOWN.getValue(),
++        "key.categories.misc"
++    );
++    { System.err.println("[mc-probe] Options field-init: F29.3g past keySpectatorOutlines"); }
+     public final KeyMapping keyAdvancements = new KeyMapping("key.advancements", 76, "key.categories.misc");
+     public final KeyMapping keyQuickActions = new KeyMapping("key.quickActions", 71, "key.categories.misc");
++    { System.err.println("[mc-probe] Options field-init: F29.4 past keyQuickActions"); }
+     public final KeyMapping[] keyHotbarSlots = new KeyMapping[]{
+         new KeyMapping("key.hotbar.1", 49, "key.categories.inventory"),
+         new KeyMapping("key.hotbar.2", 50, "key.categories.inventory"),
+@@ -507,39 +597,12 @@
+         new KeyMapping("key.hotbar.8", 56, "key.categories.inventory"),
+         new KeyMapping("key.hotbar.9", 57, "key.categories.inventory")
+     };
++    { System.err.println("[mc-probe] Options field-init: F29.5 past keyHotbarSlots array"); }
+     public final KeyMapping keySaveHotbarActivator = new KeyMapping("key.saveToolbarActivator", 67, "key.categories.creative");
+     public final KeyMapping keyLoadHotbarActivator = new KeyMapping("key.loadToolbarActivator", 88, "key.categories.creative");
+-    public final KeyMapping[] keyMappings = ArrayUtils.addAll(
+-        (KeyMapping[])(new KeyMapping[]{
+-            this.keyAttack,
+-            this.keyUse,
+-            this.keyUp,
+-            this.keyLeft,
+-            this.keyDown,
+-            this.keyRight,
+-            this.keyJump,
+-            this.keyShift,
+-            this.keySprint,
+-            this.keyDrop,
+-            this.keyInventory,
+-            this.keyChat,
+-            this.keyPlayerList,
+-            this.keyPickItem,
+-            this.keyCommand,
+-            this.keySocialInteractions,
+-            this.keyScreenshot,
+-            this.keyTogglePerspective,
+-            this.keySmoothCamera,
+-            this.keyFullscreen,
+-            this.keySpectatorOutlines,
+-            this.keySwapOffhand,
+-            this.keySaveHotbarActivator,
+-            this.keyLoadHotbarActivator,
+-            this.keyAdvancements,
+-            this.keyQuickActions
+-        }),
+-        (KeyMapping[])this.keyHotbarSlots
+-    );
++    { System.err.println("[mc-probe] Options field-init: F29.6 past keySaveHotbarActivator/keyLoadHotbarActivator"); }
++    public final KeyMapping[] keyMappings = this.initKeyMappings();
++    { System.err.println("[mc-probe] Options field-init: F30 past keyMappings"); }
+     protected Minecraft minecraft;
+     private final File optionsFile;
+     public boolean hideGui;
+@@ -561,6 +624,7 @@
+         70,
+         p_231992_ -> Minecraft.getInstance().levelRenderer.needsUpdate()
+     );
++    { System.err.println("[mc-probe] Options field-init: F31 past fov"); }
+     private static final Component TELEMETRY_TOOLTIP = Component.translatable(
+         "options.telemetry.button.tooltip", Component.translatable("options.telemetry.state.minimal"), Component.translatable("options.telemetry.state.all")
+     );
+@@ -625,6 +689,7 @@
+             return i == 100 ? genericValueLabel(p_231913_, Component.translatable("options.gamma.max")) : genericValueLabel(p_231913_, i);
+         }
+     }, OptionInstance.UnitDouble.INSTANCE, 0.5, p_408641_ -> {});
++    { System.err.println("[mc-probe] Options field-init: F32 past gamma"); }
+     public static final int AUTO_GUI_SCALE = 0;
+     private static final int MAX_GUI_SCALE_INCLUSIVE = 2147483646;
+     private final OptionInstance<Integer> guiScale = new OptionInstance<>(
+@@ -678,6 +743,9 @@
+         ),
+         "",
+         p_404797_ -> {
++            if (BuildFlags.WEB_RUNTIME) {
++                return;
++            }
+             SoundManager soundmanager = Minecraft.getInstance().getSoundManager();
+             soundmanager.reload();
+             soundmanager.play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+@@ -691,11 +759,19 @@
+         OptionInstance.forOptionEnum(),
+         new OptionInstance.Enum<>(Arrays.asList(MusicManager.MusicFrequency.values()), MusicManager.MusicFrequency.CODEC),
+         MusicManager.MusicFrequency.DEFAULT,
+-        p_404799_ -> Minecraft.getInstance().getMusicManager().setMinutesBetweenSongs(p_404799_)
++        p_404799_ -> {
++            if (BuildFlags.WEB_RUNTIME) {
++                return;
++            }
++            Minecraft.getInstance().getMusicManager().setMinutesBetweenSongs(p_404799_);
++        }
+     );
+     private static final Component NOW_PLAYING_TOAST_TOOLTIP = Component.translatable("options.showNowPlayingToast.tooltip");
+     private final OptionInstance<Boolean> showNowPlayingToast = OptionInstance.createBoolean(
+         "options.showNowPlayingToast", OptionInstance.cachedConstantTooltip(NOW_PLAYING_TOAST_TOOLTIP), false, p_404793_ -> {
++            if (BuildFlags.WEB_RUNTIME) {
++                return;
++            }
+             if (p_404793_) {
+                 this.minecraft.getToastManager().createNowPlayingToast();
+             } else {
+@@ -705,6 +781,7 @@
+     );
+     public boolean syncWrites;
+     public boolean startedCleanly = true;
++    { System.err.println("[mc-probe] Options field-init: F_END past ALL field init"); }
+ 
+     public OptionInstance<Boolean> darkMojangStudiosBackground() {
+         return this.darkMojangStudiosBackground;
+@@ -978,6 +1055,57 @@
+         );
+     }
+ 
++    private Map<SoundSource, OptionInstance<Double>> initSoundSourceVolumes() {
++        Map<SoundSource, OptionInstance<Double>> map = new EnumMap<>(SoundSource.class);
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            System.err.println("[mc-probe] Options: experimental web mode skips soundSourceVolumes initialization");
++            return map;
++        }
++        for (SoundSource soundsource : SoundSource.values()) {
++            map.put(soundsource, this.createSoundSliderOptionInstance("soundCategory." + soundsource.getName(), soundsource));
++        }
++        return map;
++    }
++
++    private KeyMapping[] initKeyMappings() {
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            System.err.println("[mc-probe] Options: experimental web mode skips keyMappings initialization");
++            return new KeyMapping[0];
++        }
++        KeyMapping[] base = new KeyMapping[]{
++            this.keyAttack,
++            this.keyUse,
++            this.keyUp,
++            this.keyLeft,
++            this.keyDown,
++            this.keyRight,
++            this.keyJump,
++            this.keyShift,
++            this.keySprint,
++            this.keyDrop,
++            this.keyInventory,
++            this.keyChat,
++            this.keyPlayerList,
++            this.keyPickItem,
++            this.keyCommand,
++            this.keySocialInteractions,
++            this.keyScreenshot,
++            this.keyTogglePerspective,
++            this.keySmoothCamera,
++            this.keyFullscreen,
++            this.keySpectatorOutlines,
++            this.keySwapOffhand,
++            this.keySaveHotbarActivator,
++            this.keyLoadHotbarActivator,
++            this.keyAdvancements,
++            this.keyQuickActions
++        };
++        KeyMapping[] result = new KeyMapping[base.length + this.keyHotbarSlots.length];
++        System.arraycopy(base, 0, result, 0, base.length);
++        System.arraycopy(this.keyHotbarSlots, 0, result, base.length, this.keyHotbarSlots.length);
++        return result;
++    }
++
+     public OptionInstance<Boolean> showSubtitles() {
+         return this.showSubtitles;
+     }
+@@ -1088,9 +1216,13 @@
+     }
+ 
+     public Options(Minecraft p_92138_, File p_92139_) {
++        System.err.println("[mc-probe] Options.<init>: A entered, p_92139_=" + p_92139_);
+         this.minecraft = p_92138_;
++        System.err.println("[mc-probe] Options.<init>: B after minecraft=");
+         this.optionsFile = new File(p_92139_, "options.txt");
+-        boolean flag = Runtime.getRuntime().maxMemory() >= 1000000000L;
++        System.err.println("[mc-probe] Options.<init>: C optionsFile=" + this.optionsFile);
++        boolean flag = BuildFlags.WEB_RUNTIME ? true : Runtime.getRuntime().maxMemory() >= 1000000000L;
++        System.err.println("[mc-probe] Options.<init>: D maxMem ok flag=" + flag);
+         this.renderDistance = new OptionInstance<>(
+             "options.renderDistance",
+             OptionInstance.noTooltip(),
+@@ -1099,6 +1231,7 @@
+             12,
+             p_231951_ -> Minecraft.getInstance().levelRenderer.needsUpdate()
+         );
++        System.err.println("[mc-probe] Options.<init>: E renderDistance ok");
+         this.simulationDistance = new OptionInstance<>(
+             "options.simulationDistance",
+             OptionInstance.noTooltip(),
+@@ -1107,8 +1240,15 @@
+             12,
+             p_409118_ -> {}
+         );
+-        this.syncWrites = Util.getPlatform() == Util.OS.WINDOWS;
++        System.err.println("[mc-probe] Options.<init>: F simulationDistance ok");
++        this.syncWrites = BuildFlags.WEB_RUNTIME ? false : Util.getPlatform() == Util.OS.WINDOWS;
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-probe] Options.<init>: web runtime skip load(); keep default option values");
++            return;
++        }
++        System.err.println("[mc-probe] Options.<init>: G before load()");
+         this.load();
++        System.err.println("[mc-probe] Options.<init>: H after load()");
+     }
+ 
+     public float getBackgroundOpacity(float p_92142_) {
+@@ -1181,8 +1321,18 @@
+         p_168428_.process("highContrast", this.highContrast);
+         p_168428_.process("highContrastBlockOutline", this.highContrastBlockOutline);
+         p_168428_.process("narratorHotkey", this.narratorHotkey);
+-        this.resourcePacks = p_168428_.process("resourcePacks", this.resourcePacks, Options::readListOfStrings, GSON::toJson);
+-        this.incompatibleResourcePacks = p_168428_.process("incompatibleResourcePacks", this.incompatibleResourcePacks, Options::readListOfStrings, GSON::toJson);
++        this.resourcePacks = p_168428_.process(
++            "resourcePacks",
++            this.resourcePacks,
++            Options::readListOfStrings,
++            p_378019_ -> GSON != null ? GSON.toJson(p_378019_) : "[]"
++        );
++        this.incompatibleResourcePacks = p_168428_.process(
++            "incompatibleResourcePacks",
++            this.incompatibleResourcePacks,
++            Options::readListOfStrings,
++            p_378018_ -> GSON != null ? GSON.toJson(p_378018_) : "[]"
++        );
+         this.lastMpIp = p_168428_.process("lastServer", this.lastMpIp);
+         this.languageCode = p_168428_.process("lang", this.languageCode);
+         p_168428_.process("chatVisibility", this.chatVisibility);
+@@ -1375,6 +1525,10 @@
+     }
+ 
+     public void save() {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
+         try (final PrintWriter printwriter = new PrintWriter(new OutputStreamWriter(new FileOutputStream(this.optionsFile), StandardCharsets.UTF_8))) {
+             printwriter.println("version:" + SharedConstants.getCurrentVersion().dataVersion().version());
+             this.processOptions(
+@@ -1391,7 +1545,7 @@
+                             .ifError(p_325293_ -> Options.LOGGER.error("Error saving option " + p_232136_ + ": " + p_325293_))
+                             .ifSuccess(p_232140_ -> {
+                                 this.writePrefix(p_232135_);
+-                                printwriter.println(Options.GSON.toJson(p_232140_));
++                                printwriter.println(Options.GSON != null ? Options.GSON.toJson(p_232140_) : p_232140_.toString());
+                             });
+                     }
+ 
+@@ -1613,4 +1767,4 @@
+     interface OptionAccess {
+         <T> void process(String p_330128_, OptionInstance<T> p_329013_);
+     }
+-}
+\ No newline at end of file
++}

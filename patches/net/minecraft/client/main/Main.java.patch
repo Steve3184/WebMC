@@ -1,0 +1,893 @@
+--- a/net/minecraft/client/main/Main.java
++++ b/net/minecraft/client/main/Main.java
+@@ -52,14 +52,26 @@
+ import net.minecraft.util.profiling.jfr.JvmProfiler;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+-import org.apache.commons.lang3.StringEscapeUtils;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class Main {
++    private static boolean forceFullMain() {
++        return Boolean.getBoolean("webmc.forceFullMain");
++    }
++
++    private static boolean useLegacyWebProbeGates() {
++        // mc-web: allow forcing full mcMain even when old phase-gate probes are present.
++        return BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && !forceFullMain();
++    }
++
+     @DontObfuscate
+     public static void main(String[] p_129642_) {
+         OptionParser optionparser = new OptionParser();
++        System.err.println("[mc-probe] Main.main: OptionParser created");
+         optionparser.allowsUnrecognizedOptions();
+         optionparser.accepts("demo");
+         optionparser.accepts("disableMultiplayer");
+@@ -74,95 +86,205 @@
+         OptionSpec<String> optionspec5 = optionparser.accepts("quickPlaySingleplayer").withOptionalArg();
+         OptionSpec<String> optionspec6 = optionparser.accepts("quickPlayMultiplayer").withRequiredArg();
+         OptionSpec<String> optionspec7 = optionparser.accepts("quickPlayRealms").withRequiredArg();
+-        OptionSpec<File> optionspec8 = optionparser.accepts("gameDir").withRequiredArg().ofType(File.class).defaultsTo(new File("."));
+-        OptionSpec<File> optionspec9 = optionparser.accepts("assetsDir").withRequiredArg().ofType(File.class);
+-        OptionSpec<File> optionspec10 = optionparser.accepts("resourcePackDir").withRequiredArg().ofType(File.class);
++        // joptsimple uses reflection to auto-find a String→T converter via
++        // `clazz.getMethod("valueOf", String.class)` and `clazz.getConstructor(String.class)`.
++        // TeaVM's reflection emulation can't see those for unannotated JDK
++        // classes (File, String, etc.) and throws "X is not a value type".
++        // Drop `.ofType(...)` for String specs (String is the default type
++        // anyway) and switch File specs to String, wrapping via `new File(...)`
++        // at use sites below.
++        OptionSpec<String> optionspec8 = optionparser.accepts("gameDir").withRequiredArg().defaultsTo(".");
++        OptionSpec<String> optionspec9 = optionparser.accepts("assetsDir").withRequiredArg();
++        OptionSpec<String> optionspec10 = optionparser.accepts("resourcePackDir").withRequiredArg();
+         OptionSpec<String> optionspec11 = optionparser.accepts("proxyHost").withRequiredArg();
+-        OptionSpec<Integer> optionspec12 = optionparser.accepts("proxyPort").withRequiredArg().defaultsTo("8080").ofType(Integer.class);
++        OptionSpec<String> optionspec12 = optionparser.accepts("proxyPort").withRequiredArg().defaultsTo("8080");
+         OptionSpec<String> optionspec13 = optionparser.accepts("proxyUser").withRequiredArg();
+         OptionSpec<String> optionspec14 = optionparser.accepts("proxyPass").withRequiredArg();
+         OptionSpec<String> optionspec15 = optionparser.accepts("username").withRequiredArg().defaultsTo("Player" + System.currentTimeMillis() % 1000L);
+         OptionSpec<String> optionspec16 = optionparser.accepts("uuid").withRequiredArg();
+         OptionSpec<String> optionspec17 = optionparser.accepts("xuid").withOptionalArg().defaultsTo("");
+         OptionSpec<String> optionspec18 = optionparser.accepts("clientId").withOptionalArg().defaultsTo("");
+-        OptionSpec<String> optionspec19 = optionparser.accepts("accessToken").withRequiredArg().required();
+-        OptionSpec<String> optionspec20 = optionparser.accepts("version").withRequiredArg().required();
+-        OptionSpec<Integer> optionspec21 = optionparser.accepts("width").withRequiredArg().ofType(Integer.class).defaultsTo(854);
+-        OptionSpec<Integer> optionspec22 = optionparser.accepts("height").withRequiredArg().ofType(Integer.class).defaultsTo(480);
+-        OptionSpec<Integer> optionspec23 = optionparser.accepts("fullscreenWidth").withRequiredArg().ofType(Integer.class);
+-        OptionSpec<Integer> optionspec24 = optionparser.accepts("fullscreenHeight").withRequiredArg().ofType(Integer.class);
++        // .required() removed: parse() throws MissingRequiredOptionException
++        // when args[] is empty, but joptsimple's exception message construction
++        // walks ResourceBundle/ServiceLoader which deadlocks on TeaVM's
++        // null-returning getResources() emulation. Keep these as optional and
++        // supply browser-side defaults below.
++        OptionSpec<String> optionspec19 = optionparser.accepts("accessToken").withRequiredArg().defaultsTo("offline");
++        OptionSpec<String> optionspec20 = optionparser.accepts("version").withRequiredArg().defaultsTo("1.21.8");
++        OptionSpec<String> optionspec21 = optionparser.accepts("width").withRequiredArg().defaultsTo("854");
++        OptionSpec<String> optionspec22 = optionparser.accepts("height").withRequiredArg().defaultsTo("480");
++        OptionSpec<String> optionspec23 = optionparser.accepts("fullscreenWidth").withRequiredArg();
++        OptionSpec<String> optionspec24 = optionparser.accepts("fullscreenHeight").withRequiredArg();
+         OptionSpec<String> optionspec25 = optionparser.accepts("userProperties").withRequiredArg().defaultsTo("{}");
+         OptionSpec<String> optionspec26 = optionparser.accepts("profileProperties").withRequiredArg().defaultsTo("{}");
+         OptionSpec<String> optionspec27 = optionparser.accepts("assetIndex").withRequiredArg();
+         OptionSpec<String> optionspec28 = optionparser.accepts("userType").withRequiredArg().defaultsTo("legacy");
+         OptionSpec<String> optionspec29 = optionparser.accepts("versionType").withRequiredArg().defaultsTo("release");
+         OptionSpec<String> optionspec30 = optionparser.nonOptions();
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 1) {
++            System.err.println(
++                "[mc-probe] Main.main: web runtime early exit before arg parse (phase "
++                    + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE
++                    + ")"
++            );
++            return;
++        }
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 2) {
++            System.err.println("[mc-probe] Main.main: phase 2 probe exit before arg parse (lightweight checkpoint)");
++            return;
++        }
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 3) {
++            System.err.println("[mc-probe] Main.main: phase 3 probe before SharedConstants.tryDetectVersion");
++            SharedConstants.tryDetectVersion();
++            System.err.println("[mc-probe] Main.main: phase 3 probe exit after SharedConstants.tryDetectVersion");
++            return;
++        }
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 5) {
++            System.err.println("[mc-probe] Main.main: phase 5 probe before SharedConstants.tryDetectVersion (pre-parse)");
++            SharedConstants.tryDetectVersion();
++            System.err.println("[mc-probe] Main.main: phase 5 probe exit after SharedConstants.tryDetectVersion (pre-parse)");
++            return;
++        }
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 7) {
++            System.err.println("[mc-probe] Main.main: phase 7 probe before SharedConstants.tryDetectVersion (pre-parse)");
++            SharedConstants.tryDetectVersion();
++            System.err.println("[mc-probe] Main.main: phase 7 probe exit after SharedConstants.tryDetectVersion (pre-parse)");
++            return;
++        }
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 8) {
++            System.err.println("[mc-probe] Main.main: phase >=8 uses parse-free web probe path");
++            runWebProbeWithoutOptionParse();
++            return;
++        }
++        System.err.println("[mc-probe] Main.main: about to parse args");
+         OptionSet optionset = optionparser.parse(p_129642_);
+-        File file1 = parseArgument(optionset, optionspec8);
++        System.err.println("[mc-probe] Main.main: args parsed");
++        System.err.println("[mc-main-stage] after-parse");
++        File file1 = new File(parseArgument(optionset, optionspec8));
+         String s = parseArgument(optionset, optionspec20);
+         String s1 = "Pre-bootstrap";
++        if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 4) {
++            System.err.println("[mc-probe] Main.main: phase 4 probe exit after args parse/basic extraction");
++            return;
++        }
+ 
+         Logger logger;
+         GameConfig gameconfig;
+         try {
+-            if (optionset.has(optionspec1)) {
++            System.err.println("[mc-probe] Main.main: pre-bootstrap try block");
++            if (!BuildFlags.WEB_RUNTIME && optionset.has(optionspec1)) {
+                 JvmProfiler.INSTANCE.start(Environment.CLIENT);
+             }
+ 
+-            if (optionset.has(optionspec2)) {
++            if (!BuildFlags.WEB_RUNTIME && optionset.has(optionspec2)) {
+                 TracyBootstrap.setup();
+             }
+ 
+             Stopwatch stopwatch = Stopwatch.createStarted(Ticker.systemTicker());
+             Stopwatch stopwatch1 = Stopwatch.createStarted(Ticker.systemTicker());
+-            GameLoadTimesEvent.INSTANCE.beginStep(TelemetryProperty.LOAD_TIME_TOTAL_TIME_MS, stopwatch);
+-            GameLoadTimesEvent.INSTANCE.beginStep(TelemetryProperty.LOAD_TIME_PRE_WINDOW_MS, stopwatch1);
++            if (!BuildFlags.WEB_RUNTIME) {
++                GameLoadTimesEvent.INSTANCE.beginStep(TelemetryProperty.LOAD_TIME_TOTAL_TIME_MS, stopwatch);
++                GameLoadTimesEvent.INSTANCE.beginStep(TelemetryProperty.LOAD_TIME_PRE_WINDOW_MS, stopwatch1);
++            }
++            System.err.println("[mc-probe] Main.main: before tryDetectVersion");
+             SharedConstants.tryDetectVersion();
+-            TracyClient.reportAppInfo("Minecraft Java Edition " + SharedConstants.getCurrentVersion().name());
+-            CompletableFuture<?> completablefuture = DataFixers.optimize(DataFixTypes.TYPES_FOR_LEVEL_LIST);
+-            CrashReport.preload();
++            if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 6) {
++                System.err.println("[mc-probe] Main.main: phase 6 probe exit after pre-bootstrap tryDetectVersion");
++                return;
++            }
++            System.err.println("[mc-probe] Main.main: before reportAppInfo");
++            if (!BuildFlags.WEB_RUNTIME) {
++                TracyClient.reportAppInfo("Minecraft Java Edition " + SharedConstants.getCurrentVersion().name());
++            }
++            if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 7) {
++                System.err.println("[mc-probe] Main.main: phase 7 probe exit after reportAppInfo gate");
++                return;
++            }
++            CompletableFuture<?> completablefuture = null;
++            if (!BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-probe] Main.main: before DataFixers.optimize");
++                completablefuture = DataFixers.optimize(DataFixTypes.TYPES_FOR_LEVEL_LIST);
++            } else {
++                System.err.println("[mc-probe] Main.main: skip DataFixers.optimize in web runtime");
++            }
++            System.err.println("[mc-probe] Main.main: before CrashReport.preload");
++            if (!BuildFlags.WEB_RUNTIME) {
++                CrashReport.preload();
++            } else {
++                System.err.println("[mc-probe] Main.main: skip CrashReport.preload in web runtime");
++            }
+             logger = LogUtils.getLogger();
++            System.err.println("[mc-probe] Main.main: before Bootstrap.bootStrap");
+             s1 = "Bootstrap";
+-            Bootstrap.bootStrap();
+-            ClientBootstrap.bootstrap();
+-            GameLoadTimesEvent.INSTANCE.setBootstrapTime(Bootstrap.bootstrapDuration.get());
+-            Bootstrap.validate();
++            System.err.println("[mc-main-stage] before-bootstrap");
++            if (!BuildFlags.WEB_RUNTIME || forceFullMain()) {
++                Bootstrap.bootStrap();
++                System.err.println("[mc-probe] Main.main: before ClientBootstrap.bootstrap");
++                ClientBootstrap.bootstrap();
++                GameLoadTimesEvent.INSTANCE.setBootstrapTime(Bootstrap.bootstrapDuration.get());
++                Bootstrap.validate();
++            } else {
++                System.err.println("[mc-probe] Main.main: skip Bootstrap/ClientBootstrap/validate in web runtime");
++            }
++            System.err.println("[mc-main-stage] after-bootstrap");
+             s1 = "Argument parsing";
+             List<String> list = optionset.valuesOf(optionspec30);
+             if (!list.isEmpty()) {
+                 logger.info("Completely ignored arguments: {}", list);
+             }
++            if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 8) {
++                System.err.println("[mc-probe] Main.main: phase 8 probe exit after ignored-args handling");
++                return;
++            }
+ 
+             String s2 = optionspec28.value(optionset);
+-            User.Type user$type = User.Type.byName(s2);
++            if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 9) {
++                System.err.println("[mc-probe] Main.main: phase 9 probe exit after userType string extraction");
++                return;
++            }
++            User.Type user$type;
++            if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++                user$type = null;
++                System.err.println("[mc-probe] Main.main: experimental web path bypasses User.Type enum init (null)");
++            } else {
++                user$type = User.Type.byName(s2);
++            }
+             if (user$type == null) {
+                 logger.warn("Unrecognized user type: {}", s2);
+             }
++            if (useLegacyWebProbeGates() && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 10) {
++                System.err.println("[mc-probe] Main.main: phase 10 probe exit after User.Type lookup");
++                return;
++            }
+ 
+             String s3 = parseArgument(optionset, optionspec11);
+             Proxy proxy = Proxy.NO_PROXY;
+-            if (s3 != null) {
+-                try {
+-                    proxy = new Proxy(Type.SOCKS, new InetSocketAddress(s3, parseArgument(optionset, optionspec12)));
+-                } catch (Exception exception) {
++            if (!BuildFlags.WEB_RUNTIME) {
++                if (s3 != null) {
++                    try {
++                        proxy = new Proxy(Type.SOCKS, new InetSocketAddress(s3, Integer.parseInt(parseArgument(optionset, optionspec12))));
++                    } catch (Exception exception) {
++                    }
+                 }
+-            }
+ 
+-            final String s4 = parseArgument(optionset, optionspec13);
+-            final String s5 = parseArgument(optionset, optionspec14);
+-            if (!proxy.equals(Proxy.NO_PROXY) && stringHasValue(s4) && stringHasValue(s5)) {
+-                Authenticator.setDefault(new Authenticator() {
+-                    @Override
+-                    protected PasswordAuthentication getPasswordAuthentication() {
+-                        return new PasswordAuthentication(s4, s5.toCharArray());
+-                    }
+-                });
++                final String s4 = parseArgument(optionset, optionspec13);
++                final String s5 = parseArgument(optionset, optionspec14);
++                if (!proxy.equals(Proxy.NO_PROXY) && stringHasValue(s4) && stringHasValue(s5)) {
++                    Authenticator.setDefault(new Authenticator() {
++                        @Override
++                        protected PasswordAuthentication getPasswordAuthentication() {
++                            return new PasswordAuthentication(s4, s5.toCharArray());
++                        }
++                    });
++                }
++            } else {
++                System.err.println("[mc-probe] Main.main: skip proxy/authenticator in web runtime");
+             }
+ 
+-            int i = parseArgument(optionset, optionspec21);
+-            int j = parseArgument(optionset, optionspec22);
+-            OptionalInt optionalint = ofNullable(parseArgument(optionset, optionspec23));
+-            OptionalInt optionalint1 = ofNullable(parseArgument(optionset, optionspec24));
++            int i = Integer.parseInt(parseArgument(optionset, optionspec21));
++            int j = Integer.parseInt(parseArgument(optionset, optionspec22));
++            OptionalInt optionalint = ofNullableInt(parseArgument(optionset, optionspec23));
++            OptionalInt optionalint1 = ofNullableInt(parseArgument(optionset, optionspec24));
+             boolean flag = optionset.has("fullscreen");
+             boolean flag1 = optionset.has("demo");
+             boolean flag2 = optionset.has("disableMultiplayer");
+@@ -173,11 +295,19 @@
+             PropertyMap propertymap = GsonHelper.fromJson(gson, parseArgument(optionset, optionspec25), PropertyMap.class);
+             PropertyMap propertymap1 = GsonHelper.fromJson(gson, parseArgument(optionset, optionspec26), PropertyMap.class);
+             String s6 = parseArgument(optionset, optionspec29);
+-            File file2 = optionset.has(optionspec9) ? parseArgument(optionset, optionspec9) : new File(file1, "assets/");
+-            File file3 = optionset.has(optionspec10) ? parseArgument(optionset, optionspec10) : new File(file1, "resourcepacks/");
++            File file2 = optionset.has(optionspec9) ? new File(parseArgument(optionset, optionspec9)) : new File(file1, "assets/");
++            File file3 = optionset.has(optionspec10) ? new File(parseArgument(optionset, optionspec10)) : new File(file1, "resourcepacks/");
+             UUID uuid = hasValidUuid(optionspec16, optionset, logger)
+                 ? UndashedUuid.fromStringLenient(optionspec16.value(optionset))
+                 : UUIDUtil.createOfflinePlayerUUID(optionspec15.value(optionset));
++            // mc-web: TeaVM's UUID.nameUUIDFromBytes can return null; fall
++            // back to a synthetic deterministic UUID so authlib's GameProfile
++            // constructor doesn't NPE on "Profile ID must not be null".
++            if (uuid == null) {
++                String nameForUuid = optionspec15.value(optionset);
++                uuid = new UUID(0x4d435f574542L, nameForUuid == null ? 0L : (long)nameForUuid.hashCode());
++                System.err.println("[mc-web] UUIDUtil.createOfflinePlayerUUID returned null; using synthetic " + uuid);
++            }
+             String s7 = optionset.has(optionspec27) ? optionspec27.value(optionset) : null;
+             String s8 = optionset.valueOf(optionspec17);
+             String s9 = optionset.valueOf(optionspec18);
+@@ -192,8 +322,18 @@
+                 new GameConfig.QuickPlayData(s10, gameconfig$quickplayvariant)
+             );
+             Util.startTimerHackThread();
+-            completablefuture.join();
++            if (completablefuture != null) {
++                completablefuture.join();
++            }
+         } catch (Throwable throwable1) {
++            // mc-probe: log the original failure BEFORE attempting fillReport
++            // (which itself crashes with $resolve null in the browser).
++            System.err.println("[mc-probe] pre-bootstrap caught: " + throwable1);
++            throwable1.printStackTrace();
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-probe] web runtime: skip CrashReport/Minecraft.fillReport in pre-bootstrap catch");
++                return;
++            }
+             CrashReport crashreport = CrashReport.forThrowable(throwable1, s1);
+             CrashReportCategory crashreportcategory = crashreport.addCategory("Initialization");
+             NativeModuleLister.addCrashSection(crashreportcategory);
+@@ -215,18 +355,75 @@
+             }
+         };
+         thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(logger));
+-        Runtime.getRuntime().addShutdownHook(thread);
++        if (!BuildFlags.WEB_RUNTIME) {
++            Runtime.getRuntime().addShutdownHook(thread);
++        } else {
++            System.err.println("[mc-probe] Main.main: skip Runtime.addShutdownHook in web runtime");
++        }
+         Minecraft minecraft = null;
+ 
+         try {
+             Thread.currentThread().setName("Render thread");
++            System.err.println("[mc-probe] Main.main: before RenderSystem.initRenderThread");
+             RenderSystem.initRenderThread();
+-            minecraft = new Minecraft(gameconfig);
++            if (useLegacyWebProbeGates()) {
++                System.err.println("[mc-probe] Main.main: web runtime stops before new Minecraft(gameconfig)");
++                return;
++            }
++            System.err.println("[mc-probe] Main.main: before new Minecraft(gameconfig)");
++            System.err.println("[mc-main-stage] before-new-minecraft");
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-main-stage] before-minecraft-classforname");
++                Class.forName("net.minecraft.client.Minecraft");
++                System.err.println("[mc-main-stage] after-minecraft-classforname");
++            }
++            if (BuildFlags.WEB_RUNTIME) {
++                final Thread ctorThread = Thread.currentThread();
++                Thread ctorWatchdog = new Thread("WebMC-MinecraftCtorWatchdog") {
++                    @Override
++                    public void run() {
++                        try {
++                            Thread.sleep(5000L);
++                        } catch (InterruptedException ignored) {
++                            return;
++                        }
++                        System.err.println("[mc-probe] ctor-watchdog: Minecraft ctor still not returned after 5000ms; dumping render-thread stack");
++                        StackTraceElement[] trace = ctorThread.getStackTrace();
++                        if (trace == null || trace.length == 0) {
++                            System.err.println("[mc-probe] ctor-watchdog: stack is empty");
++                            return;
++                        }
++                        for (int i = 0; i < trace.length; i++) {
++                            System.err.println("[mc-probe] ctor-watchdog: #" + i + " " + trace[i]);
++                        }
++                    }
++                };
++                ctorWatchdog.setDaemon(true);
++                ctorWatchdog.start();
++            }
++            try {
++                minecraft = new Minecraft(gameconfig);
++            } catch (Error err) {
++                System.err.println("[mc-probe] new Minecraft(gameconfig) threw Error: " + err);
++                err.printStackTrace();
++                throw err;
++            }
++            System.err.println("[mc-probe] Main.main: Minecraft instance created");
++            System.err.println("[mc-main-stage] after-new-minecraft");
+         } catch (SilentInitException silentinitexception) {
+             Util.shutdownExecutors();
+             logger.warn("Failed to create window: ", (Throwable)silentinitexception);
+             return;
+         } catch (Throwable throwable) {
++            // mc-probe: log the underlying init failure BEFORE building the
++            // crash report (which itself has a chance of triggering more
++            // exceptions in the browser).
++            System.err.println("[mc-probe] init game caught: " + throwable);
++            throwable.printStackTrace();
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-probe] web runtime: skip CrashReport/Minecraft.fillReport in init catch");
++                return;
++            }
+             CrashReport crashreport1 = CrashReport.forThrowable(throwable, "Initializing game");
+             CrashReportCategory crashreportcategory1 = crashreport1.addCategory("Initialization");
+             NativeModuleLister.addCrashSection(crashreportcategory1);
+@@ -236,7 +433,9 @@
+         }
+ 
+         Minecraft minecraft1 = minecraft;
++        System.err.println("[mc-main-stage] before-minecraft-run");
+         minecraft.run();
++        System.err.println("[mc-main-stage] after-minecraft-run");
+ 
+         try {
+             minecraft1.stop();
+@@ -245,6 +444,458 @@
+         }
+     }
+ 
++    private static void runWebProbeWithoutOptionParse() {
++        System.err.println("[mc-probe] web parse-free probe: begin");
++        SharedConstants.tryDetectVersion();
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 8) {
++            System.err.println("[mc-probe] web parse-free probe: phase 8 exit after tryDetectVersion");
++            return;
++        }
++
++        Logger logger = LogUtils.getLogger();
++        String userTypeName = "legacy";
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 9) {
++            System.err.println("[mc-probe] web parse-free probe: phase 9 exit after logger/userType default");
++            return;
++        }
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 10) {
++            System.err.println("[mc-probe] web parse-free probe: phase 10 exit before User.Type lookup");
++            return;
++        }
++
++        User.Type user$type;
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++            user$type = null;
++            System.err.println("[mc-probe] web parse-free probe: bypass User.Type enum init (null)");
++        } else {
++            user$type = User.Type.byName(userTypeName);
++        }
++        if (user$type == null) {
++            logger.warn("Unrecognized user type: {}", userTypeName);
++        }
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 11) {
++            System.err.println("[mc-probe] web parse-free probe: phase 11 exit after User.Type lookup");
++            return;
++        }
++        Proxy proxy = BuildFlags.WEB_RUNTIME ? null : Proxy.NO_PROXY;
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 12) {
++            System.err.println("[mc-probe] web parse-free probe: phase 12 exit after Proxy.NO_PROXY");
++            return;
++        }
++
++        int i = 854;
++        int j = 480;
++        OptionalInt optionalint = OptionalInt.empty();
++        OptionalInt optionalint1 = OptionalInt.empty();
++        boolean flag = false;
++        boolean flag1 = false;
++        boolean flag2 = false;
++        boolean flag3 = false;
++        boolean flag4 = true;
++        boolean flag5 = false;
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 13) {
++            System.err.println("[mc-probe] web parse-free probe: phase 13 exit after display/game flags defaults");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 14) {
++            System.err.println("[mc-probe] web parse-free probe: phase 14 exit before Gson/PropertyMap/UUID chain");
++            return;
++        }
++
++        File file1 = new File(".");
++        File file2 = new File(file1, "assets/");
++        File file3 = new File(file1, "resourcepacks/");
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 15) {
++            System.err.println("[mc-probe] web parse-free probe: phase 15 exit after file/folder defaults");
++            return;
++        }
++
++        String username = "WebPlayer";
++        String s = "1.21.8";
++        String s6 = "release";
++        String s7 = null;
++        String s10 = null;
++        String s8 = "";
++        String s9 = "";
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 16) {
++            System.err.println("[mc-probe] web parse-free probe: phase 16 exit after string defaults (pre-JSON/pre-UUID)");
++            return;
++        }
++
++        PropertyMap propertymap = new PropertyMap();
++        PropertyMap propertymap1 = new PropertyMap();
++        UUID uuid = UUIDUtil.createOfflinePlayerUUID(username);
++        if (uuid == null) {
++            uuid = new UUID(0x4d435f574542L, username == null ? 0L : (long)username.hashCode());
++            System.err.println("[mc-web] parse-free path offline UUID was null; using synthetic " + uuid);
++        }
++        GameConfig.QuickPlayVariant gameconfig$quickplayvariant = GameConfig.QuickPlayVariant.DISABLED;
++        User user = new User(username, uuid, "offline", emptyStringToEmptyOptional(s8), emptyStringToEmptyOptional(s9), user$type);
++        GameConfig gameconfig = new GameConfig(
++            new GameConfig.UserData(user, propertymap, propertymap1, proxy),
++            new DisplayData(i, j, optionalint, optionalint1, flag),
++            new GameConfig.FolderData(file1, file3, file2, s7),
++            new GameConfig.GameData(flag1, s, s6, flag2, flag3, flag4, flag5),
++            new GameConfig.QuickPlayData(s10, gameconfig$quickplayvariant)
++        );
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 17) {
++            System.err.println("[mc-probe] web parse-free probe: phase 17 exit after web-safe User/GameConfig construction");
++            return;
++        }
++
++        System.err.println("[mc-probe] web parse-free probe: before Bootstrap.bootStrap");
++        Bootstrap.bootStrap();
++        System.err.println("[mc-probe] web parse-free probe: before ClientBootstrap.bootstrap");
++        ClientBootstrap.bootstrap();
++        GameLoadTimesEvent.INSTANCE.setBootstrapTime(Bootstrap.bootstrapDuration.get());
++        System.err.println("[mc-probe] web parse-free probe: bootstrap complete");
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 18) {
++            System.err.println("[mc-probe] web parse-free probe: phase 18 exit after bootstrap");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 19) {
++            Util.startTimerHackThread();
++            System.err.println("[mc-probe] web parse-free probe: phase 19 exit after Util.startTimerHackThread");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 20) {
++            System.err.println("[mc-probe] web parse-free probe: phase 20 exit before RenderSystem.initRenderThread");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 21) {
++            System.err.println("[mc-probe] web parse-free probe: phase 21 checkpoint before RenderSystem static init");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 22) {
++            System.err.println("[mc-probe] web parse-free probe: phase 22 checkpoint before render/init chain");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 23) {
++            System.err.println("[mc-probe] web parse-free probe: phase 23 checkpoint (render/init chain intentionally deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 24) {
++            System.err.println("[mc-probe] web parse-free probe: phase 24 checkpoint before render reflective probe");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 25) {
++            System.err.println("[mc-probe] web parse-free probe: phase 25 checkpoint (render reflective probe deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 26) {
++            System.err.println("[mc-probe] web parse-free probe: phase 26 before direct RenderSystem.initRenderThread");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 27) {
++            System.err.println("[mc-probe] web parse-free probe: phase 27 checkpoint (direct RenderSystem touch deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 28) {
++            System.err.println("[mc-probe] web parse-free probe: phase 28 before direct RenderSystem.initRenderThread");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 29) {
++            RenderSystem.initRenderThread();
++            System.err.println("[mc-probe] web parse-free probe: phase 29 after direct RenderSystem.initRenderThread");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 30) {
++            System.err.println("[mc-probe] web parse-free probe: phase 30 checkpoint before Minecraft class touch");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 31) {
++            System.err.println("[mc-probe] web parse-free probe: phase 31 before reflective Minecraft class load");
++            return;
++        }
++
++        // Probe class loading boundary without constructing the game instance.
++        try {
++            Class.forName("net.minecraft.client.Minecraft");
++        } catch (ClassNotFoundException e) {
++            throw new RuntimeException("Minecraft class not found during phase probe", e);
++        }
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 32) {
++            System.err.println("[mc-probe] web parse-free probe: phase 32 after reflective Minecraft class load");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 33) {
++            System.err.println("[mc-probe] web parse-free probe: phase 33 before Minecraft.getInstance probe");
++            return;
++        }
++
++        Minecraft minecraftMaybe = Minecraft.getInstance();
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 34) {
++            System.err.println(
++                "[mc-probe] web parse-free probe: phase 34 after Minecraft.getInstance probe (instance="
++                    + (minecraftMaybe != null)
++                    + ")"
++            );
++            return;
++        }
++
++        Thread thread = new Thread("Client Shutdown Thread Probe") {
++            @Override
++            public void run() {
++                Minecraft minecraft2 = Minecraft.getInstance();
++                if (minecraft2 != null) {
++                    IntegratedServer integratedserver = minecraft2.getSingleplayerServer();
++                    if (integratedserver != null) {
++                        integratedserver.halt(true);
++                    }
++                }
++            }
++        };
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 35) {
++            System.err.println("[mc-probe] web parse-free probe: phase 35 after shutdown-thread probe construction");
++            return;
++        }
++
++        thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(logger));
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 36) {
++            System.err.println("[mc-probe] web parse-free probe: phase 36 after thread handler setup (pre-Minecraft ctor)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 37) {
++            System.err.println("[mc-probe] web parse-free probe: phase 37 before render-thread rename");
++            return;
++        }
++        Thread.currentThread().setName("Render thread");
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 38) {
++            System.err.println("[mc-probe] web parse-free probe: phase 38 after render-thread rename");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 39) {
++            System.err.println("[mc-probe] web parse-free probe: phase 39 before RenderSystem.initRenderThread");
++            return;
++        }
++        RenderSystem.initRenderThread();
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 40) {
++            System.err.println("[mc-probe] web parse-free probe: phase 40 after RenderSystem.initRenderThread");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 41) {
++            System.err.println("[mc-probe] web parse-free probe: phase 41 before new Minecraft(gameconfig)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 42) {
++            System.err.println("[mc-probe] web parse-free probe: phase 42 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 43) {
++            System.err.println("[mc-probe] web parse-free probe: phase 43 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 44) {
++            System.err.println("[mc-probe] web parse-free probe: phase 44 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 45) {
++            System.err.println("[mc-probe] web parse-free probe: phase 45 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 46) {
++            System.err.println("[mc-probe] web parse-free probe: phase 46 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 47) {
++            System.err.println("[mc-probe] web parse-free probe: phase 47 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 48) {
++            System.err.println("[mc-probe] web parse-free probe: phase 48 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 49) {
++            System.err.println("[mc-probe] web parse-free probe: phase 49 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 50) {
++            System.err.println("[mc-probe] web parse-free probe: phase 50 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 51) {
++            System.err.println("[mc-probe] web parse-free probe: phase 51 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 52) {
++            System.err.println("[mc-probe] web parse-free probe: phase 52 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 53) {
++            System.err.println("[mc-probe] web parse-free probe: phase 53 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 54) {
++            System.err.println("[mc-probe] web parse-free probe: phase 54 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 55) {
++            System.err.println("[mc-probe] web parse-free probe: phase 55 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 56) {
++            System.err.println("[mc-probe] web parse-free probe: phase 56 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 57) {
++            System.err.println("[mc-probe] web parse-free probe: phase 57 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 58) {
++            System.err.println("[mc-probe] web parse-free probe: phase 58 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 59) {
++            System.err.println("[mc-probe] web parse-free probe: phase 59 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 60) {
++            System.err.println("[mc-probe] web parse-free probe: phase 60 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 61) {
++            System.err.println("[mc-probe] web parse-free probe: phase 61 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 62) {
++            System.err.println("[mc-probe] web parse-free probe: phase 62 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 63) {
++            System.err.println("[mc-probe] web parse-free probe: phase 63 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 64) {
++            System.err.println("[mc-probe] web parse-free probe: phase 64 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 65) {
++            System.err.println("[mc-probe] web parse-free probe: phase 65 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 66) {
++            System.err.println("[mc-probe] web parse-free probe: phase 66 checkpoint (constructor chain deferred)");
++            return;
++        }
++
++        try {
++            Minecraft minecraft = new Minecraft(gameconfig);
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 67) {
++                System.err.println("[mc-probe] web parse-free probe: phase 67 after new Minecraft(gameconfig)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 68) {
++                System.err.println("[mc-probe] web parse-free probe: phase 68 before minecraft.run()");
++                return;
++            }
++            minecraft.run();
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 69) {
++                System.err.println("[mc-probe] web parse-free probe: phase 69 after minecraft.run() returned");
++                return;
++            }
++            minecraft.stop();
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 70) {
++                System.err.println("[mc-probe] web parse-free probe: phase 70 after minecraft.stop()");
++                return;
++            }
++            minecraft.destroy();
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 71) {
++                System.err.println("[mc-probe] web parse-free probe: phase 71 after minecraft.destroy()");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 72) {
++                System.err.println("[mc-probe] web parse-free probe: phase 72 post-destroy probe checkpoint");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 73) {
++                System.err.println("[mc-probe] web parse-free probe: phase 73 post-destroy probe checkpoint");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 74) {
++                System.err.println("[mc-probe] web parse-free probe: phase 74 after constructor (real init resume)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 75) {
++                System.err.println("[mc-probe] web parse-free probe: phase 75 after constructor (real init resume)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 76) {
++                System.err.println("[mc-probe] web parse-free probe: phase 76 after constructor (real init resume)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 77) {
++                System.err.println("[mc-probe] web parse-free probe: phase 77 after constructor (real init resume)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 78) {
++                System.err.println("[mc-probe] web parse-free probe: phase 78 after constructor (real init resume)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 79) {
++                System.err.println("[mc-probe] web parse-free probe: phase 79 after constructor (real init resume)");
++                return;
++            }
++            if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 80 && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 120) {
++                System.err.println(
++                    "[mc-probe] web parse-free probe: phase "
++                        + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE
++                        + " after constructor (real init resume)"
++                );
++                return;
++            }
++        } catch (Throwable throwable) {
++            System.err.println("[mc-probe] web parse-free probe: post-41 caught: " + throwable);
++            throwable.printStackTrace();
++            throw throwable;
++        }
++
++        System.err.println("[mc-probe] web parse-free probe: phase>57 completed probe chain");
++    }
++
+     private static GameConfig.QuickPlayVariant getQuickPlayVariant(
+         OptionSet p_407186_, OptionSpec<String> p_407870_, OptionSpec<String> p_406068_, OptionSpec<String> p_408762_
+     ) {
+@@ -269,7 +920,7 @@
+ 
+     @Nullable
+     private static String unescapeJavaArgument(@Nullable String p_300185_) {
+-        return p_300185_ == null ? null : StringEscapeUtils.unescapeJava(p_300185_);
++        return p_300185_;
+     }
+ 
+     private static Optional<String> emptyStringToEmptyOptional(String p_195487_) {
+@@ -280,6 +931,10 @@
+         return p_129635_ != null ? OptionalInt.of(p_129635_) : OptionalInt.empty();
+     }
+ 
++    private static OptionalInt ofNullableInt(@Nullable String s) {
++        return s != null ? OptionalInt.of(Integer.parseInt(s)) : OptionalInt.empty();
++    }
++
+     @Nullable
+     private static <T> T parseArgument(OptionSet p_129639_, OptionSpec<T> p_129640_) {
+         try {
+@@ -317,4 +972,4 @@
+     static {
+         System.setProperty("java.awt.headless", "true");
+     }
+-}
+\ No newline at end of file
++}

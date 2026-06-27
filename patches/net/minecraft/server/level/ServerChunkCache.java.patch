@@ -1,0 +1,84 @@
+diff --git a/net/minecraft/server/level/ServerChunkCache.java b/net/minecraft/server/level/ServerChunkCache.java
+index c1702c0..f195045 100644
+--- a/net/minecraft/server/level/ServerChunkCache.java
++++ b/net/minecraft/server/level/ServerChunkCache.java
+@@ -54,6 +54,7 @@ import net.minecraft.world.level.saveddata.SavedData;
+ import net.minecraft.world.level.storage.DimensionDataStorage;
+ import net.minecraft.world.level.storage.LevelStorageSource;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class ServerChunkCache extends ChunkSource {
+     private static final Logger LOGGER = LogUtils.getLogger();
+@@ -77,6 +78,7 @@ public class ServerChunkCache extends ChunkSource {
+     @Nullable
+     @VisibleForDebug
+     private NaturalSpawner.SpawnState lastSpawnState;
++    private int webChunkRuntimeLogs;
+ 
+     public ServerChunkCache(
+         ServerLevel p_214982_,
+@@ -290,9 +292,22 @@ public class ServerChunkCache extends ChunkSource {
+     }
+ 
+     boolean runDistanceManagerUpdates() {
++        boolean webLogChunks = BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && this.level.getServer().getTickCount() <= 2
++            && this.webChunkRuntimeLogs++ < 2;
++        if (webLogChunks) {
++            System.out.println("[mc-web/chunks] runDistanceManagerUpdates begin tick=" + this.level.getServer().getTickCount());
++        }
+         boolean flag = this.distanceManager.runAllUpdates(this.chunkMap);
+         boolean flag1 = this.chunkMap.promoteChunkMap();
++        if (webLogChunks) {
++            System.out.println("[mc-web/chunks] runDistanceManagerUpdates after promote tick=" + this.level.getServer().getTickCount() + " updated=" + flag + " promoted=" + flag1);
++        }
+         this.chunkMap.runGenerationTasks();
++        if (webLogChunks) {
++            System.out.println("[mc-web/chunks] runDistanceManagerUpdates after generation tick=" + this.level.getServer().getTickCount());
++        }
+         if (!flag && !flag1) {
+             return false;
+         } else {
+@@ -326,6 +341,13 @@ public class ServerChunkCache extends ChunkSource {
+     @Override
+     public void tick(BooleanSupplier p_201913_, boolean p_201914_) {
+         ProfilerFiller profilerfiller = Profiler.get();
++        boolean webLogChunkTick = BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && this.level.getServer().getTickCount() <= 2
++            && this.webChunkRuntimeLogs++ < 2;
++        if (webLogChunkTick) {
++            System.out.println("[mc-web/chunks] tick begin tick=" + this.level.getServer().getTickCount() + " doTick=" + p_201914_);
++        }
+         profilerfiller.push("purge");
+         if (this.level.tickRateManager().runsNormally() || !p_201914_) {
+             this.ticketStorage.purgeStaleTickets(this.chunkMap);
+@@ -334,14 +356,26 @@ public class ServerChunkCache extends ChunkSource {
+         this.runDistanceManagerUpdates();
+         profilerfiller.popPush("chunks");
+         if (p_201914_) {
++            if (webLogChunkTick) {
++                System.out.println("[mc-web/chunks] tick before tickChunks tick=" + this.level.getServer().getTickCount());
++            }
+             this.tickChunks();
++            if (webLogChunkTick) {
++                System.out.println("[mc-web/chunks] tick before chunkMap.tick tick=" + this.level.getServer().getTickCount());
++            }
+             this.chunkMap.tick();
++            if (webLogChunkTick) {
++                System.out.println("[mc-web/chunks] tick after chunkMap.tick tick=" + this.level.getServer().getTickCount());
++            }
+         }
+ 
+         profilerfiller.popPush("unload");
+         this.chunkMap.tick(p_201913_);
+         profilerfiller.pop();
+         this.clearCache();
++        if (webLogChunkTick) {
++            System.out.println("[mc-web/chunks] tick end tick=" + this.level.getServer().getTickCount());
++        }
+     }
+ 
+     private void tickChunks() {

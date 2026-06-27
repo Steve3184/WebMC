@@ -1,0 +1,54 @@
+--- a/net/minecraft/core/UUIDUtil.java
++++ b/net/minecraft/core/UUIDUtil.java
+@@ -19,6 +19,7 @@
+ import net.minecraft.Util;
+ import net.minecraft.network.FriendlyByteBuf;
+ import net.minecraft.network.codec.StreamCodec;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public final class UUIDUtil {
+     public static final Codec<UUID> CODEC = Codec.INT_STREAM
+@@ -85,11 +86,41 @@
+     }
+ 
+     public static UUID createOfflinePlayerUUID(String p_235880_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            String source = "OfflinePlayer:" + p_235880_;
++            long hash1 = 0x9E3779B97F4A7C15L;
++            long hash2 = 0xC2B2AE3D27D4EB4FL;
++
++            for (int i = 0; i < source.length(); i++) {
++                long c = source.charAt(i);
++                hash1 ^= c + 0x9E3779B97F4A7C15L + (hash1 << 6) + (hash1 >>> 2);
++                hash2 ^= c + 0xC2B2AE3D27D4EB4FL + (hash2 << 7) + (hash2 >>> 3);
++            }
++
++            long most = (hash1 & -61441L) | 16384L;
++            long least = (hash2 & 0x3FFFFFFFFFFFFFFFL) | 0x8000000000000000L;
++            UUID uuid = new UUID(most, least);
++            System.out.println("[mc-web/authlib] UUIDUtil.createOfflinePlayerUUID web name=" + p_235880_ + " -> " + uuid);
++            return uuid;
++        }
++
+         return UUID.nameUUIDFromBytes(("OfflinePlayer:" + p_235880_).getBytes(StandardCharsets.UTF_8));
+     }
+ 
+     public static GameProfile createOfflineProfile(String p_309926_) {
+         UUID uuid = createOfflinePlayerUUID(p_309926_);
++        if (uuid == null) {
++            String source = "OfflinePlayer:" + p_309926_;
++            long most = 0x1234ABCD5678EF01L;
++            long least = 0xFEDCBA9876543210L;
++            for (int i = 0; i < source.length(); i++) {
++                long c = source.charAt(i);
++                most = (most << 5) - most + c;
++                least = (least << 7) - least + c;
++            }
++            uuid = new UUID(most, least);
++            System.out.println("[mc-web/authlib] UUIDUtil.createOfflineProfile fallback name=" + p_309926_ + " -> " + uuid);
++        }
+         return new GameProfile(uuid, p_309926_);
+     }
+-}
+\ No newline at end of file
++}

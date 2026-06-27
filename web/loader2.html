@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebMC</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
+#canvas-container{position:absolute;top:0;left:0;width:100%;height:100%}
+#canvas{display:block;image-rendering:pixelated;width:100%;height:100%}
+#loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-family:monospace;font-size:16px;text-align:center;z-index:10}
+</style>
+</head>
+<body>
+<div id="canvas-container"><canvas id="canvas"></canvas></div>
+<div id="loading">Loading WebMC...<br><span id="progress">Downloading parts...</span></div>
+<script>window.webmcBootMode='mcMain'; window.VFS_URL='game.vfs.gz'; localStorage.removeItem('vfs_chunk_0'); localStorage.removeItem('w_chunk_0');</script>
+<script src="fflate.js"></script>
+<script src="vfs.js"></script>
+<script src="socket.js"></script>
+<script>
+window.onerror = function(msg, url, line, col, err) {
+    console.error('[GLOBAL ERROR]', msg, 'at', url, 'line:', line, 'col:', col, err);
+    return false;
+};
+// Set canvas size before game loads
+(function() {
+    var canvas = document.getElementById('canvas');
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+})();
+</script>
+<script>
+(function() {
+    var TOTAL_PARTS = 16;
+    var loaded = 0;
+    var parts = new Array(TOTAL_PARTS);
+    var progressEl = document.getElementById('progress');
+    var loadingEl = document.getElementById('loading');
+
+    function onAllLoaded() {
+        progressEl.textContent = 'Assembling & executing...';
+        loadingEl.style.display = 'none';
+        try {
+            var fullCode = parts.join('');
+            console.log('[loader] Total code size:', (fullCode.length / 1048576).toFixed(1), 'MB');
+            // Append main() call at the end so it runs in the same Blob URL scope
+            fullCode += '\nif(typeof main==="function"){console.log("[auto] calling main()");main();}else{console.log("[auto] main type:",typeof main);}';
+            var blob = new Blob([fullCode], { type: 'application/javascript' });
+            var url = URL.createObjectURL(blob);
+            var script = document.createElement('script');
+            script.src = url;
+            script.onload = function() {
+                URL.revokeObjectURL(url);
+                console.log('[loader] Game code executed, window.main:', typeof window.main);
+            };
+            script.onerror = function(e) {
+                progressEl.textContent = 'Script error: ' + (e.message || e);
+                loadingEl.style.display = 'block';
+                console.error('[loader] Script error:', e);
+            };
+            document.head.appendChild(script);
+        } catch(e) {
+            progressEl.textContent = 'Error: ' + e.message;
+            loadingEl.style.display = 'block';
+            console.error('[loader] Error:', e);
+        }
+    }
+
+    function loadPart(index) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'parts/part_' + String(index).padStart(3, '0') + '.js', true);
+        xhr.onload = function() {
+            if (xhr.status === 200 || xhr.status === 304) {
+                parts[index] = xhr.responseText;
+                loaded++;
+                progressEl.textContent = 'Loading part ' + loaded + '/' + TOTAL_PARTS + '...';
+                if (loaded === TOTAL_PARTS) onAllLoaded();
+            }
+        };
+        xhr.onerror = function() {
+            progressEl.textContent = 'Network error loading part ' + index;
+        };
+        xhr.send();
+    }
+
+    for (var i = 0; i < TOTAL_PARTS; i++) {
+        (function(idx) {
+            setTimeout(function() { loadPart(idx); }, idx * 50);
+        })(i);
+    }
+})();
+</script>
+</body>
+</html>

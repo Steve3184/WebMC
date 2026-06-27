@@ -1,0 +1,679 @@
+diff --git a/net/minecraft/client/renderer/GameRenderer.java b/net/minecraft/client/renderer/GameRenderer.java
+index c15b6fa..0b09b11 100644
+--- a/net/minecraft/client/renderer/GameRenderer.java
++++ b/net/minecraft/client/renderer/GameRenderer.java
+@@ -30,6 +30,7 @@ import net.minecraft.client.Minecraft;
+ import net.minecraft.client.Options;
+ import net.minecraft.client.Screenshot;
+ import net.minecraft.client.gui.GuiGraphics;
++import net.minecraft.client.gui.screens.ReceivingLevelScreen;
+ import net.minecraft.client.gui.render.GuiRenderer;
+ import net.minecraft.client.gui.render.pip.GuiBannerResultRenderer;
+ import net.minecraft.client.gui.render.pip.GuiBookModelRenderer;
+@@ -79,6 +80,9 @@ import net.minecraft.world.phys.Vec3;
+ import net.minecraft.world.waypoints.TrackedWaypoint;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import org.teavm.jso.JSBody;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ import org.apache.commons.io.IOUtils;
+ import org.joml.Matrix4f;
+ import org.joml.Matrix4fStack;
+@@ -96,8 +100,9 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+     public static final float PROJECTION_3D_HUD_Z_FAR = 100.0F;
+     private static final float PORTAL_SPINNING_SPEED = 20.0F;
+     private static final float NAUSEA_SPINNING_SPEED = 7.0F;
++    private static final boolean WEB_RENDER_DIAGNOSTICS = Boolean.getBoolean("webmc.renderDiagnostics");
+     private final Minecraft minecraft;
+-    private final RandomSource random = RandomSource.create();
++    private final RandomSource random;
+     private float renderDistance;
+     public final ItemInHandRenderer itemInHandRenderer;
+     private final ScreenEffectRenderer screenEffectRenderer;
+@@ -111,32 +116,129 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+     private boolean renderBlockOutline = true;
+     private long lastScreenshotAttempt;
+     private boolean hasWorldScreenshot;
+-    private long lastActiveTime = Util.getMillis();
++    private long lastActiveTime;
+     private final LightTexture lightTexture;
+-    private final OverlayTexture overlayTexture = new OverlayTexture();
++    private final OverlayTexture overlayTexture;
+     private boolean panoramicMode;
+-    protected final CubeMap cubeMap = new CubeMap(ResourceLocation.withDefaultNamespace("textures/gui/title/background/panorama"));
+-    protected final PanoramaRenderer panorama = new PanoramaRenderer(this.cubeMap);
+-    private final CrossFrameResourcePool resourcePool = new CrossFrameResourcePool(3);
+-    private final FogRenderer fogRenderer = new FogRenderer();
++    protected final CubeMap cubeMap;
++    protected final PanoramaRenderer panorama;
++    private final CrossFrameResourcePool resourcePool;
++    private final FogRenderer fogRenderer;
+     private final GuiRenderer guiRenderer;
+     private final GuiRenderState guiRenderState;
+     @Nullable
+     private ResourceLocation postEffectId;
+     private boolean effectActive;
+-    private final Camera mainCamera = new Camera();
+-    private final Lighting lighting = new Lighting();
+-    private final GlobalSettingsUniform globalSettingsUniform = new GlobalSettingsUniform();
+-    private final PerspectiveProjectionMatrixBuffer levelProjectionMatrixBuffer = new PerspectiveProjectionMatrixBuffer("level");
+-    private final CachedPerspectiveProjectionMatrixBuffer hud3dProjectionMatrixBuffer = new CachedPerspectiveProjectionMatrixBuffer("3d hud", 0.05F, 100.0F);
++    private final Camera mainCamera;
++    @Nullable
++    private final Lighting lighting;
++    private final GlobalSettingsUniform globalSettingsUniform;
++    private final PerspectiveProjectionMatrixBuffer levelProjectionMatrixBuffer;
++    private final CachedPerspectiveProjectionMatrixBuffer hud3dProjectionMatrixBuffer;
++    private int webRenderGateLogs;
++    private int webRenderEnteredLogs;
++    private int webRenderStateChangeLogs;
++    private int webRenderLateGateLogs;
++    @Nullable
++    private Boolean webLastWorldRenderEligible;
++    @Nullable
++    private Boolean webLastGameLoadFinished;
++    @Nullable
++    private Boolean webLastRenderWorldFlag;
++    @Nullable
++    private Boolean webLastLevelPresent;
++    @Nullable
++    private Boolean webLastPlayerPresent;
++    @Nullable
++    private String webLastScreenName;
++    @Nullable
++    private String webLastOverlayName;
++
++    @JSBody(params = {"screen", "overlay", "levelPresent", "playerPresent", "renderWorld", "gameLoadFinished", "eligible"}, script =
++        "try {" +
++        "  var s = window.__webmcState || (window.__webmcState = {});" +
++        "  s.screen = screen;" +
++        "  s.overlay = overlay;" +
++        "  s.levelPresent = !!levelPresent;" +
++        "  s.playerPresent = !!playerPresent;" +
++        "  s.renderWorld = !!renderWorld;" +
++        "  s.gameLoadFinished = !!gameLoadFinished;" +
++        "  s.worldRenderEligible = !!eligible;" +
++        "  s.renderGateUpdates = (s.renderGateUpdates || 0) + 1;" +
++        "  var n = Date.now();" +
++        "  if (!s.lastBeaconMs || n - s.lastBeaconMs >= 1000) {" +
++        "    s.lastBeaconMs = n;" +
++        "    s.lastBeaconSource = 'renderGate';" +
++        "    (new Image()).src = '/__webmc_state?source=renderGate&t=' + n + '&d=' + encodeURIComponent(JSON.stringify(s)).slice(0, 3500);" +
++        "  }" +
++        "} catch (e) {}")
++    private static native void webUpdateRenderGateState(
++        String screen,
++        String overlay,
++        boolean levelPresent,
++        boolean playerPresent,
++        boolean renderWorld,
++        boolean gameLoadFinished,
++        boolean eligible
++    );
++
++    @JSBody(params = {
++        "lightCameraMs", "pickMs", "cameraFogMs", "levelRendererMs", "handMs", "screenEffectsMs", "debugMs", "totalMs"
++    }, script =
++        "try {" +
++        "  var s = window.__webmcState || (window.__webmcState = {});" +
++        "  var b = {" +
++        "    lightCamera: lightCameraMs, pick: pickMs, cameraFog: cameraFogMs, levelRenderer: levelRendererMs," +
++        "    hand: handMs, screenEffects: screenEffectsMs, debug: debugMs, total: totalMs" +
++        "  };" +
++        "  s.lastGameRenderLevelBreakdown = b;" +
++        "  var p = window.__webmcFrameProbe;" +
++        "  if (p && p.last) p.last.gameRenderLevelBreakdown = b;" +
++        "} catch (e) {}")
++    private static native void webUpdateGameRenderLevelBreakdown(
++        double lightCameraMs,
++        double pickMs,
++        double cameraFogMs,
++        double levelRendererMs,
++        double handMs,
++        double screenEffectsMs,
++        double debugMs,
++        double totalMs
++    );
+ 
+     public GameRenderer(Minecraft p_234219_, ItemInHandRenderer p_234220_, RenderBuffers p_234222_) {
++        System.err.println("[mc-probe] GameRenderer.<init>: 0 field init start");
++        this.random = RandomSource.create();
++        this.lastActiveTime = Util.getMillis();
++        this.overlayTexture = new OverlayTexture();
++        System.err.println("[mc-probe] GameRenderer.<init>: 0.1 overlayTexture");
++        this.cubeMap = new CubeMap(ResourceLocation.withDefaultNamespace("textures/gui/title/background/panorama"));
++        this.panorama = new PanoramaRenderer(this.cubeMap);
++        this.resourcePool = new CrossFrameResourcePool(3);
++        this.fogRenderer = new FogRenderer();
++        System.err.println("[mc-probe] GameRenderer.<init>: 0.2 fog/resources");
++        this.mainCamera = new Camera();
++        System.err.println("[mc-probe] GameRenderer.<init>: 0.2a camera");
++        if (BuildFlags.WEB_RUNTIME) {
++            this.lighting = null;
++            System.err.println("[mc-probe] GameRenderer.<init>: 0.2b lighting skipped in web runtime");
++        } else {
++            this.lighting = new Lighting();
++            System.err.println("[mc-probe] GameRenderer.<init>: 0.2b lighting");
++        }
++        this.globalSettingsUniform = new GlobalSettingsUniform();
++        System.err.println("[mc-probe] GameRenderer.<init>: 0.3 globals");
++        this.levelProjectionMatrixBuffer = new PerspectiveProjectionMatrixBuffer("level");
++        this.hud3dProjectionMatrixBuffer = new CachedPerspectiveProjectionMatrixBuffer("3d hud", 0.05F, 100.0F);
++        System.err.println("[mc-probe] GameRenderer.<init>: 0.4 projection buffers");
+         this.minecraft = p_234219_;
+         this.itemInHandRenderer = p_234220_;
+         this.lightTexture = new LightTexture(this, p_234219_);
++        System.err.println("[mc-probe] GameRenderer.<init>: 1 lightTexture");
+         this.renderBuffers = p_234222_;
+         this.guiRenderState = new GuiRenderState();
+         MultiBufferSource.BufferSource multibuffersource$buffersource = p_234222_.bufferSource();
++        System.err.println("[mc-probe] GameRenderer.<init>: 2 before GuiRenderer");
+         this.guiRenderer = new GuiRenderer(
+             this.guiRenderState,
+             multibuffersource$buffersource,
+@@ -149,7 +251,9 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+                 new GuiProfilerChartRenderer(multibuffersource$buffersource)
+             )
+         );
++        System.err.println("[mc-probe] GameRenderer.<init>: 3 guiRenderer");
+         this.screenEffectRenderer = new ScreenEffectRenderer(p_234219_, multibuffersource$buffersource);
++        System.err.println("[mc-probe] GameRenderer.<init>: 4 done");
+     }
+ 
+     @Override
+@@ -161,7 +265,9 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+         this.guiRenderer.close();
+         this.levelProjectionMatrixBuffer.close();
+         this.hud3dProjectionMatrixBuffer.close();
+-        this.lighting.close();
++        if (this.lighting != null) {
++            this.lighting.close();
++        }
+         this.cubeMap.close();
+         this.fogRenderer.close();
+     }
+@@ -203,6 +309,9 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+     }
+ 
+     public void processBlurEffect() {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
+         PostChain postchain = this.minecraft.getShaderManager().getPostChain(BLUR_POST_CHAIN_ID, LevelTargetBundle.MAIN_TARGETS);
+         if (postchain != null) {
+             postchain.process(this.minecraft.getMainRenderTarget(), this.resourcePool);
+@@ -416,7 +525,8 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+             if (this.minecraft.options.getCameraType().isFirstPerson()
+                 && !p_408020_
+                 && !this.minecraft.options.hideGui
+-                && this.minecraft.gameMode.getPlayerMode() != GameType.SPECTATOR) {
++                && this.minecraft.gameMode.getPlayerMode() != GameType.SPECTATOR
++                && !BuildFlags.WEB_RUNTIME) {
+                 this.lightTexture.turnOnLightLayer();
+                 this.itemInHandRenderer
+                     .renderHandsWithItems(
+@@ -475,24 +585,156 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+             boolean flag = this.minecraft.isGameLoadFinished();
+             int i = (int)this.minecraft.mouseHandler.getScaledXPos(this.minecraft.getWindow());
+             int j = (int)this.minecraft.mouseHandler.getScaledYPos(this.minecraft.getWindow());
+-            if (flag && p_109096_ && this.minecraft.level != null) {
+-                profilerfiller.push("world");
+-                this.renderLevel(p_343467_);
+-                this.tryTakeScreenshotIfNeeded();
+-                this.minecraft.levelRenderer.doEntityOutline();
+-                if (this.postEffectId != null && this.effectActive) {
+-                    RenderSystem.resetTextureMatrix();
+-                    PostChain postchain = this.minecraft.getShaderManager().getPostChain(this.postEffectId, LevelTargetBundle.MAIN_TARGETS);
+-                    if (postchain != null) {
+-                        postchain.process(this.minecraft.getMainRenderTarget(), this.resourcePool);
++            int webRenderStage = 0;
++            boolean receivingLevelWorldRender = BuildFlags.WEB_RUNTIME
++                && this.minecraft.screen instanceof ReceivingLevelScreen
++                && this.minecraft.level != null;
++            boolean worldRenderEligible = flag && (p_109096_ || receivingLevelWorldRender) && this.minecraft.level != null;
++            if (BuildFlags.WEB_RUNTIME) {
++                String s = this.minecraft.screen == null ? "null" : this.minecraft.screen.getClass().getSimpleName();
++                String s1 = this.minecraft.getOverlay() == null ? "null" : this.minecraft.getOverlay().getClass().getSimpleName();
++                boolean flag1 = this.minecraft.level != null;
++                boolean flag2 = this.minecraft.player != null;
++                webUpdateRenderGateState(s, s1, flag1, flag2, p_109096_, flag, worldRenderEligible);
++                boolean flag3 = this.webLastWorldRenderEligible == null
++                    || this.webLastWorldRenderEligible != worldRenderEligible
++                    || this.webLastGameLoadFinished == null
++                    || this.webLastGameLoadFinished != flag
++                    || this.webLastRenderWorldFlag == null
++                    || this.webLastRenderWorldFlag != p_109096_
++                    || this.webLastLevelPresent == null
++                    || this.webLastLevelPresent != flag1
++                    || this.webLastPlayerPresent == null
++                    || this.webLastPlayerPresent != flag2
++                    || !s.equals(this.webLastScreenName)
++                    || !s1.equals(this.webLastOverlayName);
++                if (WEB_RENDER_DIAGNOSTICS && flag3 && this.webRenderStateChangeLogs < 200) {
++                    this.webRenderStateChangeLogs++;
++                    System.out.println(
++                        "[mc-web/renderGate/state] eligible="
++                            + worldRenderEligible
++                            + " screen="
++                            + s
++                            + " overlay="
++                            + s1
++                            + " playerNull="
++                            + !flag2
++                            + " levelNull="
++                            + !flag1
++                            + " renderWorld="
++                            + p_109096_
++                            + " gameLoadFinished="
++                            + flag
++                    );
++                }
++                this.webLastWorldRenderEligible = worldRenderEligible;
++                this.webLastGameLoadFinished = flag;
++                this.webLastRenderWorldFlag = p_109096_;
++                this.webLastLevelPresent = flag1;
++                this.webLastPlayerPresent = flag2;
++                this.webLastScreenName = s;
++                this.webLastOverlayName = s1;
++                if (WEB_RENDER_DIAGNOSTICS && worldRenderEligible) {
++                    if (this.webRenderEnteredLogs < 40) {
++                        this.webRenderEnteredLogs++;
++                        System.out.println(
++                            "[mc-web/renderGate] worldRender eligible=true screen="
++                                + s
++                                + " playerNull="
++                                + !flag2
++                                + " levelNull="
++                                + !flag1
++                                + " renderWorld="
++                                + p_109096_
++                                + " gameLoadFinished="
++                                + flag
++                        );
+                     }
++                } else if (WEB_RENDER_DIAGNOSTICS && this.webRenderGateLogs < 60) {
++                    this.webRenderGateLogs++;
++                    System.out.println(
++                        "[mc-web/renderGate] worldRender eligible=false screen="
++                            + s
++                            + " playerNull="
++                            + !flag2
++                            + " levelNull="
++                            + !flag1
++                            + " renderWorld="
++                            + p_109096_
++                            + " gameLoadFinished="
++                            + flag
++                    );
++                }
++                if (WEB_RENDER_DIAGNOSTICS && !worldRenderEligible && flag1 && flag2 && this.webRenderLateGateLogs < 160) {
++                    this.webRenderLateGateLogs++;
++                    System.out.println(
++                        "[mc-web/renderGate] late eligible=false screen="
++                            + s
++                            + " overlay="
++                            + s1
++                            + " renderWorld="
++                            + p_109096_
++                            + " gameLoadFinished="
++                            + flag
++                            + " log#="
++                            + this.webRenderLateGateLogs
++                    );
++                }
++            }
++            if (worldRenderEligible) {
++                try {
++                    webRenderStage = 1;
++                    profilerfiller.push("world");
++                    this.renderLevel(p_343467_);
++                    webRenderStage = 2;
++                    this.tryTakeScreenshotIfNeeded();
++                    webRenderStage = 3;
++                    this.minecraft.levelRenderer.doEntityOutline();
++                    webRenderStage = 4;
++                    if (!BuildFlags.WEB_RUNTIME && this.postEffectId != null && this.effectActive) {
++                        RenderSystem.resetTextureMatrix();
++                        PostChain postchain = this.minecraft.getShaderManager().getPostChain(this.postEffectId, LevelTargetBundle.MAIN_TARGETS);
++                        if (postchain != null) {
++                            postchain.process(this.minecraft.getMainRenderTarget(), this.resourcePool);
++                        }
++                    }
++                    webRenderStage = 5;
++                } catch (Throwable throwable3) {
++                    if (BuildFlags.WEB_RUNTIME) {
++                        System.out.println(
++                            "[mc-web/render] Rendering level caught stage="
++                                + webRenderStage
++                                + " "
++                                + throwable3.getClass().getName()
++                                + ": "
++                                + throwable3.getMessage()
++                        );
++                        StackTraceElement[] stacktraceelement = throwable3.getStackTrace();
++                        int i2 = Math.min(stacktraceelement.length, 40);
++                        for (int j2 = 0; j2 < i2; j2++) {
++                            System.out.println("[mc-web/render] at " + stacktraceelement[j2]);
++                        }
++                        Throwable throwable6 = throwable3.getCause();
++                        if (throwable6 != null) {
++                            System.out.println("[mc-web/render] cause " + throwable6.getClass().getName() + ": " + throwable6.getMessage());
++                            StackTraceElement[] stacktraceelement1 = throwable6.getStackTrace();
++                            int k2 = Math.min(stacktraceelement1.length, 40);
++                            for (int l2 = 0; l2 < k2; l2++) {
++                                System.out.println("[mc-web/render] causeAt " + stacktraceelement1[l2]);
++                            }
++                        }
++                    }
++                    CrashReport crashreport3 = CrashReport.forThrowable(throwable3, "Rendering level");
++                    throw new ReportedException(crashreport3);
+                 }
+             }
+ 
+             this.fogRenderer.endFrame();
+             RenderTarget rendertarget = this.minecraft.getMainRenderTarget();
+             RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(rendertarget.getDepthTexture(), 1.0);
+-            this.minecraft.gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_3D);
++            if (this.minecraft.gameRenderer.getLighting() != null) {
++                this.minecraft.gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_3D);
++            }
+             this.guiRenderState.reset();
+             GuiGraphics guigraphics = new GuiGraphics(this.minecraft, this.guiRenderState);
+             if (flag && p_109096_ && this.minecraft.level != null) {
+@@ -505,6 +747,8 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+                 try {
+                     this.minecraft.getOverlay().render(guigraphics, i, j, p_343467_.getGameTimeDeltaTicks());
+                 } catch (Throwable throwable2) {
++                    System.err.println("[mc-probe] GameRenderer.render overlay threw: " + throwable2);
++                    throwable2.printStackTrace();
+                     CrashReport crashreport = CrashReport.forThrowable(throwable2, "Rendering overlay");
+                     CrashReportCategory crashreportcategory = crashreport.addCategory("Overlay render details");
+                     crashreportcategory.setDetail("Overlay name", () -> this.minecraft.getOverlay().getClass().getCanonicalName());
+@@ -514,6 +758,8 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+                 try {
+                     this.minecraft.screen.renderWithTooltip(guigraphics, i, j, p_343467_.getGameTimeDeltaTicks());
+                 } catch (Throwable throwable1) {
++                    System.err.println("[mc-probe] GameRenderer.render screen threw: " + throwable1);
++                    throwable1.printStackTrace();
+                     CrashReport crashreport1 = CrashReport.forThrowable(throwable1, "Rendering screen");
+                     CrashReportCategory crashreportcategory1 = crashreport1.addCategory("Screen render details");
+                     crashreportcategory1.setDetail("Screen name", () -> this.minecraft.screen.getClass().getCanonicalName());
+@@ -539,17 +785,33 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+ 
+             if (flag) {
+                 try (Zone zone = profilerfiller.zone("toasts")) {
+-                    this.minecraft.getToastManager().render(guigraphics);
++                    if (this.minecraft.getToastManager() != null) {
++                        this.minecraft.getToastManager().render(guigraphics);
++                    }
+                 }
+             }
+ 
+-            this.guiRenderer.render(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
++            try {
++                this.guiRenderer.render(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
++            } catch (Throwable throwable4) {
++                CrashReport crashreport4 = CrashReport.forThrowable(throwable4, "Rendering GUI batch");
++                throw new ReportedException(crashreport4);
++            }
+             this.guiRenderer.incrementFrameNumber();
+-            this.resourcePool.endFrame();
++            try {
++                this.resourcePool.endFrame();
++            } catch (Throwable throwable5) {
++                CrashReport crashreport5 = CrashReport.forThrowable(throwable5, "Ending render frame");
++                throw new ReportedException(crashreport5);
++            }
+         }
+     }
+ 
+     private void tryTakeScreenshotIfNeeded() {
++        if (BuildFlags.WEB_RUNTIME) {
++            this.hasWorldScreenshot = true;
++            return;
++        }
+         if (!this.hasWorldScreenshot && this.minecraft.isLocalServer()) {
+             long i = Util.getMillis();
+             if (i - this.lastScreenshotAttempt >= 1000L) {
+@@ -622,75 +884,158 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+     }
+ 
+     public void renderLevel(DeltaTracker p_342230_) {
+-        float f = p_342230_.getGameTimeDeltaPartialTick(true);
+-        LocalPlayer localplayer = this.minecraft.player;
+-        this.lightTexture.updateLightTexture(f);
+-        if (this.minecraft.getCameraEntity() == null) {
+-            this.minecraft.setCameraEntity(localplayer);
+-        }
++        int webRenderLevelStage = 0;
++        boolean webProbe = BuildFlags.WEB_RUNTIME && WebDiagnostics.frameProbeEnabled();
++        long webRenderLevelStartNs = webProbe ? Util.getNanos() : 0L;
++        long webRenderLevelStageStartNs = webRenderLevelStartNs;
++        long webLightCameraNs = 0L;
++        long webPickNs = 0L;
++        long webCameraFogNs = 0L;
++        long webLevelRendererNs = 0L;
++        long webHandNs = 0L;
++        long webScreenEffectsNs = 0L;
++        long webDebugNs = 0L;
++        try {
++            float f = p_342230_.getGameTimeDeltaPartialTick(true);
++            LocalPlayer localplayer = this.minecraft.player;
++            webRenderLevelStage = 1;
++            this.lightTexture.updateLightTexture(f);
++            if (this.minecraft.getCameraEntity() == null) {
++                this.minecraft.setCameraEntity(localplayer);
++            }
++            if (webProbe) {
++                long now = Util.getNanos();
++                webLightCameraNs = now - webRenderLevelStageStartNs;
++                webRenderLevelStageStartNs = now;
++            }
+ 
+-        this.pick(f);
+-        ProfilerFiller profilerfiller = Profiler.get();
+-        profilerfiller.push("center");
+-        boolean flag = this.shouldRenderBlockOutline();
+-        profilerfiller.popPush("camera");
+-        Camera camera = this.mainCamera;
+-        Entity entity = (Entity)(this.minecraft.getCameraEntity() == null ? localplayer : this.minecraft.getCameraEntity());
+-        float f1 = this.minecraft.level.tickRateManager().isEntityFrozen(entity) ? 1.0F : f;
+-        camera.setup(this.minecraft.level, entity, !this.minecraft.options.getCameraType().isFirstPerson(), this.minecraft.options.getCameraType().isMirrored(), f1);
+-        this.renderDistance = this.minecraft.options.getEffectiveRenderDistance() * 16;
+-        float f2 = this.getFov(camera, f, true);
+-        Matrix4f matrix4f = this.getProjectionMatrix(f2);
+-        PoseStack posestack = new PoseStack();
+-        this.bobHurt(posestack, camera.getPartialTickTime());
+-        if (this.minecraft.options.bobView().get()) {
+-            this.bobView(posestack, camera.getPartialTickTime());
+-        }
++            webRenderLevelStage = 2;
++            this.pick(f);
++            if (webProbe) {
++                long now = Util.getNanos();
++                webPickNs = now - webRenderLevelStageStartNs;
++                webRenderLevelStageStartNs = now;
++            }
++            ProfilerFiller profilerfiller = Profiler.get();
++            profilerfiller.push("center");
++            boolean flag = this.shouldRenderBlockOutline();
++            profilerfiller.popPush("camera");
++            Camera camera = this.mainCamera;
++            Entity entity = (Entity)(this.minecraft.getCameraEntity() == null ? localplayer : this.minecraft.getCameraEntity());
++            float f1 = this.minecraft.level.tickRateManager().isEntityFrozen(entity) ? 1.0F : f;
++            camera.setup(this.minecraft.level, entity, !this.minecraft.options.getCameraType().isFirstPerson(), this.minecraft.options.getCameraType().isMirrored(), f1);
++            this.renderDistance = this.minecraft.options.getEffectiveRenderDistance() * 16;
++            float f2 = this.getFov(camera, f, true);
++            Matrix4f matrix4f = this.getProjectionMatrix(f2);
++            PoseStack posestack = new PoseStack();
++            this.bobHurt(posestack, camera.getPartialTickTime());
++            if (this.minecraft.options.bobView().get()) {
++                this.bobView(posestack, camera.getPartialTickTime());
++            }
+ 
+-        matrix4f.mul(posestack.last().pose());
+-        float f3 = this.minecraft.options.screenEffectScale().get().floatValue();
+-        float f4 = Mth.lerp(f, localplayer.oPortalEffectIntensity, localplayer.portalEffectIntensity);
+-        float f5 = localplayer.getEffectBlendFactor(MobEffects.NAUSEA, f);
+-        float f6 = Math.max(f4, f5) * (f3 * f3);
+-        if (f6 > 0.0F) {
+-            float f7 = 5.0F / (f6 * f6 + 5.0F) - f6 * 0.04F;
+-            f7 *= f7;
+-            Vector3f vector3f = new Vector3f(0.0F, Mth.SQRT_OF_TWO / 2.0F, Mth.SQRT_OF_TWO / 2.0F);
+-            float f8 = (this.spinningEffectTime + f * this.spinningEffectSpeed) * (float) (Math.PI / 180.0);
+-            matrix4f.rotate(f8, vector3f);
+-            matrix4f.scale(1.0F / f7, 1.0F, 1.0F);
+-            matrix4f.rotate(-f8, vector3f);
+-        }
++            webRenderLevelStage = 3;
++            matrix4f.mul(posestack.last().pose());
++            float f3 = this.minecraft.options.screenEffectScale().get().floatValue();
++            float f4 = Mth.lerp(f, localplayer.oPortalEffectIntensity, localplayer.portalEffectIntensity);
++            float f5 = localplayer.getEffectBlendFactor(MobEffects.NAUSEA, f);
++            float f6 = Math.max(f4, f5) * (f3 * f3);
++            if (f6 > 0.0F) {
++                float f7 = 5.0F / (f6 * f6 + 5.0F) - f6 * 0.04F;
++                f7 *= f7;
++                Vector3f vector3f = new Vector3f(0.0F, Mth.SQRT_OF_TWO / 2.0F, Mth.SQRT_OF_TWO / 2.0F);
++                float f8 = (this.spinningEffectTime + f * this.spinningEffectSpeed) * (float) (Math.PI / 180.0);
++                matrix4f.rotate(f8, vector3f);
++                matrix4f.scale(1.0F / f7, 1.0F, 1.0F);
++                matrix4f.rotate(-f8, vector3f);
++            }
+ 
+-        float f9 = Math.max(f2, (float)this.minecraft.options.fov().get().intValue());
+-        Matrix4f matrix4f2 = this.getProjectionMatrix(f9);
+-        RenderSystem.setProjectionMatrix(this.levelProjectionMatrixBuffer.getBuffer(matrix4f), ProjectionType.PERSPECTIVE);
+-        Quaternionf quaternionf = camera.rotation().conjugate(new Quaternionf());
+-        Matrix4f matrix4f1 = new Matrix4f().rotation(quaternionf);
+-        this.minecraft.levelRenderer.prepareCullFrustum(camera.getPosition(), matrix4f1, matrix4f2);
+-        profilerfiller.popPush("fog");
+-        boolean flag1 = this.minecraft.level.effects().isFoggyAt(camera.getBlockPosition().getX(), camera.getBlockPosition().getZ())
+-            || this.minecraft.gui.getBossOverlay().shouldCreateWorldFog();
+-        Vector4f vector4f = this.fogRenderer.setupFog(camera, this.minecraft.options.getEffectiveRenderDistance(), flag1, p_342230_, this.getDarkenWorldAmount(f), this.minecraft.level);
+-        GpuBufferSlice gpubufferslice = this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD);
+-        profilerfiller.popPush("level");
+-        this.minecraft.levelRenderer.renderLevel(this.resourcePool, p_342230_, flag, camera, matrix4f1, matrix4f, gpubufferslice, vector4f, !flag1);
+-        profilerfiller.popPush("hand");
+-        boolean flag2 = this.minecraft.getCameraEntity() instanceof LivingEntity && ((LivingEntity)this.minecraft.getCameraEntity()).isSleeping();
+-        RenderSystem.setProjectionMatrix(
+-            this.hud3dProjectionMatrixBuffer.getBuffer(this.minecraft.getWindow().getWidth(), this.minecraft.getWindow().getHeight(), this.getFov(camera, f, false)),
+-            ProjectionType.PERSPECTIVE
+-        );
+-        RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(this.minecraft.getMainRenderTarget().getDepthTexture(), 1.0);
+-        this.renderItemInHand(f, flag2, matrix4f1);
+-        profilerfiller.popPush("screen effects");
+-        MultiBufferSource.BufferSource multibuffersource$buffersource = this.renderBuffers.bufferSource();
+-        this.screenEffectRenderer.renderScreenEffect(flag2, f);
+-        multibuffersource$buffersource.endBatch();
+-        profilerfiller.pop();
+-        RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
+-        if (this.minecraft.gui.shouldRenderDebugCrosshair()) {
+-            this.minecraft.getDebugOverlay().render3dCrosshair(camera);
++            webRenderLevelStage = 4;
++            float f9 = Math.max(f2, (float)this.minecraft.options.fov().get().intValue());
++            Matrix4f matrix4f2 = this.getProjectionMatrix(f9);
++            RenderSystem.setProjectionMatrix(this.levelProjectionMatrixBuffer.getBuffer(matrix4f), ProjectionType.PERSPECTIVE);
++            Quaternionf quaternionf = camera.rotation().conjugate(new Quaternionf());
++            Matrix4f matrix4f1 = new Matrix4f().rotation(quaternionf);
++            this.minecraft.levelRenderer.prepareCullFrustum(camera.getPosition(), matrix4f1, matrix4f2);
++            profilerfiller.popPush("fog");
++            boolean flag1 = this.minecraft.level.effects().isFoggyAt(camera.getBlockPosition().getX(), camera.getBlockPosition().getZ())
++                || this.minecraft.gui.getBossOverlay().shouldCreateWorldFog();
++            Vector4f vector4f = this.fogRenderer.setupFog(
++                camera, this.minecraft.options.getEffectiveRenderDistance(), flag1, p_342230_, this.getDarkenWorldAmount(f), this.minecraft.level
++            );
++            GpuBufferSlice gpubufferslice = this.fogRenderer.getBuffer(FogRenderer.FogMode.WORLD);
++            if (webProbe) {
++                long now = Util.getNanos();
++                webCameraFogNs = now - webRenderLevelStageStartNs;
++                webRenderLevelStageStartNs = now;
++            }
++            profilerfiller.popPush("level");
++            webRenderLevelStage = 5;
++            this.minecraft.levelRenderer.renderLevel(this.resourcePool, p_342230_, flag, camera, matrix4f1, matrix4f, gpubufferslice, vector4f, !flag1);
++            if (webProbe) {
++                long now = Util.getNanos();
++                webLevelRendererNs = now - webRenderLevelStageStartNs;
++                webRenderLevelStageStartNs = now;
++            }
++            profilerfiller.popPush("hand");
++            boolean flag2 = this.minecraft.getCameraEntity() instanceof LivingEntity && ((LivingEntity)this.minecraft.getCameraEntity()).isSleeping();
++            RenderSystem.setProjectionMatrix(
++                this.hud3dProjectionMatrixBuffer.getBuffer(this.minecraft.getWindow().getWidth(), this.minecraft.getWindow().getHeight(), this.getFov(camera, f, false)),
++                ProjectionType.PERSPECTIVE
++            );
++            webRenderLevelStage = 61;
++            RenderSystem.getDevice().createCommandEncoder().clearDepthTexture(this.minecraft.getMainRenderTarget().getDepthTexture(), 1.0);
++            webRenderLevelStage = 62;
++            this.renderItemInHand(f, flag2, matrix4f1);
++            if (webProbe) {
++                long now = Util.getNanos();
++                webHandNs = now - webRenderLevelStageStartNs;
++                webRenderLevelStageStartNs = now;
++            }
++            profilerfiller.popPush("screen effects");
++            MultiBufferSource.BufferSource multibuffersource$buffersource = this.renderBuffers.bufferSource();
++            webRenderLevelStage = 71;
++            if (!BuildFlags.WEB_RUNTIME) {
++                this.screenEffectRenderer.renderScreenEffect(flag2, f);
++            }
++            webRenderLevelStage = 72;
++            multibuffersource$buffersource.endBatch();
++            if (webProbe) {
++                long now = Util.getNanos();
++                webScreenEffectsNs = now - webRenderLevelStageStartNs;
++                webRenderLevelStageStartNs = now;
++            }
++            profilerfiller.pop();
++            webRenderLevelStage = 8;
++            RenderSystem.setShaderFog(this.fogRenderer.getBuffer(FogRenderer.FogMode.NONE));
++            if (this.minecraft.gui.shouldRenderDebugCrosshair()) {
++                this.minecraft.getDebugOverlay().render3dCrosshair(camera);
++            }
++            if (webProbe) {
++                long now = Util.getNanos();
++                webDebugNs = now - webRenderLevelStageStartNs;
++                webUpdateGameRenderLevelBreakdown(
++                    webLightCameraNs / 1000000.0,
++                    webPickNs / 1000000.0,
++                    webCameraFogNs / 1000000.0,
++                    webLevelRendererNs / 1000000.0,
++                    webHandNs / 1000000.0,
++                    webScreenEffectsNs / 1000000.0,
++                    webDebugNs / 1000000.0,
++                    (now - webRenderLevelStartNs) / 1000000.0
++                );
++            }
++        } catch (Throwable throwable) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.out.println(
++                    "[mc-web/renderLevel] caught stage="
++                        + webRenderLevelStage
++                        + " "
++                        + throwable.getClass().getName()
++                        + ": "
++                        + throwable.getMessage()
++                );
++            }
++            throw throwable;
+         }
+     }
+ 
+@@ -763,7 +1108,7 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+     }
+ 
+     public void setLevel(@Nullable ClientLevel p_405879_) {
+-        if (p_405879_ != null) {
++        if (p_405879_ != null && this.lighting != null) {
+             this.lighting.updateLevel(p_405879_.effects().constantAmbientLight());
+         }
+     }
+@@ -771,4 +1116,4 @@ public class GameRenderer implements TrackedWaypoint.Projector, AutoCloseable {
+     public PanoramaRenderer getPanorama() {
+         return this.panorama;
+     }
+-}
+\ No newline at end of file
++}

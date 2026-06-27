@@ -1,0 +1,50 @@
+--- a/net/minecraft/client/gui/render/GuiRenderer.java
++++ b/net/minecraft/client/gui/render/GuiRenderer.java
+@@ -57,6 +57,7 @@
+ import net.minecraft.client.renderer.MappableRingBuffer;
+ import net.minecraft.client.renderer.MultiBufferSource;
+ import net.minecraft.client.renderer.RenderPipelines;
++import net.minecraft.client.renderer.GameRenderer;
+ import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
+ import net.minecraft.client.renderer.texture.OverlayTexture;
+ import net.minecraft.util.Mth;
+@@ -317,7 +318,11 @@
+             RenderSystem.outputColorTextureOverride = this.itemsAtlasView;
+             RenderSystem.outputDepthTextureOverride = this.itemsAtlasDepthView;
+             RenderSystem.setProjectionMatrix(this.itemsProjectionMatrixBuffer.getBuffer(k, k), ProjectionType.ORTHOGRAPHIC);
+-            Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_3D);
++            GameRenderer gamerenderer = Minecraft.getInstance().gameRenderer;
++            Lighting lighting = gamerenderer.getLighting();
++            if (lighting != null) {
++                lighting.setupFor(Lighting.Entry.ITEMS_3D);
++            }
+             PoseStack posestack = new PoseStack();
+             MutableBoolean mutableboolean = new MutableBoolean(false);
+             MutableBoolean mutableboolean1 = new MutableBoolean(false);
+@@ -414,11 +419,15 @@
+         p_410201_.pushPose();
+         p_410201_.translate(p_407014_ + p_407207_ / 2.0F, p_410391_ + p_407207_ / 2.0F, 0.0F);
+         p_410201_.scale(p_407207_, -p_407207_, p_407207_);
++        GameRenderer gamerenderer = Minecraft.getInstance().gameRenderer;
++        Lighting lighting = gamerenderer.getLighting();
+         boolean flag = !p_410794_.usesBlockLight();
+-        if (flag) {
+-            Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_FLAT);
+-        } else {
+-            Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_3D);
++        if (lighting != null) {
++            if (flag) {
++                lighting.setupFor(Lighting.Entry.ITEMS_FLAT);
++            } else {
++                lighting.setupFor(Lighting.Entry.ITEMS_3D);
++            }
+         }
+ 
+         RenderSystem.enableScissorForRenderTypeDraws(p_407014_, this.itemsAtlas.getHeight(0) - p_410391_ - p_407207_, p_407207_, p_407207_);
+@@ -725,4 +734,4 @@
+             this.mesh.close();
+         }
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,271 @@
+--- a/net/minecraft/client/player/LocalPlayer.java
++++ b/net/minecraft/client/player/LocalPlayer.java
+@@ -95,10 +95,13 @@ import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class LocalPlayer extends AbstractClientPlayer {
+     public static final Logger LOGGER = LogUtils.getLogger();
++    private static int webTickExceptionLogs;
++    private static int webAiExceptionLogs;
+     private static final int POSITION_REMINDER_INTERVAL = 20;
+     private static final int WATER_VISION_MAX_TIME = 600;
+     private static final int WATER_VISION_QUICK_TIME = 100;
+@@ -177,7 +180,9 @@ public class LocalPlayer extends AbstractClientPlayer {
+         if (!super.startRiding(p_108667_, p_108668_)) {
+             return false;
+         } else {
+-            if (p_108667_ instanceof AbstractMinecart) {
++            if (BuildFlags.WEB_RUNTIME) {
++                return true;
++            } else if (p_108667_ instanceof AbstractMinecart) {
+                 this.minecraft.getSoundManager().play(new RidingMinecartSoundInstance(this, (AbstractMinecart)p_108667_, true));
+                 this.minecraft.getSoundManager().play(new RidingMinecartSoundInstance(this, (AbstractMinecart)p_108667_, false));
+             } else if (p_108667_ instanceof HappyGhast) {
+@@ -206,29 +211,61 @@ public class LocalPlayer extends AbstractClientPlayer {
+ 
+     @Override
+     public void tick() {
+-        this.tickClientLoadTimeout();
+-        if (this.hasClientLoaded()) {
+-            this.dropSpamThrottler.tick();
+-            super.tick();
+-            if (!this.lastSentInput.equals(this.input.keyPresses)) {
+-                this.connection.send(new ServerboundPlayerInputPacket(this.input.keyPresses));
+-                this.lastSentInput = this.input.keyPresses;
+-            }
++        String webTickStage = "start";
++        try {
++            this.tickClientLoadTimeout();
++            webTickStage = "post-timeout";
++            if (this.hasClientLoaded()) {
++                this.dropSpamThrottler.tick();
++                webTickStage = "pre-super-tick";
++                super.tick();
++                webTickStage = "post-super-tick";
++                if (!this.lastSentInput.equals(this.input.keyPresses)) {
++                    this.connection.send(new ServerboundPlayerInputPacket(this.input.keyPresses));
++                    this.lastSentInput = this.input.keyPresses;
++                }
+ 
+-            if (this.isPassenger()) {
+-                this.connection.send(new ServerboundMovePlayerPacket.Rot(this.getYRot(), this.getXRot(), this.onGround(), this.horizontalCollision));
+-                Entity entity = this.getRootVehicle();
+-                if (entity != this && entity.isLocalInstanceAuthoritative()) {
+-                    this.connection.send(ServerboundMoveVehiclePacket.fromEntity(entity));
+-                    this.sendIsSprintingIfNeeded();
++                if (this.isPassenger()) {
++                    this.connection.send(new ServerboundMovePlayerPacket.Rot(this.getYRot(), this.getXRot(), this.onGround(), this.horizontalCollision));
++                    Entity entity = this.getRootVehicle();
++                    if (entity != this && entity.isLocalInstanceAuthoritative()) {
++                        this.connection.send(ServerboundMoveVehiclePacket.fromEntity(entity));
++                        this.sendIsSprintingIfNeeded();
++                    }
++                } else {
++                    webTickStage = "send-position";
++                    this.sendPosition();
+                 }
+-            } else {
+-                this.sendPosition();
+-            }
+ 
+-            for (AmbientSoundHandler ambientsoundhandler : this.ambientSoundHandlers) {
+-                ambientsoundhandler.tick();
++                webTickStage = "ambient-sounds";
++                if (!BuildFlags.WEB_RUNTIME) {
++                    for (AmbientSoundHandler ambientsoundhandler : this.ambientSoundHandlers) {
++                        ambientsoundhandler.tick();
++                    }
++                }
++            }
++        } catch (Throwable throwable) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.out.println("[mc-web/localplayer] tick caught stage=" + webTickStage + " " + throwable.getClass().getName() + ": " + throwable.getMessage());
++                if (webTickExceptionLogs < 5) {
++                    webTickExceptionLogs++;
++                    StackTraceElement[] stacktrace = throwable.getStackTrace();
++                    int i = Math.min(stacktrace.length, 20);
++                    for (int j = 0; j < i; j++) {
++                        System.err.println("[mc-web/localplayer] tick at " + stacktrace[j]);
++                    }
++                    Throwable throwable1 = throwable.getCause();
++                    if (throwable1 != null) {
++                        System.err.println("[mc-web/localplayer] tick cause " + throwable1.getClass().getName() + ": " + throwable1.getMessage());
++                        StackTraceElement[] stacktrace1 = throwable1.getStackTrace();
++                        int k = Math.min(stacktrace1.length, 20);
++                        for (int l = 0; l < k; l++) {
++                            System.err.println("[mc-web/localplayer] tick causeAt " + stacktrace1[l]);
++                        }
++                    }
++                }
+             }
++            throw throwable;
+         }
+     }
+ 
+@@ -244,6 +281,10 @@ public class LocalPlayer extends AbstractClientPlayer {
+ 
+     private void sendPosition() {
+         this.sendIsSprintingIfNeeded();
++        if (BuildFlags.WEB_RUNTIME && this.minecraft.screen instanceof ReceivingLevelScreen) {
++            return;
++        }
++
+         if (this.isControlledCamera()) {
+             double d0 = this.getX() - this.xLast;
+             double d1 = this.getY() - this.yLast;
+@@ -525,7 +566,7 @@ public class LocalPlayer extends AbstractClientPlayer {
+             }
+         }
+ 
+-        if (DATA_SHARED_FLAGS_ID.equals(p_108699_) && this.isFallFlying() && !this.wasFallFlying) {
++        if (!BuildFlags.WEB_RUNTIME && DATA_SHARED_FLAGS_ID.equals(p_108699_) && this.isFallFlying() && !this.wasFallFlying) {
+             this.minecraft.getSoundManager().play(new ElytraOnPlayerSoundInstance(this));
+         }
+     }
+@@ -697,39 +738,43 @@ public class LocalPlayer extends AbstractClientPlayer {
+ 
+     @Override
+     public void aiStep() {
+-        if (this.sprintTriggerTime > 0) {
+-            this.sprintTriggerTime--;
+-        }
++        String webAiStage = "start";
++        try {
++            if (this.sprintTriggerTime > 0) {
++                this.sprintTriggerTime--;
++            }
+ 
+-        if (!(this.minecraft.screen instanceof ReceivingLevelScreen)) {
+-            this.handlePortalTransitionEffect(this.getActivePortalLocalTransition() == Portal.Transition.CONFUSION);
+-            this.processPortalCooldown();
+-        }
++            if (!(this.minecraft.screen instanceof ReceivingLevelScreen)) {
++                this.handlePortalTransitionEffect(this.getActivePortalLocalTransition() == Portal.Transition.CONFUSION);
++                this.processPortalCooldown();
++            }
+ 
+-        boolean flag = this.input.keyPresses.jump();
+-        boolean flag1 = this.input.keyPresses.shift();
+-        boolean flag2 = this.input.hasForwardImpulse();
+-        Abilities abilities = this.getAbilities();
+-        this.crouching = !abilities.flying
+-            && !this.isSwimming()
+-            && !this.isPassenger()
+-            && this.canPlayerFitWithinBlocksAndEntitiesWhen(Pose.CROUCHING)
+-            && (this.isShiftKeyDown() || !this.isSleeping() && !this.canPlayerFitWithinBlocksAndEntitiesWhen(Pose.STANDING));
+-        this.input.tick();
+-        this.minecraft.getTutorial().onInput(this.input);
+-        boolean flag3 = false;
+-        if (this.autoJumpTime > 0) {
+-            this.autoJumpTime--;
+-            flag3 = true;
+-            this.input.makeJump();
+-        }
++            boolean flag = this.input.keyPresses.jump();
++            boolean flag1 = this.input.keyPresses.shift();
++            boolean flag2 = this.input.hasForwardImpulse();
++            Abilities abilities = this.getAbilities();
++            this.crouching = !abilities.flying
++                && !this.isSwimming()
++                && !this.isPassenger()
++                && this.canPlayerFitWithinBlocksAndEntitiesWhen(Pose.CROUCHING)
++                && (this.isShiftKeyDown() || !this.isSleeping() && !this.canPlayerFitWithinBlocksAndEntitiesWhen(Pose.STANDING));
++            webAiStage = "input-tick";
++            this.input.tick();
++            this.minecraft.getTutorial().onInput(this.input);
++            boolean flag3 = false;
++            if (this.autoJumpTime > 0) {
++                this.autoJumpTime--;
++                flag3 = true;
++                this.input.makeJump();
++            }
+ 
+-        if (!this.noPhysics) {
+-            this.moveTowardsClosestSpace(this.getX() - this.getBbWidth() * 0.35, this.getZ() + this.getBbWidth() * 0.35);
+-            this.moveTowardsClosestSpace(this.getX() - this.getBbWidth() * 0.35, this.getZ() - this.getBbWidth() * 0.35);
+-            this.moveTowardsClosestSpace(this.getX() + this.getBbWidth() * 0.35, this.getZ() - this.getBbWidth() * 0.35);
+-            this.moveTowardsClosestSpace(this.getX() + this.getBbWidth() * 0.35, this.getZ() + this.getBbWidth() * 0.35);
+-        }
++            if (!this.noPhysics) {
++                webAiStage = "closest-space";
++                this.moveTowardsClosestSpace(this.getX() - this.getBbWidth() * 0.35, this.getZ() + this.getBbWidth() * 0.35);
++                this.moveTowardsClosestSpace(this.getX() - this.getBbWidth() * 0.35, this.getZ() - this.getBbWidth() * 0.35);
++                this.moveTowardsClosestSpace(this.getX() + this.getBbWidth() * 0.35, this.getZ() - this.getBbWidth() * 0.35);
++                this.moveTowardsClosestSpace(this.getX() + this.getBbWidth() * 0.35, this.getZ() + this.getBbWidth() * 0.35);
++            }
+ 
+         if (flag1 || this.isUsingItem() && !this.isPassenger() || this.input.keyPresses.backward()) {
+             this.sprintTriggerTime = 0;
+@@ -843,10 +888,35 @@ public class LocalPlayer extends AbstractClientPlayer {
+             this.jumpRidingScale = 0.0F;
+         }
+ 
+-        super.aiStep();
+-        if (this.onGround() && abilities.flying && !this.minecraft.gameMode.isAlwaysFlying()) {
+-            abilities.flying = false;
+-            this.onUpdateAbilities();
++            webAiStage = "pre-super-aiStep";
++            super.aiStep();
++            webAiStage = "post-super-aiStep";
++            if (this.onGround() && abilities.flying && !this.minecraft.gameMode.isAlwaysFlying()) {
++                abilities.flying = false;
++                this.onUpdateAbilities();
++            }
++        } catch (Throwable throwable) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.out.println("[mc-web/localplayer] aiStep caught stage=" + webAiStage + " " + throwable.getClass().getName() + ": " + throwable.getMessage());
++                if (webAiExceptionLogs < 5) {
++                    webAiExceptionLogs++;
++                    StackTraceElement[] stacktrace = throwable.getStackTrace();
++                    int i = Math.min(stacktrace.length, 20);
++                    for (int j = 0; j < i; j++) {
++                        System.err.println("[mc-web/localplayer] aiStep at " + stacktrace[j]);
++                    }
++                    Throwable throwable1 = throwable.getCause();
++                    if (throwable1 != null) {
++                        System.err.println("[mc-web/localplayer] aiStep cause " + throwable1.getClass().getName() + ": " + throwable1.getMessage());
++                        StackTraceElement[] stacktrace1 = throwable1.getStackTrace();
++                        int k = Math.min(stacktrace1.length, 20);
++                        for (int l = 0; l < k; l++) {
++                            System.err.println("[mc-web/localplayer] aiStep causeAt " + stacktrace1[l]);
++                        }
++                    }
++                }
++            }
++            throw throwable;
+         }
+     }
+ 
+@@ -899,7 +969,9 @@ public class LocalPlayer extends AbstractClientPlayer {
+             }
+ 
+             if (this.portalEffectIntensity == 0.0F) {
+-                this.minecraft.getSoundManager().play(SimpleSoundInstance.forLocalAmbience(SoundEvents.PORTAL_TRIGGER, this.random.nextFloat() * 0.4F + 0.8F, 0.25F));
++                if (!BuildFlags.WEB_RUNTIME) {
++                    this.minecraft.getSoundManager().play(SimpleSoundInstance.forLocalAmbience(SoundEvents.PORTAL_TRIGGER, this.random.nextFloat() * 0.4F + 0.8F, 0.25F));
++                }
+             }
+ 
+             f = 0.0125F;
+@@ -1137,7 +1209,9 @@ public class LocalPlayer extends AbstractClientPlayer {
+         } else {
+             if (!flag && flag1) {
+                 this.level().playLocalSound(this.getX(), this.getY(), this.getZ(), SoundEvents.AMBIENT_UNDERWATER_ENTER, SoundSource.AMBIENT, 1.0F, 1.0F, false);
+-                this.minecraft.getSoundManager().play(new UnderwaterAmbientSoundInstances.UnderwaterAmbientSoundInstance(this));
++                if (!BuildFlags.WEB_RUNTIME) {
++                    this.minecraft.getSoundManager().play(new UnderwaterAmbientSoundInstances.UnderwaterAmbientSoundInstance(this));
++                }
+             }
+ 
+             if (flag && !flag1) {
+@@ -1188,4 +1262,4 @@ public class LocalPlayer extends AbstractClientPlayer {
+     public Input getLastSentInput() {
+         return this.lastSentInput;
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,59 @@
+--- a/net/minecraft/server/WorldLoader.java
++++ b/net/minecraft/server/WorldLoader.java
+@@ -33,23 +33,35 @@
+         Executor p_214367_
+     ) {
+         try {
++            System.out.println("[mc-web/worldloader] stage=createResourceManager");
+             Pair<WorldDataConfiguration, CloseableResourceManager> pair = p_214363_.packConfig.createResourceManager();
+             CloseableResourceManager closeableresourcemanager = pair.getSecond();
++            System.out.println("[mc-web/worldloader] stage=createRegistryAccess");
+             LayeredRegistryAccess<RegistryLayer> layeredregistryaccess = RegistryLayer.createRegistryAccess();
++            System.out.println("[mc-web/worldloader] stage=loadStaticTags");
+             List<Registry.PendingTags<?>> list = TagLoader.loadTagsForExistingRegistries(closeableresourcemanager, layeredregistryaccess.getLayer(RegistryLayer.STATIC));
++            System.out.println("[mc-web/worldloader] stage=worldgenAccessForLoading");
+             RegistryAccess.Frozen registryaccess$frozen = layeredregistryaccess.getAccessForLoading(RegistryLayer.WORLDGEN);
++            System.out.println("[mc-web/worldloader] stage=buildUpdatedLookups");
+             List<HolderLookup.RegistryLookup<?>> list1 = TagLoader.buildUpdatedLookups(registryaccess$frozen, list);
++            System.out.println("[mc-web/worldloader] stage=loadWorldgenRegistries");
+             RegistryAccess.Frozen registryaccess$frozen1 = RegistryDataLoader.load(closeableresourcemanager, list1, RegistryDataLoader.WORLDGEN_REGISTRIES);
++            System.out.println("[mc-web/worldloader] stage=composeDimensionLookups");
+             List<HolderLookup.RegistryLookup<?>> list2 = Stream.concat(list1.stream(), registryaccess$frozen1.listRegistries()).toList();
++            System.out.println("[mc-web/worldloader] stage=loadDimensionRegistries");
+             RegistryAccess.Frozen registryaccess$frozen2 = RegistryDataLoader.load(closeableresourcemanager, list2, RegistryDataLoader.DIMENSION_REGISTRIES);
+             WorldDataConfiguration worlddataconfiguration = pair.getFirst();
++            System.out.println("[mc-web/worldloader] stage=createProvider");
+             HolderLookup.Provider holderlookup$provider = HolderLookup.Provider.create(list2.stream());
++            System.out.println("[mc-web/worldloader] stage=worldDataSupplier");
+             WorldLoader.DataLoadOutput<D> dataloadoutput = p_214364_.get(
+                 new WorldLoader.DataLoadContext(closeableresourcemanager, worlddataconfiguration, holderlookup$provider, registryaccess$frozen2)
+             );
++            System.out.println("[mc-web/worldloader] stage=replaceFrom");
+             LayeredRegistryAccess<RegistryLayer> layeredregistryaccess1 = layeredregistryaccess.replaceFrom(
+                 RegistryLayer.WORLDGEN, registryaccess$frozen1, dataloadoutput.finalDimensions
+             );
++            System.out.println("[mc-web/worldloader] stage=loadResources");
+             return ReloadableServerResources.loadResources(
+                     closeableresourcemanager,
+                     layeredregistryaccess1,
+@@ -66,10 +78,13 @@
+                     }
+                 })
+                 .thenApplyAsync(p_358549_ -> {
++                    System.out.println("[mc-web/worldloader] stage=resultFactory");
+                     p_358549_.updateStaticRegistryTags();
+                     return p_214365_.create(closeableresourcemanager, p_358549_, layeredregistryaccess1, dataloadoutput.cookie);
+                 }, p_214367_);
+         } catch (Exception exception) {
++            System.out.println("[mc-web/worldloader] failed early: " + exception.getClass().getSimpleName() + ": " + (exception.getMessage() == null ? "<no message>" : exception.getMessage()));
++            exception.printStackTrace();
+             return CompletableFuture.failedFuture(exception);
+         }
+     }
+@@ -101,4 +116,4 @@
+     public interface WorldDataSupplier<D> {
+         WorldLoader.DataLoadOutput<D> get(WorldLoader.DataLoadContext p_251042_);
+     }
+-}
+\ No newline at end of file
++}

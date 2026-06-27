@@ -1,0 +1,3730 @@
+diff --git a/net/minecraft/client/Minecraft.java b/net/minecraft/client/Minecraft.java
+index 03515c3..a958594 100644
+--- a/net/minecraft/client/Minecraft.java
++++ b/net/minecraft/client/Minecraft.java
+@@ -38,6 +38,7 @@ import com.mojang.realmsclient.gui.RealmsDataFetcher;
+ import java.io.File;
+ import java.io.IOException;
+ import java.io.UncheckedIOException;
++import java.nio.file.Files;
+ import java.lang.management.ManagementFactory;
+ import java.net.Proxy;
+ import java.net.SocketAddress;
+@@ -46,6 +47,7 @@ import java.nio.file.Paths;
+ import java.time.Duration;
+ import java.time.Instant;
+ import java.util.ArrayList;
++import java.util.ArrayDeque;
+ import java.util.Collections;
+ import java.util.List;
+ import java.util.Locale;
+@@ -56,6 +58,7 @@ import java.util.Set;
+ import java.util.UUID;
+ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.CompletionStage;
++import java.util.concurrent.ExecutionException;
+ import java.util.concurrent.atomic.AtomicReference;
+ import java.util.function.Consumer;
+ import java.util.function.Function;
+@@ -99,12 +102,16 @@ import net.minecraft.client.gui.screens.PauseScreen;
+ import net.minecraft.client.gui.screens.ProgressScreen;
+ import net.minecraft.client.gui.screens.ReceivingLevelScreen;
+ import net.minecraft.client.gui.screens.Screen;
++import net.minecraft.client.gui.screens.WebExperimentalWorldLoadScreen;
++import net.minecraft.client.gui.screens.WebEnterWorldPlaceholderScreen;
++import net.minecraft.client.gui.screens.WebWaitingForServerScreen;
+ import net.minecraft.client.gui.screens.TitleScreen;
+ import net.minecraft.client.gui.screens.advancements.AdvancementsScreen;
+ import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+ import net.minecraft.client.gui.screens.social.PlayerSocialManager;
+ import net.minecraft.client.gui.screens.social.SocialInteractionsScreen;
++import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
+ import net.minecraft.client.gui.screens.worldselection.WorldOpenFlows;
+ import net.minecraft.client.main.GameConfig;
+ import net.minecraft.client.main.SilentInitException;
+@@ -112,6 +119,7 @@ import net.minecraft.client.model.geom.EntityModelSet;
+ import net.minecraft.client.multiplayer.ClientHandshakePacketListenerImpl;
+ import net.minecraft.client.multiplayer.ClientLevel;
+ import net.minecraft.client.multiplayer.ClientPacketListener;
++import net.minecraft.client.multiplayer.ClientRegistryLayer;
+ import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+ import net.minecraft.client.multiplayer.ProfileKeyPairManager;
+ import net.minecraft.client.multiplayer.ServerData;
+@@ -165,11 +173,13 @@ import net.minecraft.client.telemetry.ClientTelemetryManager;
+ import net.minecraft.client.telemetry.TelemetryProperty;
+ import net.minecraft.client.telemetry.events.GameLoadTimesEvent;
+ import net.minecraft.client.tutorial.Tutorial;
++import net.minecraft.commands.Commands;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.HolderSet;
+ import net.minecraft.core.Registry;
++import net.minecraft.core.RegistryAccess;
+ import net.minecraft.core.registries.BuiltInRegistries;
+ import net.minecraft.core.registries.Registries;
+ import net.minecraft.gametest.framework.GameTestTicker;
+@@ -186,10 +196,13 @@ import net.minecraft.network.protocol.login.ServerboundHelloPacket;
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.Bootstrap;
+ import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.RegistryLayer;
+ import net.minecraft.server.Services;
++import net.minecraft.server.WorldLoader;
+ import net.minecraft.server.WorldStem;
+ import net.minecraft.server.dialog.Dialog;
+ import net.minecraft.server.dialog.Dialogs;
++import net.minecraft.server.level.progress.ChunkProgressListener;
+ import net.minecraft.server.level.progress.ProcessorChunkProgressListener;
+ import net.minecraft.server.level.progress.StoringChunkProgressListener;
+ import net.minecraft.server.packs.PackResources;
+@@ -199,6 +212,7 @@ import net.minecraft.server.packs.repository.FolderRepositorySource;
+ import net.minecraft.server.packs.repository.PackRepository;
+ import net.minecraft.server.packs.repository.PackSource;
+ import net.minecraft.server.packs.repository.RepositorySource;
++import net.minecraft.server.packs.repository.ServerPacksSource;
+ import net.minecraft.server.packs.resources.ReloadInstance;
+ import net.minecraft.server.packs.resources.ReloadableResourceManager;
+ import net.minecraft.server.packs.resources.ResourceManager;
+@@ -230,6 +244,7 @@ import net.minecraft.util.profiling.metrics.profiling.MetricsRecorder;
+ import net.minecraft.util.profiling.metrics.storage.MetricsPersister;
+ import net.minecraft.util.random.WeightedList;
+ import net.minecraft.util.thread.ReentrantBlockableEventLoop;
++import net.minecraft.world.Difficulty;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.InteractionResult;
+ import net.minecraft.world.TickRateManager;
+@@ -238,28 +253,92 @@ import net.minecraft.world.entity.EntityType;
+ import net.minecraft.world.entity.player.ChatVisiblity;
+ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.GameRules;
++import net.minecraft.world.level.GameType;
+ import net.minecraft.world.level.Level;
++import net.minecraft.world.level.LevelSettings;
++import net.minecraft.world.level.WorldDataConfiguration;
+ import net.minecraft.world.level.biome.Biome;
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.RenderShape;
+ import net.minecraft.world.level.block.entity.SkullBlockEntity;
+ import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.dimension.LevelStem;
++import net.minecraft.world.level.chunk.status.ChunkStatus;
++import net.minecraft.world.level.levelgen.WorldDimensions;
++import net.minecraft.world.level.levelgen.WorldOptions;
++import net.minecraft.world.level.levelgen.presets.WorldPresets;
++import net.minecraft.world.level.storage.LevelResource;
+ import net.minecraft.world.level.storage.LevelStorageSource;
++import net.minecraft.world.level.storage.PrimaryLevelData;
+ import net.minecraft.world.level.validation.DirectoryValidator;
+ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.EntityHitResult;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ import org.apache.commons.io.FileUtils;
++import org.teavm.jso.JSBody;
+ import org.lwjgl.util.tinyfd.TinyFileDialogs;
+ import org.slf4j.Logger;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements WindowEventHandler {
++    static {
++        System.err.println("[mc-probe] Minecraft.<clinit>: class init start");
++    }
++    {
++        System.err.println("[mc-probe] Minecraft.<init>: instance init block start");
++    }
+     static Minecraft instance;
++    private static final boolean WEB_FORCE_FULL_MAIN = Boolean.getBoolean("webmc.forceFullMain");
+     private static final Logger LOGGER = LogUtils.getLogger();
+-    public static final boolean ON_OSX = Util.getPlatform() == Util.OS.OSX;
++    private static final GameNarrator WEB_NOOP_NARRATOR = new GameNarrator(null) {
++        @Override
++        public void sayChatQueued(Component p_408728_) {
++        }
++
++        @Override
++        public void saySystemChatQueued(Component p_409591_) {
++        }
++
++        @Override
++        public void saySystemQueued(Component p_407712_) {
++        }
++
++        @Override
++        public void saySystemNow(Component p_406079_) {
++        }
++
++        @Override
++        public void saySystemNow(String p_93320_) {
++        }
++
++        @Override
++        public void updateNarratorStatus(NarratorStatus p_93318_) {
++        }
++
++        @Override
++        public boolean isActive() {
++            return false;
++        }
++
++        @Override
++        public void clear() {
++        }
++
++        @Override
++        public void destroy() {
++        }
++
++        @Override
++        public void checkStatus(boolean p_289016_) {
++        }
++    };
++    public static final boolean ON_OSX = BuildFlags.WEB_RUNTIME ? false : Util.getPlatform() == Util.OS.OSX;
+     private static final int MAX_TICKS_PER_UPDATE = 10;
+     public static final ResourceLocation DEFAULT_FONT = ResourceLocation.withDefaultNamespace("default");
+     public static final ResourceLocation UNIFORM_FONT = ResourceLocation.withDefaultNamespace("uniform");
+@@ -319,7 +398,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     private final FontManager fontManager;
+     private final SplashManager splashManager;
+     private final GpuWarnlistManager gpuWarnlistManager;
+-    private final PeriodicNotificationManager regionalCompliancies = new PeriodicNotificationManager(REGIONAL_COMPLIANCIES, Minecraft::countryEqualsISO3);
++    private final PeriodicNotificationManager regionalCompliancies;
+     private final YggdrasilAuthenticationService authenticationService;
+     private final MinecraftSessionService minecraftSessionService;
+     private final UserApiService userApiService;
+@@ -360,7 +439,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     private int rightClickDelay;
+     protected int missTime;
+     private volatile boolean pause;
+-    private long lastNanoTime = Util.getNanos();
++    private long lastNanoTime = BuildFlags.WEB_RUNTIME ? System.nanoTime() : Util.getNanos();
+     private long lastTime;
+     private int frames;
+     public boolean noRender;
+@@ -373,6 +452,22 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     private volatile boolean running;
+     @Nullable
+     private Supplier<CrashReport> delayedCrash;
++
++    @JSBody(script =
++        "try {" +
++        "  var v = window.webmcAutoStartExperimentalWorld;" +
++        "  return v == null ? null : String(v);" +
++        "} catch (e) { return null; }")
++    private static native String webAutoStartExperimentalWorld();
++
++    @JSBody(script =
++        "try {" +
++        "  var v = window.webmcAutoStartExperimentalWorld;" +
++        "  window.webmcAutoStartExperimentalWorld = null;" +
++        "  return v == null ? null : String(v);" +
++        "} catch (e) { return null; }")
++    private static native String webConsumeAutoStartExperimentalWorld();
++
+     private static int fps;
+     public String fpsString = "";
+     private long frameTimeNs;
+@@ -382,7 +477,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     public boolean sectionVisibility;
+     public boolean smartCull = true;
+     private boolean windowActive;
+-    private final Queue<Runnable> progressTasks = Queues.newConcurrentLinkedQueue();
++    private final Queue<Runnable> progressTasks = BuildFlags.WEB_RUNTIME ? new ArrayDeque<>() : Queues.newConcurrentLinkedQueue();
+     @Nullable
+     private CompletableFuture<Void> pendingReload;
+     @Nullable
+@@ -401,72 +496,926 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     private final CommandHistory commandHistory;
+     private final DirectoryValidator directoryValidator;
+     private boolean gameLoadFinished;
++    private int webGameLoadLogs;
++    private int webForcedReceivingRenderLogs;
++    private long webLastForcedReceivingRenderMs;
++    private boolean webForcedReceivingRenderActive;
++    private boolean webForcedReceivingRenderQueued;
++    private int webForcedReceivingRenderQueueLogs;
++    private int webProgressTaskDrainLogs;
+     private final long clientStartTimeMs;
+     private long clientTickCount;
++    private long webRunFrameCount;
++    private long webNextFrameTimeNanos;
++    private static final int WEB_FRAME_SLEEP_MS = 1;
++    private static final int WEB_FORCED_RECEIVING_RENDER_MAX_ATTEMPTS = 8;
++    private static final long WEB_FORCED_RECEIVING_RENDER_MIN_INTERVAL_MS = 150L;
++    private static final int WEB_PLAYABLE_PROGRESS_TASK_MAX_PER_DRAIN = 8;
++    private static final long WEB_PLAYABLE_PROGRESS_TASK_BUDGET_NS = 3_000_000L;
++
++    @JSBody(params = {"clientTickCount", "fpsText", "frameCount", "frameTimeMs", "fpsLimit", "screen", "overlay", "levelPresent", "playerPresent", "pause"}, script =
++        "try {" +
++        "  var s = window.__webmcState || (window.__webmcState = {});" +
++        "  s.clientTickCount = clientTickCount;" +
++        "  s.fpsString = String(fpsText || '');" +
++        "  s.mcFrameCount = frameCount;" +
++        "  s.mcLastFrameTimeMs = frameTimeMs;" +
++        "  s.fpsLimit = fpsLimit;" +
++        "  s.screen = screen;" +
++        "  s.overlay = overlay;" +
++        "  s.levelPresent = !!levelPresent;" +
++        "  s.playerPresent = !!playerPresent;" +
++        "  s.pause = !!pause;" +
++        "} catch (e) {}")
++    private static native void webUpdateRuntimeFrameState(
++        double clientTickCount,
++        String fpsText,
++        double frameCount,
++        double frameTimeMs,
++        int fpsLimit,
++        String screen,
++        String overlay,
++        boolean levelPresent,
++        boolean playerPresent,
++        boolean pause
++    );
++
++    @JSBody(params = {
++        "frameCount", "clientTickCount", "deltaTicks", "tickLimit", "fpsLimit", "fpsText", "screen", "overlay", "levelPresent", "playerPresent", "pause",
++        "preRenderMs", "progressMs", "advanceMs", "scheduledMs", "clientTicksMs", "gpuPendingMs", "soundToastsMs", "clearMouseMs", "gameRendererMs",
++        "blitMs", "updateDisplayMs", "yieldMs", "postMs", "totalMs"
++    }, script =
++        "try {" +
++        "  var s = window.__webmcState || (window.__webmcState = {});" +
++        "  var p = window.__webmcFrameProbe || (window.__webmcFrameProbe = { count: 0, recent: [], totals: {}, max: {} });" +
++        "  var now = Date.now();" +
++        "  var stages = {" +
++        "    preRender: preRenderMs, progress: progressMs, advance: advanceMs, scheduled: scheduledMs, clientTicks: clientTicksMs," +
++        "    gpuPending: gpuPendingMs, soundToasts: soundToastsMs, clearMouse: clearMouseMs, gameRenderer: gameRendererMs, blit: blitMs," +
++        "    updateDisplay: updateDisplayMs, yield: yieldMs, post: postMs, total: totalMs" +
++        "  };" +
++        "  var last = {" +
++        "    at: now, frameCount: frameCount, clientTickCount: clientTickCount, deltaTicks: deltaTicks, tickLimit: tickLimit, fpsLimit: fpsLimit," +
++        "    fpsString: String(fpsText || ''), screen: screen, overlay: overlay, levelPresent: !!levelPresent, playerPresent: !!playerPresent, pause: !!pause," +
++        "    stages: stages" +
++        "  };" +
++        "  p.count = (p.count || 0) + 1;" +
++        "  p.last = last;" +
++        "  p.lastAt = now;" +
++        "  p.clientTickCount = clientTickCount;" +
++        "  p.frameCount = frameCount;" +
++        "  p.fpsString = String(fpsText || '');" +
++        "  p.recent.push(last);" +
++        "  if (p.recent.length > 120) p.recent.splice(0, p.recent.length - 120);" +
++        "  Object.keys(stages).forEach(function (key) {" +
++        "    var value = Number(stages[key]) || 0;" +
++        "    p.totals[key] = (Number(p.totals[key]) || 0) + value;" +
++        "    if (!p.max[key] || value > Number(p.max[key].value || 0)) p.max[key] = { value: value, frameCount: frameCount, at: now };" +
++        "  });" +
++        "  s.frameProbeUpdates = (s.frameProbeUpdates || 0) + 1;" +
++        "  s.lastFrameTotalMs = totalMs;" +
++        "  s.lastFrameGameRendererMs = gameRendererMs;" +
++        "  s.lastFrameUpdateDisplayMs = updateDisplayMs;" +
++        "  s.lastFrameClientTicksMs = clientTicksMs;" +
++        "  s.lastFrameProbe = last;" +
++        "} catch (e) {}")
++    private static native void webUpdateFrameProbe(
++        double frameCount,
++        double clientTickCount,
++        int deltaTicks,
++        int tickLimit,
++        int fpsLimit,
++        String fpsText,
++        String screen,
++        String overlay,
++        boolean levelPresent,
++        boolean playerPresent,
++        boolean pause,
++        double preRenderMs,
++        double progressMs,
++        double advanceMs,
++        double scheduledMs,
++        double clientTicksMs,
++        double gpuPendingMs,
++        double soundToastsMs,
++        double clearMouseMs,
++        double gameRendererMs,
++        double blitMs,
++        double updateDisplayMs,
++        double yieldMs,
++        double postMs,
++        double totalMs
++    );
++
++    @JSBody(params = {
++        "clientTickCount", "screen", "overlay", "levelPresent", "playerPresent", "pause",
++        "runtimeStartMs", "rateDelayMs", "guiMs", "pickTutorialMs", "gameModeScreenMs", "gameModeTickMs", "textureTickMs", "screenTickMs",
++        "guiClearCacheMs", "keybindsMs", "rendererEntityMs", "audioMs", "tutorialMs", "levelTickMs", "animateTickMs", "particlesMs",
++        "connectionMs", "keyboardMs", "totalMs"
++    }, script =
++        "try {" +
++        "  var s = window.__webmcState || (window.__webmcState = {});" +
++        "  var p = window.__webmcTickProbe || (window.__webmcTickProbe = { count: 0, recent: [], totals: {}, max: {} });" +
++        "  var now = Date.now();" +
++        "  var stages = {" +
++        "    runtimeStart: runtimeStartMs, rateDelay: rateDelayMs, gui: guiMs, pickTutorial: pickTutorialMs," +
++        "    gameModeScreen: gameModeScreenMs, gameModeTick: gameModeTickMs, textureTick: textureTickMs," +
++        "    screenTick: screenTickMs, guiClearCache: guiClearCacheMs, keybinds: keybindsMs, rendererEntity: rendererEntityMs, audio: audioMs," +
++        "    tutorial: tutorialMs, levelTick: levelTickMs, animateTick: animateTickMs, particles: particlesMs," +
++        "    connection: connectionMs, keyboard: keyboardMs, total: totalMs" +
++        "  };" +
++        "  var last = {" +
++        "    at: now, clientTickCount: clientTickCount, screen: screen, overlay: overlay," +
++        "    levelPresent: !!levelPresent, playerPresent: !!playerPresent, pause: !!pause, stages: stages" +
++        "  };" +
++        "  p.count = (p.count || 0) + 1;" +
++        "  p.last = last;" +
++        "  p.lastAt = now;" +
++        "  p.clientTickCount = clientTickCount;" +
++        "  p.recent.push(last);" +
++        "  if (p.recent.length > 120) p.recent.splice(0, p.recent.length - 120);" +
++        "  Object.keys(stages).forEach(function (key) {" +
++        "    var value = Number(stages[key]) || 0;" +
++        "    p.totals[key] = (Number(p.totals[key]) || 0) + value;" +
++        "    if (!p.max[key] || value > Number(p.max[key].value || 0)) p.max[key] = { value: value, clientTickCount: clientTickCount, at: now };" +
++        "  });" +
++        "  s.tickProbeUpdates = (s.tickProbeUpdates || 0) + 1;" +
++        "  s.lastClientTickTotalMs = totalMs;" +
++        "  s.lastClientTickProbe = last;" +
++        "} catch (e) {}")
++    private static native void webUpdateTickProbe(
++        double clientTickCount,
++        String screen,
++        String overlay,
++        boolean levelPresent,
++        boolean playerPresent,
++        boolean pause,
++        double runtimeStartMs,
++        double rateDelayMs,
++        double guiMs,
++        double pickTutorialMs,
++        double gameModeScreenMs,
++        double gameModeTickMs,
++        double textureTickMs,
++        double screenTickMs,
++        double guiClearCacheMs,
++        double keybindsMs,
++        double rendererEntityMs,
++        double audioMs,
++        double tutorialMs,
++        double levelTickMs,
++        double animateTickMs,
++        double particlesMs,
++        double connectionMs,
++        double keyboardMs,
++        double totalMs
++    );
+ 
+     public Minecraft(final GameConfig p_91084_) {
+         super("Client");
++        System.err.println("[mc-probe] Minecraft.<init>: after super(Client)");
+         instance = this;
++        System.err.println("[mc-probe] Minecraft.<init>: 1 entered");
+         this.clientStartTimeMs = System.currentTimeMillis();
+         this.gameDirectory = p_91084_.location.gameDirectory;
+         File file1 = p_91084_.location.assetDirectory;
+-        this.resourcePackDirectory = p_91084_.location.resourcePackDirectory.toPath();
++        // mc-web: TeaVM's TFile has no toPath() method (returns null/undefined),
++        // so fall back to Paths.get(file.getPath()) which routes through
++        // TDefaultFileSystem.INSTANCE.getPath(...) and gives a working Path.
++        this.resourcePackDirectory = Paths.get(p_91084_.location.resourcePackDirectory.getPath());
+         this.launchedVersion = p_91084_.game.launchVersion;
+         this.versionType = p_91084_.game.versionType;
+-        Path path = this.gameDirectory.toPath();
+-        this.directoryValidator = LevelStorageSource.parseValidator(path.resolve("allowed_symlinks.txt"));
+-        ClientPackSource clientpacksource = new ClientPackSource(p_91084_.location.getExternalAssetSource(), this.directoryValidator);
+-        this.downloadedPackSource = new DownloadedPackSource(this, path.resolve("downloads"), p_91084_.user);
+-        RepositorySource repositorysource = new FolderRepositorySource(this.resourcePackDirectory, PackType.CLIENT_RESOURCES, PackSource.DEFAULT, this.directoryValidator);
+-        this.resourcePackRepository = new PackRepository(clientpacksource, this.downloadedPackSource.createRepositorySource(), repositorysource);
+-        this.vanillaPackResources = clientpacksource.getVanillaPack();
++        Path path = Paths.get(this.gameDirectory.getPath());
++        System.err.println("[mc-probe] Minecraft.<init>: 2 paths built; gameDir=" + this.gameDirectory.getPath() + " path=" + path);
++        // mc-web: world/datapack bootstrap still routes through ServerPacksSource
++        // and FolderRepositorySource, both of which unconditionally expect a
++        // non-null DirectoryValidator. Web runtime has no symlink model here, so
++        // use an allow-all validator instead of null.
++        this.directoryValidator = BuildFlags.WEB_RUNTIME
++            ? new DirectoryValidator(p_400000_ -> true)
++            : LevelStorageSource.parseValidator(path.resolve("allowed_symlinks.txt"));
++        System.err.println("[mc-probe] Minecraft.<init>: 3 directoryValidator");
++        ClientPackSource clientpacksource = null;
++        if (!BuildFlags.WEB_RUNTIME) {
++            clientpacksource = new ClientPackSource(p_91084_.location.getExternalAssetSource(), this.directoryValidator);
++            System.err.println("[mc-probe] Minecraft.<init>: 4 ClientPackSource");
++            this.downloadedPackSource = new DownloadedPackSource(this, path.resolve("downloads"), p_91084_.user);
++            System.err.println("[mc-probe] Minecraft.<init>: 5 DownloadedPackSource");
++            RepositorySource repositorysource = new FolderRepositorySource(this.resourcePackDirectory, PackType.CLIENT_RESOURCES, PackSource.DEFAULT, this.directoryValidator);
++            System.err.println("[mc-probe] Minecraft.<init>: 6 FolderRepositorySource");
++            this.resourcePackRepository = new PackRepository(clientpacksource, this.downloadedPackSource.createRepositorySource(), repositorysource);
++            System.err.println("[mc-probe] Minecraft.<init>: 7 PackRepository");
++            this.vanillaPackResources = clientpacksource.getVanillaPack();
++            System.err.println("[mc-probe] Minecraft.<init>: 8 vanillaPack");
++            this.regionalCompliancies = new PeriodicNotificationManager(REGIONAL_COMPLIANCIES, Minecraft::countryEqualsISO3);
++        } else {
++            System.err.println("[mc-probe] Minecraft.<init>: web runtime skip ClientPackSource/DownloadedPackSource/PackRepository");
++            this.downloadedPackSource = null;
++            this.resourcePackRepository = null;
++            this.vanillaPackResources = new net.minecraft.server.packs.VanillaPackResourcesBuilder()
++                .exposeNamespace("minecraft", "realms")
++                .pushJarResources()
++                .pushAssetPath(PackType.CLIENT_RESOURCES, Paths.get("/assets"))
++                .build(new net.minecraft.server.packs.PackLocationInfo(
++                    "vanilla",
++                    Component.translatable("resourcePack.vanilla.name"),
++                    PackSource.BUILT_IN,
++                    Optional.empty()
++                ));
++            this.regionalCompliancies = null;
++        }
+         this.proxy = p_91084_.user.proxy;
+-        this.authenticationService = new YggdrasilAuthenticationService(this.proxy);
+-        this.minecraftSessionService = this.authenticationService.createMinecraftSessionService();
++        // mc-web: skip YggdrasilAuthenticationService — its constructor blocks
++        // on a synchronous Mojang HTTPS call (publickeys endpoint) that fails
++        // in the browser. Use offline impls and route any real network needs
++        // through top.steve3184.webmc.net.WebHttp later. The two remaining
++        // `this.authenticationService.getServicesKeySet()` callsites (chat
++        // signature validator) are patched separately to handle null.
++        this.authenticationService = null;
++        this.minecraftSessionService = top.steve3184.webmc.net.OfflineSessionService.INSTANCE;
+         this.user = p_91084_.user.user;
+-        this.profileFuture = CompletableFuture.supplyAsync(() -> this.minecraftSessionService.fetchProfile(this.user.getProfileId(), true), Util.nonCriticalIoPool());
+-        this.userApiService = this.createUserApiService(this.authenticationService, p_91084_);
+-        this.userPropertiesFuture = CompletableFuture.supplyAsync(() -> {
+-            try {
+-                return this.userApiService.fetchProperties();
+-            } catch (AuthenticationException authenticationexception) {
+-                LOGGER.error("Failed to fetch user properties", (Throwable)authenticationexception);
+-                return UserApiService.OFFLINE_PROPERTIES;
+-            }
+-        }, Util.nonCriticalIoPool());
++        // mc-web: TeaVM's UUID.nameUUIDFromBytes can return null, leaving
++        // user.getProfileId() null. authlib's GameProfile constructor then
++        // throws "Profile ID must not be null". Use a stable random UUID as
++        // a fallback so the splash screen has something to render.
++        java.util.UUID effectiveUuid = this.user.getProfileId();
++        if (effectiveUuid == null && BuildFlags.WEB_RUNTIME) {
++            effectiveUuid = new java.util.UUID(0x4d435f574542L, this.user.getName() == null ? 0L : (long)this.user.getName().hashCode());
++            System.err.println("[mc-web] User.profileId was null; using synthetic UUID " + effectiveUuid + " for " + this.user.getName());
++        }
++        final java.util.UUID profileUuid = effectiveUuid;
++        this.profileFuture = CompletableFuture.completedFuture(
++            new com.mojang.authlib.yggdrasil.ProfileResult(
++                new com.mojang.authlib.GameProfile(profileUuid, this.user.getName() == null ? "Player" : this.user.getName())
++            )
++        );
++        this.userApiService = UserApiService.OFFLINE;
++        this.userPropertiesFuture = CompletableFuture.completedFuture(UserApiService.OFFLINE_PROPERTIES);
+         LOGGER.info("Setting user: {}", this.user.getName());
+-        LOGGER.debug("(Session ID is {})", this.user.getSessionId());
++        // mc-web: skip session-id log; even though ConsoleLogger.debug is a
++        // no-op, the eager argument evaluation calls user.getSessionId(),
++        // which calls UndashedUuid.toString(uuid) → uuid.toString().replace
++        // (TeaVM's UUID.toString returns null, NPEing on .replace).
++        // LOGGER.debug("(Session ID is {})", this.user.getSessionId());
++        System.err.println("[mc-probe] Minecraft.<init>: 9 user set");
+         this.demo = p_91084_.game.demo;
+         this.allowsMultiplayer = !p_91084_.game.disableMultiplayer;
+         this.allowsChat = !p_91084_.game.disableChat;
+         this.singleplayerServer = null;
+         KeybindResolver.setKeyResolver(KeyMapping::createNameSupplier);
+-        this.fixerUpper = DataFixers.getDataFixer();
++        System.err.println("[mc-probe] Minecraft.<init>: 10 KeybindResolver");
++        this.fixerUpper = BuildFlags.WEB_RUNTIME ? null : DataFixers.getDataFixer();
++        System.err.println("[mc-probe] Minecraft.<init>: 11 DataFixers");
+         this.gameThread = Thread.currentThread();
++        System.err.println("[mc-probe] Minecraft.<init>: 11.5 gameThread=" + this.gameThread);
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 67
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 78
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: web probe early-return before Options/RenderSystem/bootstrap");
++            this.options = null;
++            this.toastManager = null;
++            this.tutorial = null;
++            this.hotbarManager = null;
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 74) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 74 checkpoint before Options init");
++            this.options = null;
++            this.toastManager = null;
++            this.tutorial = null;
++            this.hotbarManager = null;
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 79
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " checkpoint before Options init");
++            this.options = null;
++            this.toastManager = null;
++            this.tutorial = null;
++            this.hotbarManager = null;
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++
++        boolean webProbeSkipOptions = BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 135
++            && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190;
++        if (webProbeSkipOptions) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " skip real Options; using web-safe startup defaults");
++            this.options = null;
++        } else {
++        System.err.println("[mc-probe] Minecraft.<init>: 11.6 about to new Options(); gameDirectory=" + this.gameDirectory);
+         this.options = new Options(this, this.gameDirectory);
+-        this.toastManager = new ToastManager(this, this.options);
+-        boolean flag = this.options.startedCleanly;
+-        this.options.startedCleanly = false;
+-        this.options.save();
++        System.err.println("[mc-probe] Minecraft.<init>: 12 Options");
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 128
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " checkpoint immediately after new Options()");
++            this.toastManager = null;
++            this.tutorial = null;
++            this.hotbarManager = null;
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        }
++        this.toastManager = BuildFlags.WEB_RUNTIME ? null : new ToastManager(this, this.options);
++        System.err.println("[mc-probe] Minecraft.<init>: 13 ToastManager");
++        boolean flag = webProbeSkipOptions ? true : this.options.startedCleanly;
++        if (webProbeSkipOptions) {
++            System.err.println("[mc-probe] Minecraft.<init>: skip options.save()/broadcast; Options is web-defaulted");
++        } else if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 79
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190
++        ) {
++            System.err.println(
++                "[mc-probe] Minecraft.<init>: skip options.save()/broadcast in experimental web phase "
++                    + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE
++            );
++            flag = true;
++        } else {
++            this.options.startedCleanly = false;
++            this.options.save();
++            System.err.println("[mc-probe] Minecraft.<init>: 14 options.save");
++        }
++        if (webProbeSkipOptions && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 135 checkpoint after skipping Options init");
++            this.tutorial = null;
++            this.hotbarManager = null;
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 79
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190
++        ) {
++            System.err.println(
++                "[mc-probe] Minecraft.<init>: phase "
++                    + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE
++                    + " checkpoint after Options save (pre-RenderSystem)"
++            );
++            this.tutorial = null;
++            this.hotbarManager = null;
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++
+         this.running = true;
+-        this.tutorial = new Tutorial(this, this.options);
+-        this.hotbarManager = new HotbarManager(path, this.fixerUpper);
++        this.tutorial = webProbeSkipOptions ? null : new Tutorial(this, this.options);
++        this.hotbarManager = BuildFlags.WEB_RUNTIME ? null : new HotbarManager(path, this.fixerUpper);
++        System.err.println("[mc-probe] Minecraft.<init>: 15 HotbarManager");
+         LOGGER.info("Backend library: {}", RenderSystem.getBackendDescription());
+         DisplayData displaydata = p_91084_.display;
+-        if (this.options.overrideHeight > 0 && this.options.overrideWidth > 0) {
++        if (!webProbeSkipOptions && this.options.overrideHeight > 0 && this.options.overrideWidth > 0) {
+             displaydata = p_91084_.display.withSize(this.options.overrideWidth, this.options.overrideHeight);
+         }
+ 
+-        if (!flag) {
++        if (!flag && !webProbeSkipOptions) {
+             displaydata = displaydata.withFullscreen(false);
+             this.options.fullscreenVideoModeString = null;
+             LOGGER.warn("Detected unexpected shutdown during last game startup: resetting fullscreen mode");
+         }
++        if (webProbeSkipOptions && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 190) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " checkpoint before RenderSystem.initBackendSystem (Options skipped)");
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 121
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 121 checkpoint before RenderSystem.initBackendSystem");
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 129
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 129 checkpoint before RenderSystem.initBackendSystem");
++            this.virtualScreen = null;
++            this.window = null;
++            this.renderBuffers = null;
++            this.levelRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapRenderer = null;
++            this.particleEngine = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.levelSource = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.blockColors = null;
++            this.mainRenderTarget = null;
++            this.tracyFrameCapture = null;
++            this.soundManager = null;
++            this.musicManager = null;
++            this.fontManager = null;
++            this.splashManager = null;
++            this.gpuWarnlistManager = null;
++            this.skinManager = null;
++            this.modelManager = null;
++            this.blockRenderer = null;
++            this.paintingTextures = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.playerSocialManager = null;
++            this.blockEntityRenderDispatcher = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.commandHistory = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 126
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 126 checkpoint skipping RenderSystem/window/resource init chain");
++            this.virtualScreen = null;
++            this.window = null;
++            this.mouseHandler = null;
++            this.keyboardHandler = null;
++            this.mainRenderTarget = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.skinManager = null;
++            this.levelSource = null;
++            this.commandHistory = null;
++            this.musicManager = null;
++            this.soundManager = null;
++            this.splashManager = null;
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
+ 
+         Util.timeSource = RenderSystem.initBackendSystem();
++        System.err.println("[mc-probe] Minecraft.<init>: 16 timeSource");
+         this.virtualScreen = new VirtualScreen(this);
+-        this.window = this.virtualScreen.newWindow(displaydata, this.options.fullscreenVideoModeString, this.createTitle());
++        System.err.println("[mc-probe] Minecraft.<init>: 17 VirtualScreen");
++        this.window = this.virtualScreen.newWindow(
++            displaydata,
++            this.options.fullscreenVideoModeString,
++            BuildFlags.WEB_RUNTIME ? "Minecraft" : this.createTitle()
++        );
++        System.err.println("[mc-probe] Minecraft.<init>: 18 newWindow");
+         this.setWindowActive(true);
++        System.err.println("[mc-probe] Minecraft.<init>: 18.1 setWindowActive");
+         this.window.setWindowCloseCallback(new Runnable() {
+             private boolean threadStarted;
+ 
+@@ -478,18 +1427,85 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                 }
+             }
+         });
+-        GameLoadTimesEvent.INSTANCE.endStep(TelemetryProperty.LOAD_TIME_PRE_WINDOW_MS);
++        System.err.println("[mc-probe] Minecraft.<init>: 18.2 setWindowCloseCallback");
++        if (!(BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN)) {
++            GameLoadTimesEvent.INSTANCE.endStep(TelemetryProperty.LOAD_TIME_PRE_WINDOW_MS);
++            System.err.println("[mc-probe] Minecraft.<init>: 18.3 endStep");
++        } else {
++            System.err.println("[mc-probe] Minecraft.<init>: skip pre-window telemetry endStep in experimental web phase");
++        }
+ 
+-        try {
+-            this.window.setIcon(this.vanillaPackResources, SharedConstants.getCurrentVersion().stable() ? IconSet.RELEASE : IconSet.SNAPSHOT);
+-        } catch (IOException ioexception) {
+-            LOGGER.error("Couldn't set icon", (Throwable)ioexception);
++        if (!BuildFlags.WEB_RUNTIME) {
++            try {
++                this.window.setIcon(this.vanillaPackResources, SharedConstants.getCurrentVersion().stable() ? IconSet.RELEASE : IconSet.SNAPSHOT);
++            } catch (IOException ioexception) {
++                LOGGER.error("Couldn't set icon", (Throwable)ioexception);
++            }
++        } else {
++            System.err.println("[mc-probe] Minecraft.<init>: skip setIcon in web runtime");
+         }
++        System.err.println("[mc-probe] Minecraft.<init>: 18.4 setIcon");
+ 
+         this.mouseHandler = new MouseHandler(this);
++        System.err.println("[mc-probe] Minecraft.<init>: 18.5 MouseHandler");
+         this.mouseHandler.setup(this.window.getWindow());
++        System.err.println("[mc-probe] Minecraft.<init>: 18.6 mouseHandler.setup");
+         this.keyboardHandler = new KeyboardHandler(this);
+         this.keyboardHandler.setup(this.window.getWindow());
++        System.err.println("[mc-probe] Minecraft.<init>: 18.7 KeyboardHandler.setup");
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 127
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 127 checkpoint before RenderSystem.initRenderer");
++            this.mainRenderTarget = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.skinManager = null;
++            this.levelSource = null;
++            this.commandHistory = null;
++            this.musicManager = null;
++            this.soundManager = null;
++            this.splashManager = null;
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
+         RenderSystem.initRenderer(
+             this.window.getWindow(),
+             this.options.glDebugVerbosity,
+@@ -497,42 +1513,412 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             (p_389127_, p_389128_) -> this.getShaderManager().getShader(p_389127_, p_389128_),
+             p_91084_.game.renderDebugLabels
+         );
++        System.err.println("[mc-probe] Minecraft.<init>: 18.8 RenderSystem.initRenderer");
+         LOGGER.info("Using optional rendering extensions: {}", String.join(", ", RenderSystem.getDevice().getEnabledExtensions()));
++        System.err.println("[mc-probe] Minecraft.<init>: 19 logged extensions");
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 190
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 190 narrow checkpoint after RenderSystem.initRenderer (before MainTarget)");
++            this.mainRenderTarget = null;
++            this.resourceManager = null;
++            this.languageManager = null;
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.skinManager = null;
++            this.levelSource = null;
++            this.commandHistory = null;
++            this.musicManager = null;
++            this.soundManager = null;
++            this.splashManager = null;
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
+         this.mainRenderTarget = new MainTarget(this.window.getWidth(), this.window.getHeight());
++        System.err.println("[mc-probe] Minecraft.<init>: 20 MainTarget");
+         this.resourceManager = new ReloadableResourceManager(PackType.CLIENT_RESOURCES);
+-        this.resourcePackRepository.reload();
+-        this.options.loadSelectedResourcePacks(this.resourcePackRepository);
++        System.err.println("[mc-probe] Minecraft.<init>: 21 ReloadableResourceManager");
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.resourcePackRepository.reload();
++            System.err.println("[mc-probe] Minecraft.<init>: 22 resourcePackRepository.reload");
++            this.options.loadSelectedResourcePacks(this.resourcePackRepository);
++            System.err.println("[mc-probe] Minecraft.<init>: 23 loadSelectedResourcePacks");
++        } else {
++            System.err.println("[mc-probe] Minecraft.<init>: web runtime uses built-in VFS packs; skip PackRepository reload");
++        }
+         this.languageManager = new LanguageManager(this.options.languageCode, p_340763_ -> {
+             if (this.player != null) {
+                 this.player.connection.updateSearchTrees();
+             }
+         });
++        System.err.println("[mc-probe] Minecraft.<init>: 24 LanguageManager");
+         this.resourceManager.registerReloadListener(this.languageManager);
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 190
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 190 checkpoint before TextureManager init");
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.skinManager = null;
++            this.levelSource = null;
++            this.commandHistory = null;
++            this.musicManager = null;
++            this.soundManager = null;
++            this.splashManager = null;
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 124
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 124 checkpoint before TextureManager init");
++            this.textureManager = null;
++            this.shaderManager = null;
++            this.skinManager = null;
++            this.levelSource = null;
++            this.commandHistory = null;
++            this.musicManager = null;
++            this.soundManager = null;
++            this.splashManager = null;
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
+         this.textureManager = new TextureManager(this.resourceManager);
++        System.err.println("[mc-probe] Minecraft.<init>: 25 TextureManager");
+         this.resourceManager.registerReloadListener(this.textureManager);
+         this.shaderManager = new ShaderManager(this.textureManager, this::triggerResourcePackRecovery);
++        System.err.println("[mc-probe] Minecraft.<init>: 26 ShaderManager");
+         this.resourceManager.registerReloadListener(this.shaderManager);
+-        this.skinManager = new SkinManager(file1.toPath().resolve("skins"), this.minecraftSessionService, this);
+-        this.levelSource = new LevelStorageSource(path.resolve("saves"), path.resolve("backups"), this.directoryValidator, this.fixerUpper);
++        this.skinManager = new SkinManager(Paths.get(file1.getPath()).resolve("skins"), this.minecraftSessionService, this);
++        System.err.println("[mc-probe] Minecraft.<init>: 27 SkinManager");
++        this.levelSource = new LevelStorageSource(
++            path.resolve("saves"),
++            path.resolve("backups"),
++            BuildFlags.WEB_RUNTIME ? LevelStorageSource.parseValidator(path.resolve("allowed_symlinks.txt")) : this.directoryValidator,
++            this.fixerUpper
++        );
++        System.err.println("[mc-probe] Minecraft.<init>: 28 LevelStorageSource");
+         this.commandHistory = new CommandHistory(path);
+-        this.musicManager = new MusicManager(this);
+-        this.soundManager = new SoundManager(this.options, this.musicManager);
+-        this.resourceManager.registerReloadListener(this.soundManager);
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.musicManager = new MusicManager(this);
++            this.soundManager = new SoundManager(this.options, this.musicManager);
++        } else {
++            this.musicManager = null;
++            this.soundManager = null;
++        }
++        System.err.println("[mc-probe] Minecraft.<init>: 29 SoundManager");
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.resourceManager.registerReloadListener(this.soundManager);
++        }
+         this.splashManager = new SplashManager(this.user);
++        System.err.println("[mc-probe] Minecraft.<init>: 29.1 SplashManager");
+         this.resourceManager.registerReloadListener(this.splashManager);
+-        this.fontManager = new FontManager(this.textureManager);
+-        this.font = this.fontManager.createFont();
+-        this.fontFilterFishy = this.fontManager.createFontFilterFishy();
+-        this.resourceManager.registerReloadListener(this.fontManager);
+-        this.updateFontOptions();
+-        this.resourceManager.registerReloadListener(new GrassColorReloadListener());
+-        this.resourceManager.registerReloadListener(new FoliageColorReloadListener());
+-        this.resourceManager.registerReloadListener(new DryFoliageColorReloadListener());
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 125
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 125 checkpoint before FontManager init");
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 122
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 122 checkpoint before FontManager init");
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 143
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 149
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " hard checkpoint before FontManager init");
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++            this.tracyFrameCapture = null;
++            this.blockColors = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
++        boolean webProbeSkipFontAndReload = BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 141
++            && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 191;
++        boolean webProbeSkipInitialResourceReload = BuildFlags.WEB_RUNTIME
++            && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++            && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 141
++            && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 191;
++        if (webProbeSkipFontAndReload) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " skip FontManager init/reload listeners");
++            this.fontManager = null;
++            this.font = null;
++            this.fontFilterFishy = null;
++        } else {
++            System.err.println("[mc-probe] Minecraft.<init>: 29.2 splash registered, about to new FontManager");
++            this.fontManager = new FontManager(this.textureManager);
++            System.err.println("[mc-probe] Minecraft.<init>: 30 FontManager");
++            this.font = this.fontManager.createFont();
++            this.fontFilterFishy = this.fontManager.createFontFilterFishy();
++            System.err.println("[mc-probe] Minecraft.<init>: 31 fonts created");
++            this.resourceManager.registerReloadListener(this.fontManager);
++            this.updateFontOptions();
++            this.resourceManager.registerReloadListener(new GrassColorReloadListener());
++            this.resourceManager.registerReloadListener(new FoliageColorReloadListener());
++            this.resourceManager.registerReloadListener(new DryFoliageColorReloadListener());
++            System.err.println("[mc-probe] Minecraft.<init>: 32 color reload listeners");
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE == 123
++        ) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase 123 checkpoint before BlockColors/createDefault");
++            this.blockColors = null;
++            this.tracyFrameCapture = null;
++            this.modelManager = null;
++            this.itemModelResolver = null;
++            this.itemRenderer = null;
++            this.mapTextureManager = null;
++            this.mapDecorationTextures = null;
++            this.mapRenderer = null;
++            this.renderBuffers = null;
++            this.playerSocialManager = null;
++            this.blockRenderer = null;
++            this.entityRenderDispatcher = null;
++            this.blockEntityRenderDispatcher = null;
++            this.particleEngine = null;
++            this.paintingTextures = null;
++            this.guiSprites = null;
++            this.waypointStyles = null;
++            this.levelRenderer = null;
++            this.gameRenderer = null;
++            this.debugRenderer = null;
++            this.gui = null;
++            this.gpuWarnlistManager = null;
++            this.telemetryManager = null;
++            this.profileKeyPairManager = ProfileKeyPairManager.EMPTY_KEY_MANAGER;
++            this.realmsDataFetcher = null;
++            this.quickPlayLog = null;
++            this.framerateLimitTracker = null;
++            this.fpsPieProfiler = null;
++            this.narrator = null;
++            this.chatListener = null;
++            this.running = true;
++            return;
++        }
+         this.window.setErrorSection("Startup");
+         RenderSystem.setupDefaultState();
++        System.err.println("[mc-probe] Minecraft.<init>: 33 setupDefaultState");
+         this.window.setErrorSection("Post startup");
+         this.blockColors = BlockColors.createDefault();
++        System.err.println("[mc-probe] Minecraft.<init>: 34 BlockColors");
+         this.modelManager = new ModelManager(this.textureManager, this.blockColors, this.options.mipmapLevels().get());
++        System.err.println("[mc-probe] Minecraft.<init>: 35 ModelManager");
+         this.resourceManager.registerReloadListener(this.modelManager);
+         EquipmentAssetManager equipmentassetmanager = new EquipmentAssetManager();
+         this.resourceManager.registerReloadListener(equipmentassetmanager);
+@@ -542,6 +1928,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         this.mapDecorationTextures = new MapDecorationTextureManager(this.textureManager);
+         this.resourceManager.registerReloadListener(this.mapDecorationTextures);
+         this.mapRenderer = new MapRenderer(this.mapDecorationTextures, this.mapTextureManager);
++        System.err.println("[mc-probe] Minecraft.<init>: 36 renderers");
+ 
+         try {
+             int i = Runtime.getRuntime().availableProcessors();
+@@ -558,9 +1945,16 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             );
+             throw new SilentInitException("Unable to allocate render buffers", outofmemoryerror);
+         }
++        System.err.println("[mc-probe] Minecraft.<init>: 37 RenderBuffers");
+ 
+-        this.playerSocialManager = new PlayerSocialManager(this, this.userApiService);
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.playerSocialManager = new PlayerSocialManager(this, this.userApiService);
++        } else {
++            this.playerSocialManager = null;
++        }
++        System.err.println("[mc-probe] Minecraft.<init>: 38 PlayerSocialManager");
+         this.blockRenderer = new BlockRenderDispatcher(this.modelManager.getBlockModelShaper(), this.modelManager.specialBlockModelRenderer(), this.blockColors);
++        System.err.println("[mc-probe] Minecraft.<init>: 39 BlockRenderDispatcher");
+         this.resourceManager.registerReloadListener(this.blockRenderer);
+         this.entityRenderDispatcher = new EntityRenderDispatcher(
+             this,
+@@ -574,29 +1968,47 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             this.modelManager.entityModels(),
+             equipmentassetmanager
+         );
++        System.err.println("[mc-probe] Minecraft.<init>: 40 EntityRenderDispatcher");
+         this.resourceManager.registerReloadListener(this.entityRenderDispatcher);
+         this.blockEntityRenderDispatcher = new BlockEntityRenderDispatcher(this.font, this.modelManager.entityModels(), this.blockRenderer, this.itemModelResolver, this.itemRenderer, this.entityRenderDispatcher);
++        System.err.println("[mc-probe] Minecraft.<init>: 41 BlockEntityRenderDispatcher");
+         this.resourceManager.registerReloadListener(this.blockEntityRenderDispatcher);
+         this.particleEngine = new ParticleEngine(this.level, this.textureManager);
++        System.err.println("[mc-probe] Minecraft.<init>: 42 ParticleEngine");
+         this.resourceManager.registerReloadListener(this.particleEngine);
+         this.paintingTextures = new PaintingTextureManager(this.textureManager);
++        System.err.println("[mc-probe] Minecraft.<init>: 43 PaintingTextureManager");
+         this.resourceManager.registerReloadListener(this.paintingTextures);
+         this.guiSprites = new GuiSpriteManager(this.textureManager);
++        System.err.println("[mc-probe] Minecraft.<init>: 44 GuiSpriteManager");
+         this.resourceManager.registerReloadListener(this.guiSprites);
+         this.waypointStyles = new WaypointStyleManager();
+         this.resourceManager.registerReloadListener(this.waypointStyles);
++        System.err.println("[mc-probe] Minecraft.<init>: 45 WaypointStyleManager");
+         this.gameRenderer = new GameRenderer(this, this.entityRenderDispatcher.getItemInHandRenderer(), this.renderBuffers);
++        System.err.println("[mc-probe] Minecraft.<init>: 46 GameRenderer");
+         this.levelRenderer = new LevelRenderer(this, this.entityRenderDispatcher, this.blockEntityRenderDispatcher, this.renderBuffers);
++        System.err.println("[mc-probe] Minecraft.<init>: 47 LevelRenderer");
+         this.resourceManager.registerReloadListener(this.levelRenderer);
+         this.resourceManager.registerReloadListener(this.levelRenderer.getCloudRenderer());
+         this.gpuWarnlistManager = new GpuWarnlistManager();
++        System.err.println("[mc-probe] Minecraft.<init>: 48 GpuWarnlistManager");
+         this.resourceManager.registerReloadListener(this.gpuWarnlistManager);
+-        this.resourceManager.registerReloadListener(this.regionalCompliancies);
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.resourceManager.registerReloadListener(this.regionalCompliancies);
++        }
+         this.gui = new Gui(this);
++        System.err.println("[mc-probe] Minecraft.<init>: 49 Gui");
+         this.debugRenderer = new DebugRenderer(this);
+-        RealmsClient realmsclient = RealmsClient.getOrCreate(this);
+-        this.realmsDataFetcher = new RealmsDataFetcher(realmsclient);
++        System.err.println("[mc-probe] Minecraft.<init>: 50 DebugRenderer");
++        // mc-web: skip Realms entirely. RealmsClient.getOrCreate touches
++        // UndashedUuid.toString → uuid.toString().replace(...) which NPEs in
++        // TeaVM, and we never connect to the realms service anyway.
++        RealmsClient realmsclient = null;
++        this.realmsDataFetcher = null;
++        System.err.println("[mc-probe] Minecraft.<init>: 52 RealmsDataFetcher (skipped)");
+         RenderSystem.setErrorCallback(this::onFullscreenError);
++        System.err.println("[mc-probe] Minecraft.<init>: 53 setErrorCallback");
+         if (this.mainRenderTarget.width != this.window.getWidth() || this.mainRenderTarget.height != this.window.getHeight()) {
+             StringBuilder stringbuilder = new StringBuilder(
+                 "Recovering from unsupported resolution ("
+@@ -617,7 +2029,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+             this.window.setWindowed(this.mainRenderTarget.width, this.mainRenderTarget.height);
+             TinyFileDialogs.tinyfd_messageBox("Minecraft", stringbuilder.toString(), "ok", "error", false);
+-        } else if (this.options.fullscreen().get() && !this.window.isFullscreen()) {
++        } else if (!BuildFlags.WEB_RUNTIME && this.options.fullscreen().get() && !this.window.isFullscreen()) {
+             if (flag) {
+                 this.window.toggleFullScreen();
+                 this.options.fullscreen().set(this.window.isFullscreen());
+@@ -626,64 +2038,167 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             }
+         }
+ 
+-        this.window.updateVsync(this.options.enableVsync().get());
+-        this.window.updateRawMouseInput(this.options.rawMouseInput().get());
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.window.updateVsync(this.options.enableVsync().get());
++            this.window.updateRawMouseInput(this.options.rawMouseInput().get());
++        }
+         this.window.setDefaultErrorCallback();
+         this.resizeDisplay();
+-        this.gameRenderer.preloadUiShader(this.vanillaPackResources.asProvider());
+-        this.telemetryManager = new ClientTelemetryManager(this, this.userApiService, this.user);
+-        this.profileKeyPairManager = ProfileKeyPairManager.create(this.userApiService, this.user, path);
+-        this.narrator = new GameNarrator(this);
+-        this.narrator.checkStatus(this.options.narrator().get() != NarratorStatus.OFF);
++        System.err.println("[mc-probe] Minecraft.<init>: 54 resizeDisplay");
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.gameRenderer.preloadUiShader(this.vanillaPackResources.asProvider());
++        } else {
++            System.err.println("[mc-probe] Minecraft.<init>: web runtime skip preloadUiShader until VFS vanilla pack provider is wired");
++        }
++        System.err.println("[mc-probe] Minecraft.<init>: 55 preloadUiShader");
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.telemetryManager = new ClientTelemetryManager(this, this.userApiService, this.user);
++        } else {
++            this.telemetryManager = null;
++        }
++        System.err.println("[mc-probe] Minecraft.<init>: 56 ClientTelemetryManager");
++        this.profileKeyPairManager = BuildFlags.WEB_RUNTIME
++            ? ProfileKeyPairManager.EMPTY_KEY_MANAGER
++            : ProfileKeyPairManager.create(this.userApiService, this.user, path);
++        System.err.println("[mc-probe] Minecraft.<init>: 57 ProfileKeyPairManager");
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.narrator = new GameNarrator(this);
++            this.narrator.checkStatus(this.options.narrator().get() != NarratorStatus.OFF);
++        } else {
++            this.narrator = null;
++        }
++        System.err.println("[mc-probe] Minecraft.<init>: 58 GameNarrator");
+         this.chatListener = new ChatListener(this);
+         this.chatListener.setMessageDelay(this.options.chatDelay().get());
+-        this.reportingContext = ReportingContext.create(ReportEnvironment.local(), this.userApiService);
++        System.err.println("[mc-probe] Minecraft.<init>: 59 ChatListener");
++        this.reportingContext = BuildFlags.WEB_RUNTIME ? null : ReportingContext.create(ReportEnvironment.local(), this.userApiService);
++        System.err.println("[mc-probe] Minecraft.<init>: 60 ReportingContext");
+         TitleScreen.registerTextures(this.textureManager);
+         LoadingOverlay.registerTextures(this.textureManager);
+         this.gameRenderer.getPanorama().registerTextures(this.textureManager);
++        System.err.println("[mc-probe] Minecraft.<init>: 61 textures registered");
+         this.setScreen(new GenericMessageScreen(Component.translatable("gui.loadingMinecraft")));
+-        List<PackResources> list1 = this.resourcePackRepository.openAllSelected();
+-        this.reloadStateTracker.startReload(ResourceLoadStateTracker.ReloadReason.INITIAL, list1);
+-        ReloadInstance reloadinstance = this.resourceManager.createReload(Util.backgroundExecutor().forName("resourceLoad"), this, RESOURCE_RELOAD_INITIAL_TASK, list1);
+-        GameLoadTimesEvent.INSTANCE.beginStep(TelemetryProperty.LOAD_TIME_LOADING_OVERLAY_MS);
+-        Minecraft.GameLoadCookie minecraft$gameloadcookie = new Minecraft.GameLoadCookie(realmsclient, p_91084_.quickPlay);
+-        this.setOverlay(
+-            new LoadingOverlay(
+-                this, reloadinstance, p_296164_ -> Util.ifElse(p_296164_, p_296162_ -> this.rollbackResourcePacks(p_296162_, minecraft$gameloadcookie), () -> {
+-                    if (SharedConstants.IS_RUNNING_IN_IDE) {
+-                        this.selfTest();
+-                    }
++        System.err.println("[mc-probe] Minecraft.<init>: 62 setScreen");
++        if (webProbeSkipInitialResourceReload) {
++            System.err.println("[mc-probe] Minecraft.<init>: phase " + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE + " skip initial resource reload pipeline");
++            this.reloadStateTracker.finishReload();
++            this.setOverlay(null);
++            this.onResourceLoadFinished(new Minecraft.GameLoadCookie(realmsclient, p_91084_.quickPlay));
++        } else {
++            List<PackResources> list1 = BuildFlags.WEB_RUNTIME ? List.of(this.vanillaPackResources) : this.resourcePackRepository.openAllSelected();
++            System.err.println("[mc-probe] Minecraft.<init>: 63 openAllSelected, n=" + list1.size());
++            this.reloadStateTracker.startReload(ResourceLoadStateTracker.ReloadReason.INITIAL, list1);
++            System.err.println("[mc-probe] Minecraft.<init>: 64 startReload");
++            ReloadInstance reloadinstance;
++            try {
++                reloadinstance = this.resourceManager.createReload(Util.backgroundExecutor().forName("resourceLoad"), this, RESOURCE_RELOAD_INITIAL_TASK, list1);
++            } catch (Throwable t) {
++                System.err.println("[mc-probe] createReload threw: " + t);
++                t.printStackTrace();
++                throw new RuntimeException(t);
++            }
++            System.err.println("[mc-probe] Minecraft.<init>: 65 createReload");
++            GameLoadTimesEvent.INSTANCE.beginStep(TelemetryProperty.LOAD_TIME_LOADING_OVERLAY_MS);
++            Minecraft.GameLoadCookie minecraft$gameloadcookie = new Minecraft.GameLoadCookie(realmsclient, p_91084_.quickPlay);
++            this.setOverlay(
++                new LoadingOverlay(
++                    this, reloadinstance, p_296164_ -> Util.ifElse(p_296164_, p_296162_ -> {
++                        if (BuildFlags.WEB_RUNTIME) {
++                            System.err.println("[mc-web] initial resource reload reported error; continuing without desktop resource-pack rollback: " + p_296162_);
++                            p_296162_.printStackTrace();
++                            this.reloadStateTracker.finishReload();
++                            this.onResourceLoadFinished(minecraft$gameloadcookie);
++                        } else {
++                            this.rollbackResourcePacks(p_296162_, minecraft$gameloadcookie);
++                        }
++                    }, () -> {
++                        if (SharedConstants.IS_RUNNING_IN_IDE) {
++                            this.selfTest();
++                        }
+ 
+-                    this.reloadStateTracker.finishReload();
+-                    this.onResourceLoadFinished(minecraft$gameloadcookie);
+-                }), false
+-            )
+-        );
+-        this.quickPlayLog = QuickPlayLog.of(p_91084_.quickPlay.logPath());
++                        this.reloadStateTracker.finishReload();
++                        this.onResourceLoadFinished(minecraft$gameloadcookie);
++                    }), false
++                )
++            );
++            System.err.println("[mc-probe] Minecraft.<init>: 66 setOverlay");
++        }
++        this.quickPlayLog = BuildFlags.WEB_RUNTIME ? null : QuickPlayLog.of(p_91084_.quickPlay.logPath());
++        System.err.println("[mc-probe] Minecraft.<init>: 67 QuickPlayLog");
+         this.framerateLimitTracker = new FramerateLimitTracker(this.options, this);
+         this.fpsPieProfiler = new ContinuousProfiler(Util.timeSource, () -> this.fpsPieRenderTicks, this.framerateLimitTracker::isHeavilyThrottled);
++        System.err.println("[mc-probe] Minecraft.<init>: 68 trackers");
+         if (TracyClient.isAvailable() && p_91084_.game.captureTracyImages) {
+             this.tracyFrameCapture = new TracyFrameCapture();
+         } else {
+             this.tracyFrameCapture = null;
+         }
++        System.err.println("[mc-probe] Minecraft.<init>: 69 done");
+     }
+ 
+     private void onResourceLoadFinished(@Nullable Minecraft.GameLoadCookie p_299693_) {
++        if (BuildFlags.WEB_RUNTIME && this.webGameLoadLogs < 12) {
++            this.webGameLoadLogs++;
++            System.err.println(
++                "[mc-web/gameload] onResourceLoadFinished gameLoadFinished="
++                    + this.gameLoadFinished
++                    + " screen="
++                    + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++                    + " overlay="
++                    + (this.overlay == null ? "null" : this.overlay.getClass().getSimpleName())
++                    + " pendingProgressTasks="
++                    + this.progressTasks.size()
++            );
++        }
+         if (!this.gameLoadFinished) {
+             this.gameLoadFinished = true;
++            if (BuildFlags.WEB_RUNTIME && this.webGameLoadLogs < 12) {
++                this.webGameLoadLogs++;
++                System.err.println("[mc-web/gameload] gameLoadFinished=true");
++            }
+             this.onGameLoadFinished(p_299693_);
+         }
+     }
+ 
+     private void onGameLoadFinished(@Nullable Minecraft.GameLoadCookie p_300808_) {
++        if (BuildFlags.WEB_RUNTIME && this.webGameLoadLogs < 12) {
++            this.webGameLoadLogs++;
++            System.err.println(
++                "[mc-web/gameload] onGameLoadFinished queueBefore="
++                    + this.progressTasks.size()
++                    + " screen="
++                    + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++                    + " overlay="
++                    + (this.overlay == null ? "null" : this.overlay.getClass().getSimpleName())
++            );
++        }
+         Runnable runnable = this.buildInitialScreens(p_300808_);
+         GameLoadTimesEvent.INSTANCE.endStep(TelemetryProperty.LOAD_TIME_LOADING_OVERLAY_MS);
+         GameLoadTimesEvent.INSTANCE.endStep(TelemetryProperty.LOAD_TIME_TOTAL_TIME_MS);
+-        GameLoadTimesEvent.INSTANCE.send(this.telemetryManager.getOutsideSessionSender());
+-        runnable.run();
+-        this.options.startedCleanly = true;
+-        this.options.save();
++        if (!BuildFlags.WEB_RUNTIME) {
++            GameLoadTimesEvent.INSTANCE.send(this.telemetryManager.getOutsideSessionSender());
++        }
++        // mc-web: defer heavy post-reload work (initial-screen build + options.save)
++        // to a later event-loop tick so LoadingOverlay.render returns promptly and
++        // the browser can paint the fade-out frame. Running synchronously caused an
++        // 8+ second setTimeout-handler stall when the title screen's texture/layout
++        // init piled into one frame.
++        this.progressTasks.add(() -> {
++            if (BuildFlags.WEB_RUNTIME && this.webGameLoadLogs < 12) {
++                this.webGameLoadLogs++;
++                System.err.println(
++                    "[mc-web/gameload] progressTask.run queueBefore="
++                        + this.progressTasks.size()
++                        + " screen="
++                        + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++                        + " overlay="
++                        + (this.overlay == null ? "null" : this.overlay.getClass().getSimpleName())
++                );
++            }
++            runnable.run();
++            this.options.startedCleanly = true;
++            this.options.save();
++        });
+     }
+ 
+     public boolean isGameLoadFinished() {
+@@ -697,7 +2212,21 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             if (p_299870_ != null && p_299870_.quickPlayData.isEnabled()) {
+                 QuickPlay.connect(this, p_299870_.quickPlayData.variant(), p_299870_.realmsClient());
+             } else {
++                if (BuildFlags.WEB_RUNTIME) {
++                    System.err.println("[mc-web] Installing TitleScreen after initial resource reload");
++                }
+                 this.setScreen(new TitleScreen(true, new LogoRenderer(flag)));
++                if (BuildFlags.WEB_RUNTIME) {
++                    if (BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 197) {
++                        this.setOverlay(null);
++                    }
++                    System.err.println("[mc-web] TitleScreen installed");
++                    String s = webConsumeAutoStartExperimentalWorld();
++                    if (s != null && !s.isBlank()) {
++                        System.err.println("[mc-web] auto start experimental world: " + s);
++                        this.startWebExperimentalWorld(s, this.screen);
++                    }
++                }
+             }
+         };
+ 
+@@ -711,7 +2240,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+     private boolean addInitialScreens(List<Function<Runnable, Screen>> p_297818_) {
+         boolean flag = false;
+-        if (this.options.onboardAccessibility) {
++        if (!BuildFlags.WEB_RUNTIME && this.options.onboardAccessibility) {
+             p_297818_.add(p_296165_ -> new AccessibilityOnboardingScreen(this.options, p_296165_));
+             flag = true;
+         }
+@@ -841,6 +2370,115 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+     public void run() {
+         this.gameThread = Thread.currentThread();
++        boolean forceFullMain = BuildFlags.WEB_RUNTIME && Boolean.getBoolean("webmc.forceFullMain");
++        System.err.println(
++            "[mc-probe] Minecraft.run: enter forceFullMain="
++                + forceFullMain
++                + " phase="
++                + BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE
++                + " running="
++                + this.running
++        );
++        if (forceFullMain) {
++            System.err.println("[mc-probe] Minecraft.run: forceFullMain persistent runTick loop");
++            this.running = true;
++            int tick = 0;
++            int webRunTickFailures = 0;
++            while (this.running) {
++                if (tick < 3) {
++                    System.err.println("[mc-probe] Minecraft.run: web persistent tick " + tick);
++                }
++                this.handleDelayedCrash();
++                try {
++                    this.runTick(true);
++                } catch (Throwable throwable) {
++                    webRunTickFailures++;
++                    if (webRunTickFailures <= 8 || webRunTickFailures % 100 == 0) {
++                        System.out.println(
++                            "[mc-web/run] runTick failure #" + webRunTickFailures + " tick=" + tick + " " + throwable.getClass().getName() + ": " + throwable.getMessage()
++                        );
++                        StackTraceElement[] stacktraceelement = throwable.getStackTrace();
++                        int i = Math.min(stacktraceelement.length, 12);
++                        for (int j = 0; j < i; j++) {
++                            System.out.println("[mc-web/run] at " + stacktraceelement[j]);
++                        }
++                    }
++                }
++                tick++;
++                try { Thread.sleep(WEB_FRAME_SLEEP_MS); } catch (InterruptedException ignored) {}
++            }
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && !WEB_FORCE_FULL_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 69
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 71
++        ) {
++            System.err.println("[mc-probe] Minecraft.run: web probe early-return before runTick loop");
++            this.running = false;
++            return;
++        }
++        if (
++            BuildFlags.WEB_RUNTIME
++                && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN
++                && !WEB_FORCE_FULL_MAIN
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 72
++                && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE <= 193
++        ) {
++            System.err.println("[mc-probe] Minecraft.run: web minimal runtime pass (phase >= 72)");
++            this.handleDelayedCrash();
++            this.running = false;
++            return;
++        }
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && !WEB_FORCE_FULL_MAIN && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 197) {
++            System.err.println("[mc-probe] Minecraft.run: web persistent runTick loop (phase >= 197)");
++            this.running = true;
++            int tick = 0;
++            int webRunTickFailures = 0;
++            while (this.running) {
++                if (tick < 3) {
++                    System.err.println("[mc-probe] Minecraft.run: web persistent tick " + tick);
++                }
++                this.handleDelayedCrash();
++                try {
++                    this.runTick(true);
++                } catch (Throwable throwable) {
++                    webRunTickFailures++;
++                    if (webRunTickFailures <= 8 || webRunTickFailures % 100 == 0) {
++                        System.out.println(
++                            "[mc-web/run] runTick failure #" + webRunTickFailures + " tick=" + tick + " " + throwable.getClass().getName() + ": " + throwable.getMessage()
++                        );
++                        StackTraceElement[] stacktraceelement = throwable.getStackTrace();
++                        int i = Math.min(stacktraceelement.length, 12);
++                        for (int j = 0; j < i; j++) {
++                            System.out.println("[mc-web/run] at " + stacktraceelement[j]);
++                        }
++                    }
++                }
++                tick++;
++                try { Thread.sleep(WEB_FRAME_SLEEP_MS); } catch (InterruptedException ignored) {}
++            }
++            return;
++        }
++        if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN && !WEB_FORCE_FULL_MAIN && BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 194) {
++            int tickLimit = BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 196 ? 600 : (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 195 ? 120 : 8);
++            System.err.println("[mc-probe] Minecraft.run: web bounded runTick pass (phase >= 194, ticks=" + tickLimit + ")");
++            this.running = true;
++            for (int i = 0; i < tickLimit && this.running; i++) {
++                if (i < 8 || i % 20 == 0 || i + 1 == tickLimit) {
++                    System.err.println("[mc-probe] Minecraft.run: web bounded tick " + i);
++                }
++                this.handleDelayedCrash();
++                this.runTick(true);
++                if (BuildFlags.EXPERIMENTAL_MC_MAIN_PHASE >= 196) {
++                    try { Thread.sleep(WEB_FRAME_SLEEP_MS); } catch (InterruptedException ignored) {}
++                }
++            }
++            this.running = false;
++            return;
++        }
+         if (Runtime.getRuntime().availableProcessors() > 4) {
+             this.gameThread.setPriority(10);
+         }
+@@ -851,6 +2489,10 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             boolean flag = false;
+ 
+             while (this.running) {
++                // mc-web: yield to the browser event loop every frame to prevent
++                // 100% CPU usage and keep the UI responsive.
++                try { Thread.sleep(WEB_FRAME_SLEEP_MS); } catch (InterruptedException ignored) {}
++
+                 this.handleDelayedCrash();
+ 
+                 try {
+@@ -930,28 +2572,29 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public static int saveReport(File p_362993_, CrashReport p_366163_) {
+-        Path path = p_362993_.toPath().resolve("crash-reports");
+-        Path path1 = path.resolve("crash-" + Util.getFilenameFormattedDateTime() + "-client.txt");
+-        Bootstrap.realStdoutPrintln(p_366163_.getFriendlyReport(ReportType.CRASH));
+-        if (p_366163_.getSaveFile() != null) {
+-            Bootstrap.realStdoutPrintln("#@!@# Game crashed! Crash report saved to: #@!@# " + p_366163_.getSaveFile().toAbsolutePath());
+-            return -1;
+-        } else if (p_366163_.saveToFile(path1, ReportType.CRASH)) {
+-            Bootstrap.realStdoutPrintln("#@!@# Game crashed! Crash report saved to: #@!@# " + path1.toAbsolutePath());
+-            return -1;
+-        } else {
+-            Bootstrap.realStdoutPrintln("#@?@# Game crashed! Crash report could not be saved. #@?@#");
+-            return -2;
++        // mc-web: browser has no filesystem; File.toPath() returns null on
++        // TeaVM and triggers `$resolve` on null. Print the friendly report and
++        // skip the save path entirely.
++        try {
++            Bootstrap.realStdoutPrintln(p_366163_.getFriendlyReport(ReportType.CRASH));
++        } catch (Throwable t) {
++            System.err.println("[mc-web] failed to print crash report: " + t);
+         }
++        Bootstrap.realStdoutPrintln("#@?@# Game crashed! Crash report not saved (browser). #@?@#");
++        return -2;
+     }
+ 
+     public static void crash(@Nullable Minecraft p_311916_, File p_309666_, CrashReport p_91333_) {
+-        int i = saveReport(p_309666_, p_91333_);
++        // mc-web: skip System.exit (no-op in browser) and skip soundManager
++        // shutdown if Minecraft never finished init.
++        saveReport(p_309666_, p_91333_);
+         if (p_311916_ != null) {
+-            p_311916_.soundManager.emergencyShutdown();
++            try {
++                p_311916_.soundManager.emergencyShutdown();
++            } catch (Throwable t) {
++                System.err.println("[mc-web] soundManager.emergencyShutdown failed: " + t);
++            }
+         }
+-
+-        System.exit(i);
+     }
+ 
+     public boolean isEnforceUnicode() {
+@@ -1065,7 +2708,9 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             } else {
+                 Component component = minecraft$chatstatus.getMessage();
+                 this.gui.setOverlayMessage(component, false);
+-                this.narrator.saySystemNow(component);
++                if (this.narrator != null) {
++                    this.narrator.saySystemNow(component);
++                }
+                 this.gui.setChatDisabledByPlayerShown(minecraft$chatstatus == Minecraft.ChatStatus.DISABLED_BY_PROFILE);
+             }
+         } else {
+@@ -1098,6 +2743,9 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             }
+ 
+             this.screen = p_91153_;
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-web] setScreen: " + (p_91153_ == null ? "null" : p_91153_.getClass().getName()));
++            }
+             if (this.screen != null) {
+                 this.screen.added();
+             }
+@@ -1108,7 +2756,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                 p_91153_.init(this, this.window.getGuiScaledWidth(), this.window.getGuiScaledHeight());
+                 this.noRender = false;
+             } else {
+-                this.soundManager.resume();
++                if (this.soundManager != null) this.soundManager.resume();
+                 this.mouseHandler.grabMouse();
+             }
+ 
+@@ -1118,9 +2766,17 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+     public void setOverlay(@Nullable Overlay p_91151_) {
+         this.overlay = p_91151_;
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web] setOverlay: " + (p_91151_ == null ? "null" : p_91151_.getClass().getName()));
++        }
+     }
+ 
+     public void destroy() {
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-probe] Minecraft.destroy: web runtime skip desktop shutdown path");
++            this.running = false;
++            return;
++        }
+         try {
+             LOGGER.info("Stopping!");
+ 
+@@ -1158,14 +2814,16 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         }
+ 
+         try {
+-            this.telemetryManager.close();
++            if (this.telemetryManager != null) {
++                this.telemetryManager.close();
++            }
+             this.regionalCompliancies.close();
+             this.modelManager.close();
+             this.fontManager.close();
+             this.gameRenderer.close();
+             this.shaderManager.close();
+             this.levelRenderer.close();
+-            this.soundManager.destroy();
++            if (this.soundManager != null) this.soundManager.destroy();
+             this.particleEngine.close();
+             this.paintingTextures.close();
+             this.mapDecorationTextures.close();
+@@ -1190,6 +2848,25 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     private void runTick(boolean p_91384_) {
++        boolean webFrameProbe = BuildFlags.WEB_RUNTIME && WebDiagnostics.frameProbeEnabled();
++        long webFrameStartNs = webFrameProbe ? Util.getNanos() : 0L;
++        long webStageStartNs = webFrameStartNs;
++        long webPreRenderNs = 0L;
++        long webProgressNs = 0L;
++        long webAdvanceNs = 0L;
++        long webScheduledNs = 0L;
++        long webClientTicksNs = 0L;
++        long webGpuPendingNs = 0L;
++        long webSoundToastsNs = 0L;
++        long webClearMouseNs = 0L;
++        long webGameRendererNs = 0L;
++        long webBlitNs = 0L;
++        long webUpdateDisplayNs = 0L;
++        long webYieldNs = 0L;
++        long webPostNs = 0L;
++        int webDeltaTicks = 0;
++        int webTickLimit = 0;
++
+         this.window.setErrorSection("Pre render");
+         if (this.window.shouldClose()) {
+             this.stop();
+@@ -1201,34 +2878,78 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             this.reloadResourcePacks().thenRun(() -> completablefuture.complete(null));
+         }
+ 
+-        Runnable runnable;
+-        while ((runnable = this.progressTasks.poll()) != null) {
+-            runnable.run();
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webPreRenderNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
++
++        this.runProgressTasks();
++
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webProgressNs = now - webStageStartNs;
++            webStageStartNs = now;
+         }
+ 
+         int i = this.deltaTracker.advanceTime(Util.getMillis(), p_91384_);
++        webDeltaTicks = i;
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webAdvanceNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+         ProfilerFiller profilerfiller = Profiler.get();
+         if (p_91384_) {
+             profilerfiller.push("scheduledExecutables");
+             this.runAllTasks();
++            if (BuildFlags.WEB_RUNTIME) {
++                this.runProgressTasks();
++            }
+             profilerfiller.pop();
++            if (webFrameProbe) {
++                long now = Util.getNanos();
++                webScheduledNs = now - webStageStartNs;
++                webStageStartNs = now;
++            }
+             profilerfiller.push("tick");
+ 
+-            for (int j = 0; j < Math.min(10, i); j++) {
++            int tickLimit = BuildFlags.WEB_RUNTIME ? Math.min(2, i) : Math.min(10, i);
++            webTickLimit = tickLimit;
++            for (int j = 0; j < tickLimit; j++) {
+                 profilerfiller.incrementCounter("clientTick");
+                 this.tick();
+             }
+ 
+             profilerfiller.pop();
++            if (webFrameProbe) {
++                long now = Util.getNanos();
++                webClientTicksNs = now - webStageStartNs;
++                webStageStartNs = now;
++            }
+         }
+ 
+         this.window.setErrorSection("Render");
+         profilerfiller.push("gpuAsync");
+         RenderSystem.executePendingTasks();
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webGpuPendingNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+         profilerfiller.popPush("sound");
+-        this.soundManager.updateSource(this.gameRenderer.getMainCamera());
++        if (this.soundManager != null) {
++            this.soundManager.updateSource(this.gameRenderer.getMainCamera());
++        }
+         profilerfiller.popPush("toasts");
+-        this.toastManager.update();
++        if (this.toastManager != null) {
++            this.toastManager.update();
++        }
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webSoundToastsNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+         profilerfiller.popPush("render");
+         long j1 = Util.getNanos();
+         boolean flag;
+@@ -1247,16 +2968,31 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         profilerfiller.push("mouse");
+         this.mouseHandler.handleAccumulatedMovement();
+         profilerfiller.pop();
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webClearMouseNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+         if (!this.noRender) {
+             profilerfiller.popPush("gameRenderer");
+             this.gameRenderer.render(this.deltaTracker, p_91384_);
+             profilerfiller.pop();
+         }
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webGameRendererNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+ 
+         profilerfiller.push("blit");
+         if (!this.window.isMinimized()) {
+             rendertarget.blitToScreen();
+         }
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webBlitNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+ 
+         this.frameTimeNs = Util.getNanos() - j1;
+         if (flag) {
+@@ -1271,12 +3007,24 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+         this.window.updateDisplay(this.tracyFrameCapture);
+         int k = this.framerateLimitTracker.getFramerateLimit();
+-        if (k < 260) {
++        if (BuildFlags.WEB_RUNTIME && k > 0 && k < 260) {
++            this.webLimitDisplayFPS(k);
++        } else if (!BuildFlags.WEB_RUNTIME && k < 260) {
+             RenderSystem.limitDisplayFPS(k);
+         }
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webUpdateDisplayNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+ 
+         profilerfiller.popPush("yield");
+         Thread.yield();
++        if (webFrameProbe) {
++            long now = Util.getNanos();
++            webYieldNs = now - webStageStartNs;
++            webStageStartNs = now;
++        }
+         profilerfiller.pop();
+         this.window.setErrorSection("Post render");
+         this.frames++;
+@@ -1285,11 +3033,17 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             && (this.screen != null && this.screen.isPauseScreen() || this.overlay != null && this.overlay.isPauseScreen())
+             && !this.singleplayerServer.isPublished();
+         if (!flag1 && this.pause) {
+-            this.soundManager.pauseAllExcept(SoundSource.MUSIC, SoundSource.UI);
++            if (this.soundManager != null) {
++                this.soundManager.pauseAllExcept(SoundSource.MUSIC, SoundSource.UI);
++            }
+         }
+ 
+         this.deltaTracker.updatePauseState(this.pause);
+-        this.deltaTracker.updateFrozenState(!this.isLevelRunningNormally());
++        boolean freezeGameTime = !this.isLevelRunningNormally();
++        if (BuildFlags.WEB_RUNTIME && this.screen instanceof ReceivingLevelScreen) {
++            freezeGameTime = false;
++        }
++        this.deltaTracker.updateFrozenState(freezeGameTime);
+         long l = Util.getNanos();
+         long i1 = l - this.lastNanoTime;
+         if (flag) {
+@@ -1330,6 +3084,71 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         }
+ 
+         profilerfiller.pop();
++        if (BuildFlags.WEB_RUNTIME) {
++            this.webRunFrameCount++;
++            String screenName = this.screen == null ? "null" : this.screen.getClass().getSimpleName();
++            String overlayName = this.overlay == null ? "null" : this.overlay.getClass().getSimpleName();
++            double frameTimeMs = this.frameTimeNs / 1000000.0;
++            webUpdateRuntimeFrameState(
++                (double)this.clientTickCount,
++                this.fpsString,
++                (double)this.webRunFrameCount,
++                frameTimeMs,
++                k,
++                screenName,
++                overlayName,
++                this.level != null,
++                this.player != null,
++                this.pause
++            );
++            if (webFrameProbe) {
++                long now = Util.getNanos();
++                webPostNs = now - webStageStartNs;
++                webUpdateFrameProbe(
++                    (double)this.webRunFrameCount,
++                    (double)this.clientTickCount,
++                    webDeltaTicks,
++                    webTickLimit,
++                    k,
++                    this.fpsString,
++                    screenName,
++                    overlayName,
++                    this.level != null,
++                    this.player != null,
++                    this.pause,
++                    webPreRenderNs / 1000000.0,
++                    webProgressNs / 1000000.0,
++                    webAdvanceNs / 1000000.0,
++                    webScheduledNs / 1000000.0,
++                    webClientTicksNs / 1000000.0,
++                    webGpuPendingNs / 1000000.0,
++                    webSoundToastsNs / 1000000.0,
++                    webClearMouseNs / 1000000.0,
++                    webGameRendererNs / 1000000.0,
++                    webBlitNs / 1000000.0,
++                    webUpdateDisplayNs / 1000000.0,
++                    webYieldNs / 1000000.0,
++                    webPostNs / 1000000.0,
++                    (now - webFrameStartNs) / 1000000.0
++                );
++            }
++        }
++    }
++
++    private void webLimitDisplayFPS(int p_410300_) {
++        long i = TimeUtil.NANOSECONDS_PER_SECOND / Math.max(1L, (long)p_410300_);
++        long j = Util.getNanos();
++        if (this.webNextFrameTimeNanos <= 0L || j - this.webNextFrameTimeNanos > TimeUtil.NANOSECONDS_PER_SECOND) {
++            this.webNextFrameTimeNanos = j + i;
++            return;
++        }
++
++        if (this.webNextFrameTimeNanos > j) {
++            Thread.yield();
++            j = Util.getNanos();
++        }
++
++        this.webNextFrameTimeNanos = Math.max(this.webNextFrameTimeNanos + i, j);
+     }
+ 
+     private ProfilerFiller constructProfiler(boolean p_167971_, @Nullable SingleTickProfiler p_167972_) {
+@@ -1531,7 +3350,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         if (this.screen == null) {
+             boolean flag = this.hasSingleplayerServer() && !this.singleplayerServer.isPublished();
+             if (flag) {
+-                this.setScreen(new PauseScreen(!p_91359_));
++                this.setScreen(new PauseScreen(BuildFlags.WEB_RUNTIME ? true : !p_91359_));
+             } else {
+                 this.setScreen(new PauseScreen(true));
+             }
+@@ -1681,8 +3500,63 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         return this.musicManager;
+     }
+ 
++    private void pollWebRuntimeWorldStart() {
++        if (!BuildFlags.WEB_RUNTIME || this.level != null || this.player != null || !(this.screen instanceof TitleScreen)) {
++            return;
++        }
++
++        String s = webConsumeAutoStartExperimentalWorld();
++        if (s != null && !s.isBlank()) {
++            System.err.println("[mc-web] runtime start experimental world: " + s);
++            this.startWebExperimentalWorld(s, this.screen);
++        }
++    }
++
+     public void tick() {
++        boolean webTickProbe = BuildFlags.WEB_RUNTIME && WebDiagnostics.frameProbeEnabled();
++        long webTickStartNs = webTickProbe ? Util.getNanos() : 0L;
++        long webTickStageStartNs = webTickStartNs;
++        long webRuntimeStartNs = 0L;
++        long webRateDelayNs = 0L;
++        long webGuiNs = 0L;
++        long webPickTutorialNs = 0L;
++        long webGameModeScreenNs = 0L;
++        long webGameModeScreenStartNs = 0L;
++        long webGameModeTickNs = 0L;
++        long webTextureTickNs = 0L;
++        long webScreenTickNs = 0L;
++        long webGuiClearCacheNs = 0L;
++        long webKeybindsNs = 0L;
++        long webRendererEntityNs = 0L;
++        long webAudioNs = 0L;
++        long webTutorialNs = 0L;
++        long webLevelTickNs = 0L;
++        long webAnimateTickNs = 0L;
++        long webParticlesNs = 0L;
++        long webConnectionNs = 0L;
++        long webKeyboardNs = 0L;
++        boolean webConnectionTickedInGameMode = false;
+         this.clientTickCount++;
++        this.pollWebRuntimeWorldStart();
++        if (BuildFlags.WEB_RUNTIME && this.clientTickCount <= 3) {
++            System.out.println(
++                "[mc-web/clienttick] begin clientTickCount="
++                    + this.clientTickCount
++                    + " levelNull="
++                    + (this.level == null)
++                    + " playerNull="
++                    + (this.player == null)
++                    + " pause="
++                    + this.pause
++                    + " screen="
++                    + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++            );
++        }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webRuntimeStartNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+         if (this.level != null && !this.pause) {
+             this.level.tickRateManager().tick();
+         }
+@@ -1690,23 +3564,56 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         if (this.rightClickDelay > 0) {
+             this.rightClickDelay--;
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webRateDelayNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+         ProfilerFiller profilerfiller = Profiler.get();
+         profilerfiller.push("gui");
+         this.chatListener.tick();
+         this.gui.tick(this.pause);
+         profilerfiller.pop();
+-        this.gameRenderer.pick(1.0F);
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webGuiNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
++        boolean skipPick = BuildFlags.WEB_RUNTIME && this.screen instanceof ReceivingLevelScreen;
++        if (!skipPick) {
++            this.gameRenderer.pick(1.0F);
++        }
+         this.tutorial.onLookAt(this.level, this.hitResult);
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webPickTutorialNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++            webGameModeScreenStartNs = now;
++        }
+         profilerfiller.push("gameMode");
+         if (!this.pause && this.level != null) {
+-            this.gameMode.tick();
++            boolean skipGameModeTick = BuildFlags.WEB_RUNTIME && this.screen instanceof ReceivingLevelScreen;
++            if (!skipGameModeTick) {
++                this.gameMode.tick();
++                webConnectionTickedInGameMode = BuildFlags.WEB_RUNTIME;
++            }
++        }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webGameModeTickNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
+         }
+ 
+         profilerfiller.popPush("textures");
+         if (this.isLevelRunningNormally()) {
+             this.textureManager.tick();
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webTextureTickNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+         if (this.screen != null || this.player == null) {
+             if (this.screen instanceof InBedChatScreen inbedchatscreen && !this.player.isSleeping()) {
+@@ -1727,14 +3634,25 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                 this.screen.tick();
+             } catch (Throwable throwable) {
+                 CrashReport crashreport = CrashReport.forThrowable(throwable, "Ticking screen");
+-                this.screen.fillCrashDetails(crashreport);
++                if (this.screen != null) this.screen.fillCrashDetails(crashreport);
+                 throw new ReportedException(crashreport);
+             }
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webScreenTickNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+         if (!this.getDebugOverlay().showDebugScreen()) {
+             this.gui.clearCache();
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webGuiClearCacheNs = now - webTickStageStartNs;
++            webGameModeScreenNs = now - webGameModeScreenStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+         if (this.overlay == null && this.screen == null) {
+             profilerfiller.popPush("Keybindings");
+@@ -1743,6 +3661,11 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                 this.missTime--;
+             }
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webKeybindsNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+         if (this.level != null) {
+             profilerfiller.popPush("gameRenderer");
+@@ -1762,10 +3685,49 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         } else if (this.gameRenderer.currentPostEffect() != null) {
+             this.gameRenderer.clearPostEffect();
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webRendererEntityNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+-        this.musicManager.tick();
+-        this.soundManager.tick(this.pause);
++        boolean skipAudioTick = BuildFlags.WEB_RUNTIME
++            && ((this.level == null && this.player == null) || this.screen instanceof ReceivingLevelScreen);
++        if (!skipAudioTick && this.musicManager != null) {
++            this.musicManager.tick();
++        }
++        if (!skipAudioTick && this.soundManager != null) {
++            this.soundManager.tick(this.pause);
++        }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webAudioNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            boolean shouldLogTickState = this.clientTickCount <= 5;
++            if (shouldLogTickState) {
++                System.out.println(
++                    "[mc-web/clienttick] outerState levelNull="
++                        + (this.level == null)
++                        + " playerNull="
++                        + (this.player == null)
++                        + " pause="
++                        + this.pause
++                );
++            }
++        }
+         if (this.level != null) {
++            if (BuildFlags.WEB_RUNTIME && this.clientTickCount <= 5) {
++                System.out.println(
++                    "[mc-web/clienttick] state levelNull=false playerNull="
++                        + (this.player == null)
++                        + " pause="
++                        + this.pause
++                        + " connNull="
++                        + (this.getConnection() == null)
++                );
++            }
+             if (!this.pause) {
+                 if (!this.options.joinedFirstServer && this.isMultiplayerServer()) {
+                     Component component = Component.translatable("tutorial.socialInteractions.title");
+@@ -1777,6 +3739,11 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                 }
+ 
+                 this.tutorial.tick();
++                if (webTickProbe) {
++                    long now = Util.getNanos();
++                    webTutorialNs = now - webTickStageStartNs;
++                    webTickStageStartNs = now;
++                }
+ 
+                 try {
+                     this.level.tick(() -> true);
+@@ -1791,30 +3758,84 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+                     throw new ReportedException(crashreport1);
+                 }
++                if (webTickProbe) {
++                    long now = Util.getNanos();
++                    webLevelTickNs = now - webTickStageStartNs;
++                    webTickStageStartNs = now;
++                }
+             }
+ 
+             profilerfiller.popPush("animateTick");
+             if (!this.pause && this.isLevelRunningNormally()) {
+                 this.level.animateTick(this.player.getBlockX(), this.player.getBlockY(), this.player.getBlockZ());
+             }
++            if (webTickProbe) {
++                long now = Util.getNanos();
++                webAnimateTickNs = now - webTickStageStartNs;
++                webTickStageStartNs = now;
++            }
+ 
+             profilerfiller.popPush("particles");
+             if (!this.pause && this.isLevelRunningNormally()) {
+                 this.particleEngine.tick();
+             }
++            if (webTickProbe) {
++                long now = Util.getNanos();
++                webParticlesNs = now - webTickStageStartNs;
++                webTickStageStartNs = now;
++            }
+ 
+             ClientPacketListener clientpacketlistener = this.getConnection();
+-            if (clientpacketlistener != null && !this.pause) {
++            if (clientpacketlistener != null && (!this.pause || BuildFlags.WEB_RUNTIME)) {
+                 clientpacketlistener.send(ServerboundClientTickEndPacket.INSTANCE);
++                if (BuildFlags.WEB_RUNTIME && !webConnectionTickedInGameMode) {
++                    clientpacketlistener.getConnection().tick();
++                }
+             }
+         } else if (this.pendingConnection != null) {
+             profilerfiller.popPush("pendingConnection");
+             this.pendingConnection.tick();
+         }
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webConnectionNs = now - webTickStageStartNs;
++            webTickStageStartNs = now;
++        }
+ 
+         profilerfiller.popPush("keyboard");
+         this.keyboardHandler.tick();
+         profilerfiller.pop();
++        if (webTickProbe) {
++            long now = Util.getNanos();
++            webKeyboardNs = now - webTickStageStartNs;
++            webUpdateTickProbe(
++                this.clientTickCount,
++                this.screen == null ? "null" : this.screen.getClass().getSimpleName(),
++                this.overlay == null ? "null" : this.overlay.getClass().getSimpleName(),
++                this.level != null,
++                this.player != null,
++                this.pause,
++                webRuntimeStartNs / 1000000.0,
++                webRateDelayNs / 1000000.0,
++                webGuiNs / 1000000.0,
++                webPickTutorialNs / 1000000.0,
++                webGameModeScreenNs / 1000000.0,
++                webGameModeTickNs / 1000000.0,
++                webTextureTickNs / 1000000.0,
++                webScreenTickNs / 1000000.0,
++                webGuiClearCacheNs / 1000000.0,
++                webKeybindsNs / 1000000.0,
++                webRendererEntityNs / 1000000.0,
++                webAudioNs / 1000000.0,
++                webTutorialNs / 1000000.0,
++                webLevelTickNs / 1000000.0,
++                webAnimateTickNs / 1000000.0,
++                webParticlesNs / 1000000.0,
++                webConnectionNs / 1000000.0,
++                webKeyboardNs / 1000000.0,
++                (now - webTickStartNs) / 1000000.0
++            );
++        }
+     }
+ 
+     private boolean isLevelRunningNormally() {
+@@ -1857,7 +3878,9 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         while (this.options.keySocialInteractions.consumeClick()) {
+             if (!this.isMultiplayerServer()) {
+                 this.player.displayClientMessage(SOCIAL_INTERACTIONS_NOT_AVAILABLE, true);
+-                this.narrator.saySystemNow(SOCIAL_INTERACTIONS_NOT_AVAILABLE);
++                if (this.narrator != null) {
++                    this.narrator.saySystemNow(SOCIAL_INTERACTIONS_NOT_AVAILABLE);
++                }
+             } else {
+                 if (this.socialInteractionsToast != null) {
+                     this.socialInteractionsToast.hide();
+@@ -1971,27 +3994,65 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public void doWorldLoad(LevelStorageSource.LevelStorageAccess p_261564_, PackRepository p_261826_, WorldStem p_261470_, boolean p_261465_) {
++        System.out.println("[mc-web/doworld] begin levelId=" + p_261564_.getLevelId());
+         this.disconnectWithProgressScreen();
+         this.progressListener.set(null);
+         Instant instant = Instant.now();
++        final boolean disableExperimentalWebLoadTimeouts = BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN;
++        final long webProgressListenerTimeoutMs = disableExperimentalWebLoadTimeouts ? 0L : 15_000L;
++        final long webServerReadyTimeoutMs = disableExperimentalWebLoadTimeouts ? 0L : 12_000L;
++        final long webWaitLogIntervalMs = 1_000L;
+ 
+         try {
++            System.out.println("[mc-web/doworld] saveDataTag begin");
+             p_261564_.saveDataTag(p_261470_.registries().compositeAccess(), p_261470_.worldData());
++            System.out.println("[mc-web/doworld] saveDataTag end");
+             Services services = Services.create(this.authenticationService, this.gameDirectory);
+             services.profileCache().setExecutor(this);
+             SkullBlockEntity.setup(services, this);
+             GameProfileCache.setUsesAuthentication(false);
++            System.out.println("[mc-web/doworld] MinecraftServer.spin begin");
+             this.singleplayerServer = MinecraftServer.spin(
+                 p_231361_ -> new IntegratedServer(p_231361_, this, p_261564_, p_261826_, p_261470_, services, p_325274_ -> {
++                    if (BuildFlags.WEB_RUNTIME && BuildFlags.ENABLE_EXPERIMENTAL_MC_MAIN) {
++                        this.progressListener.set(StoringChunkProgressListener.createCompleted());
++                        return new ChunkProgressListener() {
++                            @Override
++                            public void updateSpawnPos(ChunkPos p_410250_) {
++                            }
++
++                            @Override
++                            public void onStatusChange(ChunkPos p_410251_, @Nullable ChunkStatus p_410252_) {
++                            }
++
++                            @Override
++                            public void start() {
++                            }
++
++                            @Override
++                            public void stop() {
++                            }
++                        };
++                    }
++
+                     StoringChunkProgressListener storingchunkprogresslistener = StoringChunkProgressListener.createFromGameruleRadius(p_325274_ + 0);
+                     this.progressListener.set(storingchunkprogresslistener);
+                     return ProcessorChunkProgressListener.createStarted(storingchunkprogresslistener, this.progressTasks::add);
+                 })
+             );
++            System.out.println("[mc-web/doworld] MinecraftServer.spin end");
+             this.isLocalServer = true;
+-            this.updateReportEnvironment(ReportEnvironment.local());
+-            this.quickPlayLog.setWorldData(QuickPlayLog.Type.SINGLEPLAYER, p_261564_.getLevelId(), p_261470_.worldData().getLevelName());
++            if (!BuildFlags.WEB_RUNTIME) {
++                this.updateReportEnvironment(ReportEnvironment.local());
++                this.quickPlayLog.setWorldData(QuickPlayLog.Type.SINGLEPLAYER, p_261564_.getLevelId(), p_261470_.worldData().getLevelName());
++            }
+         } catch (Throwable throwable) {
++            System.out.println(
++                "[mc-web/doworld] failed "
++                    + throwable.getClass().getSimpleName()
++                    + ": "
++                    + (throwable.getMessage() == null ? "<no message>" : throwable.getMessage())
++            );
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Starting integrated server");
+             CrashReportCategory crashreportcategory = crashreport.addCategory("Starting integrated server");
+             crashreportcategory.setDetail("Level ID", p_261564_.getLevelId());
+@@ -1999,55 +4060,544 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             throw new ReportedException(crashreport);
+         }
+ 
++        System.out.println("[mc-web/doworld] wait progressListener begin");
++        long progressWaitStartMs = System.currentTimeMillis();
++        long nextProgressWaitLogMs = progressWaitStartMs + webWaitLogIntervalMs;
+         while (this.progressListener.get() == null) {
++            if (BuildFlags.WEB_RUNTIME) {
++                long nowMs = System.currentTimeMillis();
++                if (nowMs >= nextProgressWaitLogMs) {
++                    long elapsedMs = nowMs - progressWaitStartMs;
++                    System.out.println("[mc-web/doworld] wait progressListener elapsedMs=" + elapsedMs);
++                    nextProgressWaitLogMs = nowMs + webWaitLogIntervalMs;
++                }
++                if (webProgressListenerTimeoutMs > 0L && nowMs - progressWaitStartMs >= webProgressListenerTimeoutMs) {
++                    String s = p_261470_.worldData().getLevelName();
++                    System.out.println(
++                        "[mc-web/doworld] wait progressListener timeout elapsedMs="
++                            + (nowMs - progressWaitStartMs)
++                            + " levelId="
++                            + p_261564_.getLevelId()
++                    );
++                    this.setScreen(new WebEnterWorldPlaceholderScreen(null, s == null ? p_261564_.getLevelId() : s));
++                    return;
++                }
++            }
+             Thread.yield();
+         }
++        System.out.println("[mc-web/doworld] wait progressListener end");
+ 
+-        LevelLoadingScreen levelloadingscreen = new LevelLoadingScreen(this.progressListener.get());
++        LevelLoadingScreen levelloadingscreen = BuildFlags.WEB_RUNTIME ? null : new LevelLoadingScreen(this.progressListener.get());
+         ProfilerFiller profilerfiller = Profiler.get();
+-        this.setScreen(levelloadingscreen);
++        this.setScreen(BuildFlags.WEB_RUNTIME ? new WebWaitingForServerScreen() : levelloadingscreen);
+         profilerfiller.push("waitForServer");
++        System.out.println("[mc-web/doworld] wait server ready begin");
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/doworld] wait server ready mode=fullRunTick");
++        }
++        long serverReadyWaitStartMs = System.currentTimeMillis();
++        long nextServerWaitLogMs = serverReadyWaitStartMs + webWaitLogIntervalMs;
+ 
+         for (; !this.singleplayerServer.isReady() || this.overlay != null; this.handleDelayedCrash()) {
+-            levelloadingscreen.tick();
+-            this.runTick(false);
++            if (BuildFlags.WEB_RUNTIME) {
++                long nowMs = System.currentTimeMillis();
++                if (nowMs >= nextServerWaitLogMs) {
++                    long elapsedMs = nowMs - serverReadyWaitStartMs;
++                    System.out.println(
++                        "[mc-web/doworld] wait server ready elapsedMs="
++                            + elapsedMs
++                            + " serverReady="
++                            + this.singleplayerServer.isReady()
++                            + " overlay="
++                            + (this.overlay == null ? "null" : this.overlay.getClass().getSimpleName())
++                    );
++                    nextServerWaitLogMs = nowMs + webWaitLogIntervalMs;
++                }
++                if (webServerReadyTimeoutMs > 0L && nowMs - serverReadyWaitStartMs >= webServerReadyTimeoutMs) {
++                    String s1 = p_261470_.worldData().getLevelName();
++                    System.out.println(
++                        "[mc-web/doworld] wait server ready timeout elapsedMs="
++                            + (nowMs - serverReadyWaitStartMs)
++                            + " levelId="
++                            + p_261564_.getLevelId()
++                    );
++                    System.out.println("[mc-web/doworld] wait server ready end (timeout-fallback)");
++                    System.out.println("[mc-web/loopback] timeout fallback path");
++                    profilerfiller.pop();
++                    this.handleWebLocalLoopbackFailure(
++                        "waitServerReadyTimeout",
++                        new IllegalStateException("Integrated server not ready within timeout")
++                    );
++                    this.setScreen(new WebEnterWorldPlaceholderScreen(null, s1 == null ? p_261564_.getLevelId() : s1));
++                    return;
++                }
++            }
++            if (levelloadingscreen != null) {
++                levelloadingscreen.tick();
++            }
++            this.runTick(BuildFlags.WEB_RUNTIME);
+ 
+             try {
+                 Thread.sleep(16L);
+             } catch (InterruptedException interruptedexception) {
+             }
+         }
++        System.out.println("[mc-web/doworld] wait server ready end");
+ 
+         GameTestTicker.SINGLETON.startTicking();
+         profilerfiller.pop();
+         Duration duration = Duration.between(instant, Instant.now());
+-        SocketAddress socketaddress = this.singleplayerServer.getConnection().startMemoryChannel();
+-        Connection connection = Connection.connectToLocalServer(socketaddress);
++        System.out.println("[mc-web/doworld] start memory channel begin");
++        SocketAddress socketaddress;
++        try {
++            socketaddress = this.singleplayerServer.getConnection().startMemoryChannel();
++        } catch (Throwable throwable) {
++            System.out.println(
++                "[mc-web/doworld] start memory channel failed "
++                    + throwable.getClass().getSimpleName()
++                    + ": "
++                    + (throwable.getMessage() == null ? "<no message>" : throwable.getMessage())
++            );
++            throwable.printStackTrace();
++            if (BuildFlags.WEB_RUNTIME) {
++                this.handleWebLocalLoopbackFailure("startMemoryChannel", throwable);
++                return;
++            }
++            throw throwable;
++        }
++        System.out.println("[mc-web/doworld] start memory channel end");
++        Connection connection;
++        try {
++            connection = Connection.connectToLocalServer(socketaddress);
++        } catch (Throwable throwable1) {
++            System.out.println(
++                "[mc-web/doworld] connectToLocalServer failed "
++                    + throwable1.getClass().getSimpleName()
++                    + ": "
++                    + (throwable1.getMessage() == null ? "<no message>" : throwable1.getMessage())
++            );
++            throwable1.printStackTrace();
++            if (BuildFlags.WEB_RUNTIME) {
++                this.handleWebLocalLoopbackFailure("connectToLocalServer", throwable1);
++                return;
++            }
++            throw throwable1;
++        }
++        System.out.println("[mc-web/doworld] local connection created");
+         connection.initiateServerboundPlayConnection(
+             socketaddress.toString(), 0, new ClientHandshakePacketListenerImpl(connection, this, null, null, p_261465_, duration, p_231442_ -> {}, null)
+         );
++        System.out.println("[mc-web/doworld] play connection initiated");
+         connection.send(new ServerboundHelloPacket(this.getUser().getName(), this.getUser().getProfileId()));
++        System.out.println("[mc-web/doworld] hello sent");
+         this.pendingConnection = connection;
++        System.out.println("[mc-web/doworld] end levelId=" + p_261564_.getLevelId());
++    }
++
++    private void handleWebLocalLoopbackFailure(String p_411274_, Throwable p_410250_) {
++        System.out.println(
++            "[mc-web/doworld] local loopback fallback after "
++                + p_411274_
++                + " failure: "
++                + p_410250_.getClass().getSimpleName()
++                + ": "
++                + (p_410250_.getMessage() == null ? "<no message>" : p_410250_.getMessage())
++        );
++        this.pendingConnection = null;
++        this.progressListener.set(null);
++        this.isLocalServer = false;
++        IntegratedServer integratedserver = this.singleplayerServer;
++        this.singleplayerServer = null;
++        if (integratedserver != null) {
++            integratedserver.halt(false);
++        }
++
++        this.setScreen(new TitleScreen());
+     }
+ 
+     public void setLevel(ClientLevel p_91157_, ReceivingLevelScreen.Reason p_335893_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] minecraft.setLevel.begin");
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] minecraft.setLevel.beforeUpdateScreenAndTick");
++        }
+         this.updateScreenAndTick(new ReceivingLevelScreen(() -> false, p_335893_));
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] minecraft.setLevel.afterUpdateScreenAndTick");
++        }
+         this.level = p_91157_;
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] minecraft.setLevel.beforeUpdateLevelInEngines");
++        }
+         this.updateLevelInEngines(p_91157_);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] minecraft.setLevel.afterUpdateLevelInEngines");
++        }
+         if (!this.isLocalServer) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-web/clientlogin] minecraft.setLevel.beforeRemoteServices");
++            }
+             Services services = Services.create(this.authenticationService, this.gameDirectory);
+             services.profileCache().setExecutor(this);
+             SkullBlockEntity.setup(services, this);
+             GameProfileCache.setUsesAuthentication(false);
++            if (BuildFlags.WEB_RUNTIME) {
++                System.err.println("[mc-web/clientlogin] minecraft.setLevel.afterRemoteServices");
++            }
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] minecraft.setLevel.end");
+         }
+     }
+ 
++    public void webQueueForcedReceivingLevelRender(String source) {
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.execute(() -> this.webForceReceivingLevelRender(source));
++            return;
++        }
++        if (WebDiagnostics.enabled() && this.webForcedReceivingRenderQueueLogs < 12) {
++            this.webForcedReceivingRenderQueueLogs++;
++            System.out.println(
++                "[mc-web/renderGate] forcedReceivingRender.delayedProbe source="
++                    + source
++                    + " screen="
++                    + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++                    + " levelNull="
++                    + (this.level == null)
++                    + " playerNull="
++                    + (this.player == null)
++                    + " progressSize="
++                    + this.progressTasks.size()
++            );
++        }
++        if (this.screen instanceof ReceivingLevelScreen && this.level != null && this.player != null) {
++            this.execute(() -> this.webForceReceivingLevelRender(source));
++        }
++    }
++
++    private void runProgressTasks() {
++        int initialSize = this.progressTasks.size();
++        boolean webBudgetedDrain = BuildFlags.WEB_RUNTIME && this.screen == null && this.level != null && this.player != null;
++        long drainStartNs = webBudgetedDrain ? Util.getNanos() : 0L;
++        int drained = 0;
++        if (
++            BuildFlags.WEB_RUNTIME
++                && initialSize > 0
++                && WebDiagnostics.enabled()
++                && this.webProgressTaskDrainLogs < 12
++        ) {
++            this.webProgressTaskDrainLogs++;
++            System.out.println(
++                "[mc-web/renderGate] progressTasks.drainBegin size="
++                    + initialSize
++                    + " screen="
++                    + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++                    + " levelNull="
++                    + (this.level == null)
++                    + " playerNull="
++                    + (this.player == null)
++            );
++        }
++        Runnable runnable;
++        while ((runnable = this.progressTasks.poll()) != null) {
++            runnable.run();
++            drained++;
++            if (
++                webBudgetedDrain
++                    && (
++                        drained >= WEB_PLAYABLE_PROGRESS_TASK_MAX_PER_DRAIN
++                            || Util.getNanos() - drainStartNs >= WEB_PLAYABLE_PROGRESS_TASK_BUDGET_NS
++                    )
++            ) {
++                if (WebDiagnostics.enabled() && this.webProgressTaskDrainLogs < 12) {
++                    this.webProgressTaskDrainLogs++;
++                    System.out.println(
++                        "[mc-web/renderGate] progressTasks.budgetPause drained="
++                            + drained
++                            + " remaining="
++                            + this.progressTasks.size()
++                    );
++                }
++                break;
++            }
++        }
++    }
++
++    public void webForceReceivingLevelRender(String source) {
++        if (!BuildFlags.WEB_RUNTIME || this.webForcedReceivingRenderLogs >= WEB_FORCED_RECEIVING_RENDER_MAX_ATTEMPTS) {
++            return;
++        }
++
++        if (!this.isSameThread()) {
++            int i = this.webForcedReceivingRenderLogs + 1;
++            if (i <= 8) {
++                System.out.println("[mc-web/renderGate] forcedReceivingRender.defer source=" + source + " pendingLog#=" + i);
++            }
++            this.execute(() -> this.webForceReceivingLevelRender(source + "/client-thread"));
++            return;
++        }
++
++        if (
++            this.webForcedReceivingRenderActive
++                || !(this.screen instanceof ReceivingLevelScreen)
++                || this.level == null
++                || this.player == null
++        ) {
++            int i = this.webForcedReceivingRenderLogs + 1;
++            if (i <= 8) {
++                System.out.println(
++                    "[mc-web/renderGate] forcedReceivingRender.skip source="
++                        + source
++                        + " active="
++                        + this.webForcedReceivingRenderActive
++                        + " screen="
++                        + (this.screen == null ? "null" : this.screen.getClass().getSimpleName())
++                        + " levelNull="
++                        + (this.level == null)
++                        + " playerNull="
++                        + (this.player == null)
++                );
++            }
++            return;
++        }
++
++        long nowMs = System.currentTimeMillis();
++        if (this.webLastForcedReceivingRenderMs != 0L && nowMs - this.webLastForcedReceivingRenderMs < WEB_FORCED_RECEIVING_RENDER_MIN_INTERVAL_MS) {
++            long waitMs = WEB_FORCED_RECEIVING_RENDER_MIN_INTERVAL_MS - (nowMs - this.webLastForcedReceivingRenderMs);
++            if (waitMs > 0L && waitMs <= 80L) {
++                if (WebDiagnostics.enabled() && this.webForcedReceivingRenderQueueLogs < 12) {
++                    this.webForcedReceivingRenderQueueLogs++;
++                    System.out.println(
++                        "[mc-web/renderGate] forcedReceivingRender.waitInterval source="
++                            + source
++                            + " waitMs="
++                            + waitMs
++                    );
++                }
++                try {
++                    Thread.sleep(waitMs);
++                } catch (InterruptedException interruptedexception) {
++                    Thread.currentThread().interrupt();
++                    return;
++                }
++                nowMs = System.currentTimeMillis();
++                if (nowMs - this.webLastForcedReceivingRenderMs < WEB_FORCED_RECEIVING_RENDER_MIN_INTERVAL_MS) {
++                    return;
++                }
++            } else {
++                return;
++            }
++        }
++
++        this.webForcedReceivingRenderLogs++;
++        this.webLastForcedReceivingRenderMs = nowMs;
++        this.webForcedReceivingRenderActive = true;
++        try {
++            System.out.println(
++                "[mc-web/renderGate] forcedReceivingRender.begin source="
++                    + source
++                    + " log#="
++                    + this.webForcedReceivingRenderLogs
++            );
++            this.gameRenderer.render(this.deltaTracker, true);
++            boolean terrainReady = this.levelRenderer != null && this.levelRenderer.hasWebTerrainReady();
++            if (terrainReady) {
++                this.webForcedReceivingRenderLogs = WEB_FORCED_RECEIVING_RENDER_MAX_ATTEMPTS;
++            }
++            System.out.println(
++                "[mc-web/renderGate] forcedReceivingRender.end source="
++                    + source
++                    + " terrainReady="
++                    + terrainReady
++                    + " attempts="
++                    + this.webForcedReceivingRenderLogs
++            );
++        } catch (Throwable throwable) {
++            System.out.println(
++                "[mc-web/renderGate] forcedReceivingRender.caught source="
++                    + source
++                    + " "
++                    + throwable.getClass().getName()
++                    + ": "
++                    + throwable.getMessage()
++            );
++        } finally {
++            this.webForcedReceivingRenderActive = false;
++        }
++    }
++
++    public void startWebExperimentalWorld(String p_410200_, @Nullable Screen p_410201_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            System.out.println("[mc-web/worldload] experimental start requested: " + p_410200_);
++            WebExperimentalWorldLoadScreen webexperimentalworldloadscreen = new WebExperimentalWorldLoadScreen(p_410200_, p_410201_);
++            this.setScreen(webexperimentalworldloadscreen);
++            String s = p_410200_ == null ? "" : p_410200_.trim();
++            if (s.isEmpty()) {
++                s = "Web World";
++            }
++
++            try {
++                String s1 = FileUtil.findAvailableName(this.getLevelSource().getBaseDir(), s, "");
++                webexperimentalworldloadscreen.setProbeState("Creating experimental world", "levelId=" + s1);
++                LevelSettings levelsettings = new LevelSettings(
++                    s,
++                    GameType.SURVIVAL,
++                    false,
++                    Difficulty.NORMAL,
++                    false,
++                    createWebExperimentalGameRules(),
++                    WorldDataConfiguration.DEFAULT
++                );
++                System.out.println("[mc-web/worldload] experimental world createFreshLevel: " + s1);
++                this.createWorldOpenFlows()
++                    .createFreshLevel(
++                        s1,
++                        levelsettings,
++                        WorldOptions.testWorldWithRandomSeed(),
++                        WorldPresets::createFlatWorldDimensions,
++                        webexperimentalworldloadscreen
++                    );
++            } catch (Exception exception) {
++                String s2 = exception.getClass().getSimpleName() + ": " + (exception.getMessage() == null ? "<no message>" : exception.getMessage());
++                System.out.println("[mc-web/worldload] experimental world setup failed: " + s2);
++                webexperimentalworldloadscreen.applyProbeResult(new WebExperimentalWorldLoadScreen.ProbeResult(false, "CreateFreshLevelSetup", s2, null));
++            }
++        }
++    }
++
++    private static GameRules createWebExperimentalGameRules() {
++        GameRules gamerules = new GameRules(WorldDataConfiguration.DEFAULT.enabledFeatures());
++        gamerules.getRule(GameRules.RULE_RANDOMTICKING).set(0, null);
++        return gamerules;
++    }
++
++    public WebExperimentalWorldLoadScreen.ProbeResult runWebExperimentalWorldProbe(String p_410210_) {
++        String s = p_410210_ == null ? "" : p_410210_.trim();
++        if (s.isEmpty()) {
++            s = "Web World";
++        }
++
++        LevelStorageSource levelstoragesource = this.getLevelSource();
++        LevelStorageSource.LevelStorageAccess levelstoragesource$levelstorageaccess = null;
++
++        try {
++            String s1 = FileUtil.findAvailableName(levelstoragesource.getBaseDir(), s, "");
++            System.out.println("[mc-web/worldload] probe folder candidate: " + s1);
++            levelstoragesource$levelstorageaccess = levelstoragesource.createAccess(s1);
++            FileUtil.createDirectoriesSafe(levelstoragesource$levelstorageaccess.getLevelPath(LevelResource.DATAPACK_DIR));
++            boolean flag = Files.exists(levelstoragesource$levelstorageaccess.getLevelDirectory().path());
++            boolean flag1 = levelstoragesource$levelstorageaccess.hasWorldData();
++            String s2 = "folder=" + s1 + ", exists=" + flag + ", hasLevelDatBefore=" + flag1;
++            System.out.println("[mc-web/worldload] bootstrap success: " + s2);
++            String s3 = this.tryWriteWebExperimentalLevelData(levelstoragesource$levelstorageaccess, s);
++            boolean flag2 = levelstoragesource$levelstorageaccess.hasWorldData();
++            String s4 = s2 + ", hasLevelDatAfter=" + flag2 + ", levelDatWrite=" + s3;
++            if (flag2) {
++                System.out.println("[mc-web/worldload] leveldat success: " + s4);
++                return new WebExperimentalWorldLoadScreen.ProbeResult(true, "LevelDatWritten", s4, s1);
++            } else {
++                System.out.println("[mc-web/worldload] probe blocked: " + s4);
++                return new WebExperimentalWorldLoadScreen.ProbeResult(false, "LevelDatBlocked", s4, s1);
++            }
++        } catch (Exception exception) {
++            String s5 = exception.getClass().getSimpleName() + ": " + (exception.getMessage() == null ? "<no message>" : exception.getMessage());
++            System.out.println("[mc-web/worldload] probe failed: " + s5);
++            return new WebExperimentalWorldLoadScreen.ProbeResult(false, "Failure", s5, null);
++        } finally {
++            if (levelstoragesource$levelstorageaccess != null) {
++                levelstoragesource$levelstorageaccess.safeClose();
++            }
++        }
++    }
++
++    private String tryWriteWebExperimentalLevelData(LevelStorageSource.LevelStorageAccess p_410220_, String p_410221_) {
++        try {
++            Minecraft.WebExperimentalLevelBootstrap minecraft$webexperimentallevelbootstrap = this.loadWebExperimentalLevelBootstrap();
++            RegistryAccess.Frozen registryaccess$frozen = minecraft$webexperimentallevelbootstrap.registryAccess();
++            boolean flag = registryaccess$frozen.lookup(Registries.WORLD_PRESET).isPresent();
++            boolean flag1 = registryaccess$frozen.lookup(Registries.LEVEL_STEM).isPresent();
++            LevelSettings levelsettings = new LevelSettings(
++                p_410221_,
++                GameType.SURVIVAL,
++                false,
++                Difficulty.NORMAL,
++                false,
++                createWebExperimentalGameRules(),
++                WorldDataConfiguration.DEFAULT
++            );
++            PrimaryLevelData primaryleveldata = new PrimaryLevelData(
++                levelsettings,
++                WorldOptions.testWorldWithRandomSeed(),
++                minecraft$webexperimentallevelbootstrap.specialWorldProperty(),
++                registryaccess$frozen.allRegistriesLifecycle()
++            );
++            p_410220_.saveDataTag(registryaccess$frozen, primaryleveldata);
++            return "worldLoaderBootstrap(worldPreset=" + flag + ", levelStem=" + flag1 + ")";
++        } catch (ExecutionException executionexception) {
++            Throwable throwable = executionexception.getCause();
++            String s = throwable == null
++                ? "ExecutionException: <no cause>"
++                : throwable.getClass().getSimpleName() + ": " + (throwable.getMessage() == null ? "<no message>" : throwable.getMessage());
++            System.out.println("[mc-web/worldload] leveldat failed cause: " + s);
++            if (throwable != null) {
++                throwable.printStackTrace();
++            } else {
++                executionexception.printStackTrace();
++            }
++            return "blocked(" + s + ")";
++        } catch (Exception exception) {
++            String s = exception.getClass().getSimpleName() + ": " + (exception.getMessage() == null ? "<no message>" : exception.getMessage());
++            System.out.println("[mc-web/worldload] leveldat failed: " + s);
++            exception.printStackTrace();
++            return "blocked(" + s + ")";
++        }
++    }
++
++    private Minecraft.WebExperimentalLevelBootstrap loadWebExperimentalLevelBootstrap() throws Exception {
++        System.out.println("[mc-web/worldload] bootstrap registry load: begin");
++        PackRepository packrepository = new PackRepository(new ServerPacksSource(this.directoryValidator()));
++        WorldLoader.PackConfig worldloader$packconfig = new WorldLoader.PackConfig(packrepository, WorldDataConfiguration.DEFAULT, false, true);
++        WorldLoader.InitConfig worldloader$initconfig = new WorldLoader.InitConfig(worldloader$packconfig, Commands.CommandSelection.INTEGRATED, 2);
++        CompletableFuture<Minecraft.WebExperimentalLevelBootstrap> completablefuture = WorldLoader.load(
++            worldloader$initconfig,
++            p_410230_ -> {
++                System.out.println("[mc-web/worldload] bootstrap registry load: supplier");
++                WorldDimensions.Complete worlddimensions$complete = WorldPresets.createFlatWorldDimensions(p_410230_.datapackWorldgen())
++                    .bake(p_410230_.datapackDimensions().lookupOrThrow(Registries.LEVEL_STEM));
++                return new WorldLoader.DataLoadOutput<>(worlddimensions$complete, worlddimensions$complete.dimensionsRegistryAccess());
++            },
++            (p_410225_, p_410226_, p_410227_, p_410228_) -> {
++                try {
++                    System.out.println("[mc-web/worldload] bootstrap registry load: result");
++                    RegistryAccess.Frozen registryaccess$frozen = p_410227_.replaceFrom(RegistryLayer.DIMENSIONS, p_410228_.dimensionsRegistryAccess()).compositeAccess();
++                    return new Minecraft.WebExperimentalLevelBootstrap(registryaccess$frozen, p_410228_.specialWorldProperty());
++                } finally {
++                    p_410225_.close();
++                }
++            },
++            Util.backgroundExecutor(),
++            this
++        );
++        this.managedBlock(completablefuture::isDone);
++        System.out.println("[mc-web/worldload] bootstrap registry load: join");
++        return completablefuture.get();
++    }
++
++    @OnlyIn(Dist.CLIENT)
++    static record WebExperimentalLevelBootstrap(RegistryAccess.Frozen registryAccess, PrimaryLevelData.SpecialWorldProperty specialWorldProperty) {
++    }
++
+     public void disconnectWithSavingScreen() {
+         this.disconnect(new GenericMessageScreen(SAVING_LEVEL), false);
+     }
+ 
+     public void disconnectWithProgressScreen() {
+-        this.disconnect(new ProgressScreen(true), false);
++        if (BuildFlags.WEB_RUNTIME) {
++            this.disconnect(new GenericMessageScreen(Component.literal("Preparing local world...")), false);
++        } else {
++            this.disconnect(new ProgressScreen(true), false);
++        }
+     }
+ 
+     public void disconnect(Screen p_335030_, boolean p_330226_) {
+@@ -2060,16 +4608,22 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             }
+         }
+ 
+-        this.playerSocialManager.stopOnlineMode();
++        if (this.playerSocialManager != null) {
++            this.playerSocialManager.stopOnlineMode();
++        }
+         if (this.metricsRecorder.isRecording()) {
+             this.debugClientMetricsCancel();
+         }
+ 
+         IntegratedServer integratedserver = this.singleplayerServer;
+         this.singleplayerServer = null;
+-        this.gameRenderer.resetData();
++        if (this.gameRenderer != null) {
++            this.gameRenderer.resetData();
++        }
+         this.gameMode = null;
+-        this.narrator.clear();
++        if (this.narrator != null) {
++            this.narrator.clear();
++        }
+         this.clientLevelTeardownInProgress = true;
+ 
+         try {
+@@ -2086,7 +4640,9 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                     profilerfiller.pop();
+                 }
+ 
+-                this.gui.onDisconnected();
++                if (this.gui != null) {
++                    this.gui.onDisconnected();
++                }
+                 this.isLocalServer = false;
+             }
+ 
+@@ -2101,7 +4657,9 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public void clearDownloadedResourcePacks() {
+-        this.downloadedPackSource.cleanupAfterDisconnect();
++        if (this.downloadedPackSource != null) {
++            this.downloadedPackSource.cleanupAfterDisconnect();
++        }
+         this.runAllTasks();
+     }
+ 
+@@ -2115,14 +4673,20 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+             this.debugClientMetricsCancel();
+         }
+ 
+-        this.gameRenderer.resetData();
++        if (this.gameRenderer != null) {
++            this.gameRenderer.resetData();
++        }
+         this.gameMode = null;
+-        this.narrator.clear();
++        if (this.narrator != null) {
++            this.narrator.clear();
++        }
+         this.clientLevelTeardownInProgress = true;
+ 
+         try {
+             this.updateScreenAndTick(p_297406_);
+-            this.gui.onDisconnected();
++            if (this.gui != null) {
++                this.gui.onDisconnected();
++            }
+             this.level = null;
+             this.updateLevelInEngines(null);
+             this.player = null;
+@@ -2136,11 +4700,28 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     private void updateScreenAndTick(Screen p_91363_) {
+         ProfilerFiller profilerfiller = Profiler.get();
+         profilerfiller.push("forcedTick");
+-        this.soundManager.stop();
++        if (this.soundManager != null) {
++            this.soundManager.stop();
++        }
+         this.cameraEntity = null;
+         this.pendingConnection = null;
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateScreenAndTick.beforeSetScreen " + p_91363_.getClass().getName());
++        }
+         this.setScreen(p_91363_);
+-        this.runTick(false);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateScreenAndTick.afterSetScreen");
++        }
++        boolean skipForcedReceivingTick = BuildFlags.WEB_RUNTIME && p_91363_ instanceof ReceivingLevelScreen;
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateScreenAndTick.beforeRunTick skip=" + skipForcedReceivingTick);
++        }
++        if (!skipForcedReceivingTick) {
++            this.runTick(false);
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateScreenAndTick.afterRunTick");
++        }
+         profilerfiller.pop();
+     }
+ 
+@@ -2152,11 +4733,32 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     private void updateLevelInEngines(@Nullable ClientLevel p_91325_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.beforeLevelRenderer");
++        }
+         this.levelRenderer.setLevel(p_91325_);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.afterLevelRenderer");
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.beforeParticleEngine");
++        }
+         this.particleEngine.setLevel(p_91325_);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.afterParticleEngine");
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.beforeBlockEntityDispatcher");
++        }
+         this.blockEntityRenderDispatcher.setLevel(p_91325_);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.afterBlockEntityDispatcher");
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.beforeGameRenderer");
++        }
+         this.gameRenderer.setLevel(p_91325_);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.afterGameRenderer");
++        }
+         this.updateTitle();
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-web/clientlogin] updateLevelInEngines.afterUpdateTitle");
++        }
+     }
+ 
+     private UserProperties userProperties() {
+@@ -2327,7 +4929,12 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+         }
+ 
+         if (p_167852_ != null) {
+-            p_167851_.setDetail("Resource Packs", () -> PackRepository.displayPackList(p_167852_.getResourcePackRepository().getSelectedPacks()));
++            p_167851_.setDetail(
++                "Resource Packs",
++                () -> p_167852_.getResourcePackRepository() != null
++                        ? PackRepository.displayPackList(p_167852_.getResourcePackRepository().getSelectedPacks())
++                        : "vanilla (web runtime)"
++            );
+         }
+ 
+         if (p_167853_ != null) {
+@@ -2350,7 +4957,12 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public void updateReportEnvironment(ReportEnvironment p_239477_) {
+-        if (!this.reportingContext.matches(p_239477_)) {
++        if (this.reportingContext == null) {
++            if (BuildFlags.WEB_RUNTIME) {
++                return;
++            }
++            this.reportingContext = ReportingContext.create(p_239477_, this.userApiService);
++        } else if (!this.reportingContext.matches(p_239477_)) {
+             this.reportingContext = ReportingContext.create(p_239477_, this.userApiService);
+         }
+     }
+@@ -2379,7 +4991,11 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public boolean isLocalPlayer(UUID p_298914_) {
+-        return p_298914_.equals(this.getUser().getProfileId());
++        if (BuildFlags.WEB_RUNTIME && p_298914_ == null) {
++            System.err.println("[mc-web/localplayer] isLocalPlayer null arg");
++            return false;
++        }
++        return p_298914_ != null && p_298914_.equals(this.getUser().getProfileId());
+     }
+ 
+     public User getUser() {
+@@ -2461,7 +5077,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+                 if (optional.isPresent()) {
+                     Optional<Music> optional1 = optional.get().getRandom(level.random);
+                     return new MusicInfo(optional1.orElse(null), f);
+-                } else if (!this.musicManager.isPlayingMusic(Musics.UNDER_WATER) && (!this.player.isUnderWater() || !holder.is(BiomeTags.PLAYS_UNDERWATER_MUSIC))) {
++                } else if ((this.musicManager == null || !this.musicManager.isPlayingMusic(Musics.UNDER_WATER)) && (!this.player.isUnderWater() || !holder.is(BiomeTags.PLAYS_UNDERWATER_MUSIC))) {
+                     return level.dimension() != Level.NETHER && this.player.getAbilities().instabuild && this.player.getAbilities().mayfly
+                         ? new MusicInfo(Musics.CREATIVE, f)
+                         : new MusicInfo(Musics.GAME, f);
+@@ -2547,7 +5163,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public ToastManager getToastManager() {
+-        return this.toastManager;
++        return this.toastManager != null ? this.toastManager : ToastManager.noop();
+     }
+ 
+     public Tutorial getTutorial() {
+@@ -2726,10 +5342,15 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+ 
+     @Nullable
+     public SignatureValidator getProfileKeySignatureValidator() {
++        // mc-web: authenticationService is null (offline browser mode); chat
++        // signature validation is disabled — there is no online server to
++        // validate against.
++        if (this.authenticationService == null) return null;
+         return SignatureValidator.from(this.authenticationService.getServicesKeySet(), ServicesKeyType.PROFILE_KEY);
+     }
+ 
+     public boolean canValidateProfileKeys() {
++        if (this.authenticationService == null) return false;
+         return !this.authenticationService.getServicesKeySet().keys(ServicesKeyType.PROFILE_KEY).isEmpty();
+     }
+ 
+@@ -2742,7 +5363,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public GameNarrator getNarrator() {
+-        return this.narrator;
++        return this.narrator != null ? this.narrator : WEB_NOOP_NARRATOR;
+     }
+ 
+     public ChatListener getChatListener() {
+@@ -2758,7 +5379,7 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     }
+ 
+     public QuickPlayLog quickPlayLog() {
+-        return this.quickPlayLog;
++        return this.quickPlayLog != null ? this.quickPlayLog : QuickPlayLog.of(null);
+     }
+ 
+     public CommandHistory commandHistory() {
+@@ -2836,3 +5457,15 @@ public class Minecraft extends ReentrantBlockableEventLoop<Runnable> implements
+     record GameLoadCookie(RealmsClient realmsClient, GameConfig.QuickPlayData quickPlayData) {
+     }
+ }
++
++
++
++
++
++
++
++
++
++
++
++

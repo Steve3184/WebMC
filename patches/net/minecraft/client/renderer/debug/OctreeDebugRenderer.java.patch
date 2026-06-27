@@ -1,0 +1,12 @@
+--- a/net/minecraft/client/renderer/debug/OctreeDebugRenderer.java
++++ b/net/minecraft/client/renderer/debug/OctreeDebugRenderer.java
+@@ -24,6 +24,9 @@
+ 
+     public void render(PoseStack p_368352_, Frustum p_366121_, MultiBufferSource p_363548_, double p_363763_, double p_367605_, double p_361347_) {
+         Octree octree = this.minecraft.levelRenderer.getSectionOcclusionGraph().getOctree();
++        if (octree == null) {
++            return;
++        }
+         MutableInt mutableint = new MutableInt(0);
+         octree.visitNodes(
+             (p_367461_, p_361624_, p_368817_, p_363024_) -> this.renderNode(

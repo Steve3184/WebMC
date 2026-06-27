@@ -1,0 +1,91 @@
+diff --git a/net/minecraft/util/thread/BlockableEventLoop.java b/net/minecraft/util/thread/BlockableEventLoop.java
+index 80de408..1ee36cf 100644
+--- a/net/minecraft/util/thread/BlockableEventLoop.java
++++ b/net/minecraft/util/thread/BlockableEventLoop.java
+@@ -20,17 +20,27 @@ import net.minecraft.util.profiling.metrics.MetricSampler;
+ import net.minecraft.util.profiling.metrics.MetricsRegistry;
+ import net.minecraft.util.profiling.metrics.ProfilerMeasured;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.teavm.runtime.YieldingExecutorService;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public abstract class BlockableEventLoop<R extends Runnable> implements ProfilerMeasured, TaskScheduler<R>, Executor {
+     public static final long BLOCK_TIME_NANOS = 100000L;
+     private final String name;
+     private static final Logger LOGGER = LogUtils.getLogger();
+-    private final Queue<R> pendingRunnables = Queues.newConcurrentLinkedQueue();
++    private final Queue<R> pendingRunnables = BuildFlags.WEB_RUNTIME ? Queues.newArrayDeque() : Queues.newConcurrentLinkedQueue();
+     private int blockingCount;
++    private static int webTaskExceptionLogs;
+ 
+     protected BlockableEventLoop(String p_18686_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-probe] BlockableEventLoop.<init>: name=" + p_18686_);
++        }
+         this.name = p_18686_;
+-        MetricsRegistry.INSTANCE.add(this);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println("[mc-probe] BlockableEventLoop.<init>: skip MetricsRegistry.INSTANCE.add(this) in web runtime");
++        } else {
++            MetricsRegistry.INSTANCE.add(this);
++        }
+     }
+ 
+     protected abstract boolean shouldRun(R p_18703_);
+@@ -107,7 +117,11 @@ public abstract class BlockableEventLoop<R extends Runnable> implements Profiler
+     }
+ 
+     protected void runAllTasks() {
++        long start = net.minecraft.Util.getMillis();
+         while (this.pollTask()) {
++            if (net.minecraft.Util.getMillis() - start > 10L) {
++                break;
++            }
+         }
+     }
+ 
+@@ -138,6 +152,17 @@ public abstract class BlockableEventLoop<R extends Runnable> implements Profiler
+     }
+ 
+     protected void waitForTasks() {
++        if (BuildFlags.WEB_RUNTIME && YieldingExecutorService.pumpAllOnce()) {
++            return;
++        }
++        if (BuildFlags.WEB_RUNTIME) {
++            try {
++                Thread.sleep(1L);
++            } catch (InterruptedException interruptedexception) {
++                Thread.currentThread().interrupt();
++            }
++            return;
++        }
+         Thread.yield();
+         LockSupport.parkNanos("waiting for tasks", 100000L);
+     }
+@@ -146,6 +171,18 @@ public abstract class BlockableEventLoop<R extends Runnable> implements Profiler
+         try (Zone zone = TracyClient.beginZone("Task", SharedConstants.IS_RUNNING_IN_IDE)) {
+             p_18700_.run();
+         } catch (Exception exception) {
++            if (BuildFlags.WEB_RUNTIME && webTaskExceptionLogs < 20) {
++                webTaskExceptionLogs++;
++                System.err.println(
++                    "[mc-web/task] exception loop="
++                        + this.name()
++                        + " type="
++                        + exception.getClass().getName()
++                        + " msg="
++                        + exception.getMessage()
++                );
++                exception.printStackTrace();
++            }
+             LOGGER.error(LogUtils.FATAL_MARKER, "Error executing task on {}", this.name(), exception);
+             if (isNonRecoverable(exception)) {
+                 throw exception;
+@@ -163,4 +200,4 @@ public abstract class BlockableEventLoop<R extends Runnable> implements Profiler
+             ? isNonRecoverable(reportedexception.getCause())
+             : p_366916_ instanceof OutOfMemoryError || p_366916_ instanceof StackOverflowError;
+     }
+-}
+\ No newline at end of file
++}
+

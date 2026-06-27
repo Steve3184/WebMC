@@ -1,0 +1,99 @@
+--- a/net/minecraft/client/gui/components/toasts/ToastManager.java
++++ b/net/minecraft/client/gui/components/toasts/ToastManager.java
+@@ -24,6 +24,7 @@
+ public class ToastManager {
+     private static final int SLOT_COUNT = 5;
+     private static final int ALL_SLOTS_OCCUPIED = -1;
++    private static final ToastManager NOOP = new ToastManager();
+     final Minecraft minecraft;
+     private final List<ToastManager.ToastInstance<?>> visibleToasts = new ArrayList<>();
+     private final BitSet occupiedSlots = new BitSet(5);
+@@ -32,6 +33,10 @@
+     @Nullable
+     private ToastManager.ToastInstance<NowPlayingToast> nowPlayingToast;
+ 
++    private ToastManager() {
++        this.minecraft = null;
++    }
++
+     public ToastManager(Minecraft p_363951_, Options p_407989_) {
+         this.minecraft = p_363951_;
+         if (p_407989_.showNowPlayingToast().get()) {
+@@ -39,7 +44,14 @@
+         }
+     }
+ 
++    public static ToastManager noop() {
++        return NOOP;
++    }
++
+     public void update() {
++        if (this.minecraft == null) {
++            return;
++        }
+         MutableBoolean mutableboolean = new MutableBoolean(false);
+         this.visibleToasts.removeIf(p_389308_ -> {
+             Toast.Visibility toast$visibility = p_389308_.visibility;
+@@ -82,6 +94,9 @@
+     }
+ 
+     public void render(GuiGraphics p_366590_) {
++        if (this.minecraft == null) {
++            return;
++        }
+         if (!this.minecraft.options.hideGui) {
+             int i = p_366590_.guiWidth();
+             if (!this.visibleToasts.isEmpty()) {
+@@ -146,10 +161,16 @@
+     }
+ 
+     public void addToast(Toast p_360768_) {
++        if (this.minecraft == null) {
++            return;
++        }
+         this.queued.add(p_360768_);
+     }
+ 
+     public void showNowPlayingToast() {
++        if (this.minecraft == null) {
++            return;
++        }
+         if (this.nowPlayingToast != null) {
+             this.nowPlayingToast.resetToast();
+             this.nowPlayingToast.getToast().showToast(this.minecraft.options);
+@@ -157,12 +178,18 @@
+     }
+ 
+     public void hideNowPlayingToast() {
++        if (this.minecraft == null) {
++            return;
++        }
+         if (this.nowPlayingToast != null) {
+             this.nowPlayingToast.getToast().setWantedVisibility(Toast.Visibility.HIDE);
+         }
+     }
+ 
+     public void createNowPlayingToast() {
++        if (this.minecraft == null) {
++            return;
++        }
+         this.nowPlayingToast = new ToastManager.ToastInstance<>(new NowPlayingToast(), 0, 0);
+     }
+ 
+@@ -175,6 +202,9 @@
+     }
+ 
+     public double getNotificationDisplayTimeMultiplier() {
++        if (this.minecraft == null) {
++            return 1.0;
++        }
+         return this.minecraft.options.notificationDisplayTime().get();
+     }
+ 
+@@ -261,4 +291,4 @@
+             }
+         }
+     }
+-}
+\ No newline at end of file
++}

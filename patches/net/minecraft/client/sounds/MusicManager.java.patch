@@ -1,0 +1,38 @@
+--- a/net/minecraft/client/sounds/MusicManager.java
++++ b/net/minecraft/client/sounds/MusicManager.java
+@@ -14,6 +14,7 @@
+ import net.minecraft.util.StringRepresentable;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class MusicManager {
+@@ -160,7 +161,9 @@
+         FREQUENT(10),
+         CONSTANT(0);
+ 
+-        public static final Codec<MusicManager.MusicFrequency> CODEC = StringRepresentable.fromEnum(MusicManager.MusicFrequency::values);
++        public static final Codec<MusicManager.MusicFrequency> CODEC = BuildFlags.WEB_RUNTIME
++            ? Codec.INT.xmap(MusicManager.MusicFrequency::byId, MusicManager.MusicFrequency::getId)
++            : StringRepresentable.fromEnum(MusicManager.MusicFrequency::values);
+         private static final String KEY_PREPEND = "options.music_frequency.";
+         private final int id;
+         private final int maxFrequency;
+@@ -198,5 +201,14 @@
+         public String getSerializedName() {
+             return this.name();
+         }
++
++        private static MusicManager.MusicFrequency byId(int id) {
++            for (MusicManager.MusicFrequency value : values()) {
++                if (value.id == id) {
++                    return value;
++                }
++            }
++            return DEFAULT;
++        }
+     }
+-}
+\ No newline at end of file
++}

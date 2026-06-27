@@ -1,0 +1,22 @@
+--- a/net/minecraft/client/renderer/DynamicUniforms.java
++++ b/net/minecraft/client/renderer/DynamicUniforms.java
+@@ -16,8 +16,10 @@
+ @OnlyIn(Dist.CLIENT)
+ public class DynamicUniforms implements AutoCloseable {
+     public static final int TRANSFORM_UBO_SIZE = new Std140SizeCalculator().putMat4f().putVec4().putVec3().putMat4f().putFloat().get();
+-    private static final int INITIAL_CAPACITY = 2;
+-    private final DynamicUniformStorage<DynamicUniforms.Transform> transforms = new DynamicUniformStorage<>("Dynamic Transforms UBO", TRANSFORM_UBO_SIZE, 2);
++    private static final int INITIAL_CAPACITY = 128;
++    private final DynamicUniformStorage<DynamicUniforms.Transform> transforms = new DynamicUniformStorage<>(
++        "Dynamic Transforms UBO", TRANSFORM_UBO_SIZE, INITIAL_CAPACITY
++    );
+ 
+     public void reset() {
+         this.transforms.endFrame();
+@@ -52,4 +54,4 @@
+                 .putFloat(this.lineWidth);
+         }
+     }
+-}
+\ No newline at end of file
++}

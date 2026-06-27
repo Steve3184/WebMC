@@ -1,0 +1,32 @@
+--- a/net/minecraft/world/level/levelgen/DensityFunction.java
++++ b/net/minecraft/world/level/levelgen/DensityFunction.java
+@@ -10,13 +10,15 @@
+ import net.minecraft.world.level.levelgen.synth.NormalNoise;
+ 
+ public interface DensityFunction {
+-    Codec<DensityFunction> DIRECT_CODEC = DensityFunctions.DIRECT_CODEC;
+-    Codec<Holder<DensityFunction>> CODEC = RegistryFileCodec.create(Registries.DENSITY_FUNCTION, DIRECT_CODEC);
+-    Codec<DensityFunction> HOLDER_HELPER_CODEC = CODEC.xmap(
+-        DensityFunctions.HolderHolder::new,
+-        p_208226_ -> (Holder<DensityFunction>)(p_208226_ instanceof DensityFunctions.HolderHolder densityfunctions$holderholder
+-            ? densityfunctions$holderholder.function()
+-            : new Holder.Direct<>(p_208226_))
++    Codec<DensityFunction> DIRECT_CODEC = Codec.lazyInitialized(() -> DensityFunctions.DIRECT_CODEC);
++    Codec<Holder<DensityFunction>> CODEC = Codec.lazyInitialized(() -> RegistryFileCodec.create(Registries.DENSITY_FUNCTION, DIRECT_CODEC));
++    Codec<DensityFunction> HOLDER_HELPER_CODEC = Codec.lazyInitialized(
++        () -> CODEC.xmap(
++                DensityFunctions.HolderHolder::new,
++                p_208226_ -> (Holder<DensityFunction>)(p_208226_ instanceof DensityFunctions.HolderHolder densityfunctions$holderholder
++                    ? densityfunctions$holderholder.function()
++                    : new Holder.Direct<>(p_208226_))
++            )
+     );
+ 
+     double compute(DensityFunction.FunctionContext p_208223_);
+@@ -130,4 +132,4 @@
+             return p_224018_;
+         }
+     }
+-}
+\ No newline at end of file
++}

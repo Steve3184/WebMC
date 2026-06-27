@@ -1,0 +1,281 @@
+diff --git a/net/minecraft/server/packs/resources/SimpleReloadInstance.java b/net/minecraft/server/packs/resources/SimpleReloadInstance.java
+index c8e32de..c694fd0 100644
+--- a/net/minecraft/server/packs/resources/SimpleReloadInstance.java
++++ b/net/minecraft/server/packs/resources/SimpleReloadInstance.java
+@@ -2,7 +2,9 @@ package net.minecraft.server.packs.resources;
+ 
+ import java.util.ArrayList;
+ import java.util.HashSet;
++import java.util.IdentityHashMap;
+ import java.util.List;
++import java.util.Map;
+ import java.util.Objects;
+ import java.util.Set;
+ import java.util.concurrent.CompletableFuture;
+@@ -12,6 +14,10 @@ import java.util.concurrent.atomic.AtomicInteger;
+ import javax.annotation.Nullable;
+ import net.minecraft.Util;
+ import net.minecraft.util.Unit;
++import net.minecraft.util.thread.TaskScheduler;
++import org.teavm.jso.JSBody;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ public class SimpleReloadInstance<S> implements ReloadInstance {
+     private static final int PREPARATION_PROGRESS_WEIGHT = 2;
+@@ -26,6 +32,59 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+     private final AtomicInteger finishedTasks = new AtomicInteger();
+     private final AtomicInteger startedReloads = new AtomicInteger();
+     private final AtomicInteger finishedReloads = new AtomicInteger();
++    private final Map<PreparableReloadListener, String> webListenerNames = new IdentityHashMap<>();
++    private final long webReloadStartMs;
++    private static int webReloadExecutorLogs;
++    private static int webReloadStateLogs;
++
++    @JSBody(params = {
++        "listenerCount",
++        "preparingCount",
++        "startedTasks",
++        "finishedTasks",
++        "startedReloads",
++        "finishedReloads",
++        "phase",
++        "listener",
++        "remaining",
++        "elapsedMs"
++    }, script =
++        "try {" +
++        "  var s = window.__webmcState || (window.__webmcState = {});" +
++        "  s.reloadListenerCount = listenerCount;" +
++        "  s.reloadPreparingCount = preparingCount;" +
++        "  s.reloadStartedTasks = startedTasks;" +
++        "  s.reloadFinishedTasks = finishedTasks;" +
++        "  s.reloadStartedReloads = startedReloads;" +
++        "  s.reloadFinishedReloads = finishedReloads;" +
++        "  s.reloadPhase = String(phase || '');" +
++        "  s.reloadListener = String(listener || '');" +
++        "  s.reloadRemainingListeners = String(remaining || '');" +
++        "  s.reloadElapsedMs = elapsedMs;" +
++        "  s.reloadStateAt = Date.now();" +
++        "  var diag = !!window.webmcDiagnostics || new URLSearchParams(window.location.search || '').get('diagnostics') === '1';" +
++        "  if (diag) {" +
++        "    var events = s.reloadEvents || (s.reloadEvents = []);" +
++        "    if (events.length < 320) events.push({" +
++        "      at: Date.now(), elapsedMs: elapsedMs, phase: s.reloadPhase, listener: s.reloadListener," +
++        "      remaining: s.reloadRemainingListeners, remainingCount: preparingCount," +
++        "      startedTasks: startedTasks, finishedTasks: finishedTasks," +
++        "      startedReloads: startedReloads, finishedReloads: finishedReloads" +
++        "    });" +
++        "  }" +
++        "} catch (e) {}")
++    private static native void webUpdateReloadState(
++        int listenerCount,
++        int preparingCount,
++        int startedTasks,
++        int finishedTasks,
++        int startedReloads,
++        int finishedReloads,
++        String phase,
++        String listener,
++        String remaining,
++        int elapsedMs
++    );
+ 
+     public static ReloadInstance of(
+         ResourceManager p_10816_, List<PreparableReloadListener> p_10817_, Executor p_10818_, Executor p_10819_, CompletableFuture<Unit> p_10820_
+@@ -38,6 +97,7 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+     protected SimpleReloadInstance(List<PreparableReloadListener> p_10811_) {
+         this.listenerCount = p_10811_.size();
+         this.preparingListeners = new HashSet<>(p_10811_);
++        this.webReloadStartMs = BuildFlags.WEB_RUNTIME ? System.currentTimeMillis() : 0L;
+     }
+ 
+     protected void startTasks(
+@@ -68,23 +128,52 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+         };
+         Executor executor1 = p_390183_ -> {
+             this.startedReloads.incrementAndGet();
+-            p_395239_.execute(() -> {
++            Runnable runnable = () -> {
+                 p_390183_.run();
+                 this.finishedReloads.incrementAndGet();
+-            });
++            };
++            if (BuildFlags.WEB_RUNTIME && p_395239_ instanceof TaskScheduler<?> taskscheduler) {
++                @SuppressWarnings("unchecked")
++                TaskScheduler<Runnable> taskscheduler1 = (TaskScheduler<Runnable>)taskscheduler;
++                taskscheduler1.schedule(taskscheduler1.wrapRunnable(runnable));
++            } else {
++                p_395239_.execute(runnable);
++            }
+         };
+         this.startedTasks.incrementAndGet();
+         p_393207_.thenRun(this.finishedTasks::incrementAndGet);
+         CompletableFuture<?> completablefuture = p_393207_;
+         List<CompletableFuture<S>> list = new ArrayList<>();
+ 
++        int idx = 0;
+         for (PreparableReloadListener preparablereloadlistener : p_397834_) {
++            String listenerName = this.webNameListener(preparablereloadlistener);
++            if (WebDiagnostics.enabled()) {
++                System.err.println("[mc-probe] prepareTasks: idx=" + idx + " listener=" + listenerName);
++            }
++            this.webNoteReloadState("create:" + idx, listenerName);
++            idx++;
+             PreparableReloadListener.PreparationBarrier preparablereloadlistener$preparationbarrier = this.createBarrierForListener(
+                 preparablereloadlistener, completablefuture, p_395239_
+             );
+-            CompletableFuture<S> completablefuture1 = p_391359_.create(
+-                preparablereloadlistener$preparationbarrier, p_394670_, preparablereloadlistener, executor, executor1
+-            );
++            Executor listenerApplyExecutor = this.webWrapApplyExecutorForListener(executor1, listenerName);
++            CompletableFuture<S> completablefuture1;
++            try {
++                completablefuture1 = p_391359_.create(
++                    preparablereloadlistener$preparationbarrier, p_394670_, preparablereloadlistener, executor, listenerApplyExecutor
++                );
++            } catch (Throwable t) {
++                if (WebDiagnostics.enabled()) {
++                    System.err.println("[mc-probe] prepareTasks: listener " + listenerName + " threw: " + t);
++                    t.printStackTrace();
++                }
++                throw t;
++            }
++            if (completablefuture1 == null) {
++                if (WebDiagnostics.enabled()) {
++                    System.err.println("[mc-probe] prepareTasks: listener " + listenerName + " returned NULL CompletableFuture");
++                }
++            }
+             list.add(completablefuture1);
+             completablefuture = completablefuture1;
+         }
+@@ -92,6 +181,34 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+         return Util.sequenceFailFast(list);
+     }
+ 
++    private String webNameListener(@Nullable PreparableReloadListener listener) {
++        if (listener == null) {
++            return "NULL";
++        }
++
++        String listenerName = listener.getClass().getName();
++        if (BuildFlags.WEB_RUNTIME) {
++            this.webListenerNames.put(listener, listenerName);
++        }
++
++        return listenerName;
++    }
++
++    private Executor webWrapApplyExecutorForListener(Executor executor, String listenerName) {
++        if (!BuildFlags.WEB_RUNTIME) {
++            return executor;
++        }
++
++        return runnable -> {
++            if (WebDiagnostics.enabled() && webReloadExecutorLogs < 80) {
++                webReloadExecutorLogs++;
++                System.err.println("[mc-probe] SimpleReloadInstance.executor1 schedule apply listener=" + listenerName);
++            }
++
++            executor.execute(runnable);
++        };
++    }
++
+     private PreparableReloadListener.PreparationBarrier createBarrierForListener(
+         final PreparableReloadListener p_396536_, final CompletableFuture<?> p_394372_, final Executor p_391253_
+     ) {
+@@ -100,6 +217,7 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+             public <T> CompletableFuture<T> wait(T p_10858_) {
+                 p_391253_.execute(() -> {
+                     SimpleReloadInstance.this.preparingListeners.remove(p_396536_);
++                    SimpleReloadInstance.this.webNoteReloadState("barrier", SimpleReloadInstance.this.webNameListener(p_396536_));
+                     if (SimpleReloadInstance.this.preparingListeners.isEmpty()) {
+                         SimpleReloadInstance.this.allPreparations.complete(Unit.INSTANCE);
+                     }
+@@ -119,9 +237,79 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+         int i = this.listenerCount - this.preparingListeners.size();
+         float f = weightProgress(this.finishedTasks.get(), this.finishedReloads.get(), i);
+         float f1 = weightProgress(this.startedTasks.get(), this.startedReloads.get(), this.listenerCount);
++        if (BuildFlags.WEB_RUNTIME && (webReloadStateLogs < 60 || webReloadStateLogs % 120 == 0)) {
++            this.webNoteReloadState("progress", "");
++        }
+         return f / f1;
+     }
+ 
++    private void webNoteReloadState(String phase, String listenerName) {
++        if (!BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
++        webReloadStateLogs++;
++        int preparingCount = this.preparingListeners.size();
++        String remaining = this.webRemainingListeners();
++        long elapsedMsLong = this.webReloadStartMs == 0L ? 0L : System.currentTimeMillis() - this.webReloadStartMs;
++        int elapsedMs = (int)Math.min((long)Integer.MAX_VALUE, Math.max(0L, elapsedMsLong));
++        webUpdateReloadState(
++            this.listenerCount,
++            preparingCount,
++            this.startedTasks.get(),
++            this.finishedTasks.get(),
++            this.startedReloads.get(),
++            this.finishedReloads.get(),
++            phase,
++            listenerName,
++            remaining,
++            elapsedMs
++        );
++
++        if (WebDiagnostics.enabled() && !"progress".equals(phase) && webReloadStateLogs < 160) {
++            System.err.println(
++                "[mc-probe] reload.state elapsedMs="
++                    + elapsedMs
++                    + " phase="
++                    + phase
++                    + " listener="
++                    + listenerName
++                    + " remaining="
++                    + preparingCount
++                    + " pending="
++                    + remaining
++            );
++        }
++    }
++
++    private String webRemainingListeners() {
++        if (!BuildFlags.WEB_RUNTIME || this.preparingListeners.isEmpty()) {
++            return "";
++        }
++
++        StringBuilder stringbuilder = new StringBuilder();
++        int emitted = 0;
++        for (PreparableReloadListener preparablereloadlistener : this.preparingListeners) {
++            if (emitted > 0) {
++                stringbuilder.append(",");
++            }
++
++            String listenerName = this.webListenerNames.get(preparablereloadlistener);
++            if (listenerName == null) {
++                listenerName = this.webNameListener(preparablereloadlistener);
++            }
++
++            stringbuilder.append(listenerName);
++            emitted++;
++            if (emitted >= 8 && this.preparingListeners.size() > emitted) {
++                stringbuilder.append(",+").append(this.preparingListeners.size() - emitted);
++                break;
++            }
++        }
++
++        return stringbuilder.toString();
++    }
++
+     private static int weightProgress(int p_396182_, int p_395893_, int p_394193_) {
+         return p_396182_ * 2 + p_395893_ * 2 + p_394193_ * 1;
+     }
+@@ -153,4 +341,4 @@ public class SimpleReloadInstance<S> implements ReloadInstance {
+             Executor p_10868_
+         );
+     }
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,11 @@
+--- a/net/minecraft/network/chat/SignedMessageLink.java
++++ b/net/minecraft/network/chat/SignedMessageLink.java
+@@ -23,7 +23,7 @@
+     );
+ 
+     public static SignedMessageLink unsigned(UUID p_251496_) {
+-        return root(p_251496_, Util.NIL_UUID);
++        return root(p_251496_, new UUID(0L, 0L));
+     }
+ 
+     public static SignedMessageLink root(UUID p_249990_, UUID p_248913_) {

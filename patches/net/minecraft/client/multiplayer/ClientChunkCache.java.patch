@@ -1,0 +1,112 @@
+diff --git a/net/minecraft/client/multiplayer/ClientChunkCache.java b/net/minecraft/client/multiplayer/ClientChunkCache.java
+index 99e8c51..c229384 100644
+--- a/net/minecraft/client/multiplayer/ClientChunkCache.java
++++ b/net/minecraft/client/multiplayer/ClientChunkCache.java
+@@ -29,20 +29,34 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class ClientChunkCache extends ChunkSource {
+     static final Logger LOGGER = LogUtils.getLogger();
+-    private final LevelChunk emptyChunk;
++    @Nullable
++    private LevelChunk emptyChunk;
+     private final LevelLightEngine lightEngine;
+     volatile ClientChunkCache.Storage storage;
+     final ClientLevel level;
+ 
+     public ClientChunkCache(ClientLevel p_104414_, int p_104415_) {
+         this.level = p_104414_;
+-        this.emptyChunk = new EmptyLevelChunk(p_104414_, new ChunkPos(0, 0), p_104414_.registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS));
++        WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.beforeEmptyChunk");
++        if (BuildFlags.WEB_RUNTIME) {
++            this.emptyChunk = null;
++            WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.deferEmptyChunk");
++        } else {
++            this.emptyChunk = this.createEmptyChunk();
++        }
++        WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.afterEmptyChunk");
++        WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.beforeLightEngine");
+         this.lightEngine = new LevelLightEngine(this, true, p_104414_.dimensionType().hasSkyLight());
++        WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.afterLightEngine");
++        WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.beforeStorage");
+         this.storage = new ClientChunkCache.Storage(calculateStorageRange(p_104415_));
++        WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.afterStorage");
+     }
+ 
+     @Override
+@@ -50,6 +64,10 @@ public class ClientChunkCache extends ChunkSource {
+         return this.lightEngine;
+     }
+ 
++    private LevelChunk createEmptyChunk() {
++        return new EmptyLevelChunk(this.level, new ChunkPos(0, 0), this.level.registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS));
++    }
++
+     private static boolean isValidChunk(@Nullable LevelChunk p_104439_, int p_104440_, int p_104441_) {
+         if (p_104439_ == null) {
+             return false;
+@@ -78,7 +96,15 @@ public class ClientChunkCache extends ChunkSource {
+             }
+         }
+ 
+-        return p_104454_ ? this.emptyChunk : null;
++        if (p_104454_) {
++            if (this.emptyChunk == null) {
++                this.emptyChunk = this.createEmptyChunk();
++                WebDiagnostics.log("[mc-web/clientlogin] clientChunkCache.lazyEmptyChunkCreated");
++            }
++            return this.emptyChunk;
++        }
++
++        return null;
+     }
+ 
+     @Override
+@@ -129,6 +155,35 @@ public class ClientChunkCache extends ChunkSource {
+         }
+     }
+ 
++    @Nullable
++    public LevelChunk replaceWithWebPacketData(
++        int p_408572_,
++        int p_408251_,
++        LevelChunk p_410113_,
++        Map<Heightmap.Types, long[]> p_408721_,
++        Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> p_407949_
++    ) {
++        if (!this.storage.inRange(p_408572_, p_408251_)) {
++            LOGGER.warn("Ignoring web chunk since it's not in the view range: {}, {}", p_408572_, p_408251_);
++            return null;
++        } else {
++            int i = this.storage.getIndex(p_408572_, p_408251_);
++            LevelChunk levelchunk = this.storage.chunks.get(i);
++            ChunkPos chunkpos = new ChunkPos(p_408572_, p_408251_);
++            if (!isValidChunk(levelchunk, p_408572_, p_408251_)) {
++                levelchunk = new LevelChunk(this.level, chunkpos);
++                levelchunk.replaceWithWebPacketData(p_410113_, p_408721_, p_407949_);
++                this.storage.replace(i, levelchunk);
++            } else {
++                levelchunk.replaceWithWebPacketData(p_410113_, p_408721_, p_407949_);
++                this.storage.refreshEmptySections(levelchunk);
++            }
++
++            this.level.onChunkLoaded(chunkpos);
++            return levelchunk;
++        }
++    }
++
+     @Override
+     public void tick(BooleanSupplier p_202421_, boolean p_202422_) {
+     }
+@@ -307,4 +362,4 @@ public class ClientChunkCache extends ChunkSource {
+             }
+         }
+     }
+-}
+\ No newline at end of file
++}

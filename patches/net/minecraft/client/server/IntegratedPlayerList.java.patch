@@ -1,0 +1,31 @@
+diff --git a/net/minecraft/client/server/IntegratedPlayerList.java b/net/minecraft/client/server/IntegratedPlayerList.java
+index 638cb09..d8f35e2 100644
+--- a/net/minecraft/client/server/IntegratedPlayerList.java
++++ b/net/minecraft/client/server/IntegratedPlayerList.java
+@@ -16,6 +16,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class IntegratedPlayerList extends PlayerList {
+@@ -30,6 +31,10 @@ public class IntegratedPlayerList extends PlayerList {
+ 
+     @Override
+     protected void save(ServerPlayer p_120011_) {
++        if (BuildFlags.WEB_RUNTIME) {
++            return;
++        }
++
+         if (this.getServer().isSingleplayerOwner(p_120011_.getGameProfile())) {
+             try (ProblemReporter.ScopedCollector problemreporter$scopedcollector = new ProblemReporter.ScopedCollector(p_120011_.problemPath(), LOGGER)) {
+                 TagValueOutput tagvalueoutput = TagValueOutput.createWithContext(problemreporter$scopedcollector, p_120011_.registryAccess());
+@@ -57,4 +62,4 @@ public class IntegratedPlayerList extends PlayerList {
+     public CompoundTag getSingleplayerData() {
+         return this.playerData;
+     }
+-}
+\ No newline at end of file
++}
+

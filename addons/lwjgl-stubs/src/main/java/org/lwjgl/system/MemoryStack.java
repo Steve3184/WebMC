@@ -1,0 +1,102 @@
+package org.lwjgl.system;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+
+/**
+ * Stub of {@code org.lwjgl.system.MemoryStack}. Real LWJGL maintains a
+ * per-thread native bump allocator. We emulate with a single shared direct
+ * ByteBuffer per thread, push/pop tracked by integer offset.
+ *
+ * MC uses this in a try-with-resources pattern:
+ * <pre>{@code
+ *   try (MemoryStack stack = MemoryStack.stackPush()) {
+ *       FloatBuffer buf = stack.mallocFloat(16);
+ *       ...
+ *   }
+ * }</pre>
+ */
+public final class MemoryStack implements AutoCloseable {
+    private static final int DEFAULT_SIZE = 64 * 1024;
+
+    private static final ThreadLocal<MemoryStack> TL = ThreadLocal.withInitial(MemoryStack::new);
+
+    private final ByteBuffer storage;
+    private int top;
+    private final int[] markStack = new int[64];
+    private int markIdx = 0;
+
+    private MemoryStack() {
+        storage = ByteBuffer.allocateDirect(DEFAULT_SIZE).order(ByteOrder.nativeOrder());
+        top = 0;
+    }
+
+    public static MemoryStack stackPush() {
+        MemoryStack s = TL.get();
+        if (s.markIdx >= s.markStack.length) {
+            throw new IllegalStateException("MemoryStack overflow: too many nested stackPush()");
+        }
+        s.markStack[s.markIdx++] = s.top;
+        return s;
+    }
+
+    public static MemoryStack stackGet() { return TL.get(); }
+
+    @Override
+    public void close() {
+        if (markIdx == 0) throw new IllegalStateException("MemoryStack underflow");
+        top = markStack[--markIdx];
+    }
+
+    private ByteBuffer slice(int size, int align) {
+        // align top
+        int padding = (align - (top % align)) % align;
+        int start = top + padding;
+        int end = start + size;
+        if (end > storage.capacity()) {
+            throw new OutOfMemoryError("MemoryStack: requested " + size + "B, only "
+                                       + (storage.capacity() - top) + "B available");
+        }
+        top = end;
+        ByteBuffer view = storage.duplicate().order(ByteOrder.nativeOrder());
+        view.position(start).limit(end);
+        return view.slice().order(ByteOrder.nativeOrder());
+    }
+
+    public ByteBuffer  malloc(int size)       { return slice(size, 1); }
+    public ByteBuffer  calloc(int size)       { ByteBuffer b = malloc(size); for (int i = 0; i < size; i++) b.put(i, (byte) 0); return b; }
+    public IntBuffer   mallocInt(int count)   { return slice(count * 4, 4).asIntBuffer(); }
+    public IntBuffer   callocInt(int count)   { IntBuffer b = mallocInt(count); for (int i = 0; i < count; i++) b.put(i, 0); return b; }
+    public FloatBuffer mallocFloat(int count) { return slice(count * 4, 4).asFloatBuffer(); }
+    public FloatBuffer callocFloat(int count) { FloatBuffer b = mallocFloat(count); for (int i = 0; i < count; i++) b.put(i, 0f); return b; }
+
+    public IntBuffer   ints(int... vals)      { IntBuffer b = mallocInt(vals.length); b.put(vals).flip(); return b; }
+    public FloatBuffer floats(float... vals)  { FloatBuffer b = mallocFloat(vals.length); b.put(vals).flip(); return b; }
+
+    /** Stack-pointer index. Native LWJGL returns the current top-of-stack offset. */
+    public int getPointer()                   { return top; }
+    public void setPointer(int p)             { this.top = p; }
+
+    public org.lwjgl.PointerBuffer mallocPointer(int count) {
+        // 8 bytes per pointer; back with a fresh PointerBuffer (untracked w.r.t. our stack).
+        return org.lwjgl.PointerBuffer.allocateDirect(count);
+    }
+    public org.lwjgl.PointerBuffer callocPointer(int count) { return mallocPointer(count); }
+    public java.nio.LongBuffer mallocLong(int count) { return slice(count * 8, 8).asLongBuffer(); }
+    public java.nio.LongBuffer callocLong(int count) {
+        java.nio.LongBuffer b = mallocLong(count);
+        for (int i = 0; i < count; i++) b.put(i, 0L);
+        return b;
+    }
+
+    /** UTF-8 helper: encodes a string into stack memory and returns a NUL-terminated ByteBuffer. */
+    public ByteBuffer UTF8(CharSequence s) {
+        byte[] bytes = s.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        ByteBuffer b = malloc(bytes.length + 1);
+        b.put(bytes).put((byte) 0).flip();
+        return b;
+    }
+    public ByteBuffer ASCII(CharSequence s) { return UTF8(s); }
+}

@@ -1,0 +1,33 @@
+--- a/net/minecraft/client/Camera.java
++++ b/net/minecraft/client/Camera.java
+@@ -20,6 +20,7 @@ import net.minecraft.world.waypoints.TrackedWaypoint;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.joml.Quaternionf;
+ import org.joml.Vector3f;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class Camera implements TrackedWaypoint.Camera {
+@@ -42,6 +43,7 @@ public class Camera implements TrackedWaypoint.Camera {
+     private float eyeHeight;
+     private float eyeHeightOld;
+     private float partialTickTime;
++    private static int webForcedViewLogs;
+     public static final float FOG_DISTANCE_SCALE = 0.083333336F;
+ 
+     public void setup(BlockGetter p_90576_, Entity p_90577_, boolean p_90578_, boolean p_90579_, float p_90580_) {
+@@ -101,6 +103,16 @@ public class Camera implements TrackedWaypoint.Camera {
+             this.setRotation(direction != null ? direction.toYRot() - 180.0F : 0.0F, 0.0F);
+             this.move(0.0F, 0.3F, 0.0F);
+         }
++
++        if (BuildFlags.WEB_RUNTIME) {
++            if (webForcedViewLogs < 16) {
++                webForcedViewLogs++;
++                System.out.println("[mc-web/camera] view pos=" + this.position + " yRot=" + this.yRot + " xRot=" + this.xRot);
++            }
++        }
+     }
+ 
+     public void tick() {

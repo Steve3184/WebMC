@@ -1,0 +1,645 @@
+diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index cd80e0b..1608070 100644
+--- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -22,11 +22,13 @@ import java.util.Optional;
+ import java.util.Set;
+ import java.util.concurrent.CancellationException;
+ import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CompletionException;
+ import java.util.function.BiFunction;
+ import java.util.function.Consumer;
+ import java.util.stream.Collectors;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++import net.minecraft.ReportedException;
+ import net.minecraft.ChatFormatting;
+ import net.minecraft.Util;
+ import net.minecraft.advancements.AdvancementHolder;
+@@ -117,6 +119,7 @@ import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+ import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
+ import net.minecraft.network.protocol.game.ServerboundRecipeBookChangeSettingsPacket;
+ import net.minecraft.network.protocol.game.ServerboundRecipeBookSeenRecipePacket;
++import net.minecraft.server.RunningOnDifferentThreadException;
+ import net.minecraft.network.protocol.game.ServerboundRenameItemPacket;
+ import net.minecraft.network.protocol.game.ServerboundSeenAdvancementsPacket;
+ import net.minecraft.network.protocol.game.ServerboundSelectBundleItemPacket;
+@@ -207,6 +210,7 @@ import net.minecraft.world.phys.shapes.BooleanOp;
+ import net.minecraft.world.phys.shapes.Shapes;
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class ServerGamePacketListenerImpl
+     extends ServerCommonPacketListenerImpl
+@@ -260,6 +264,9 @@ public class ServerGamePacketListenerImpl
+     private final MessageSignatureCache messageSignatureCache = MessageSignatureCache.createDefault();
+     private final FutureChain chatMessageChain;
+     private boolean waitingForSwitchToConfig;
++    private static int webPacketErrorLogs;
++    private static int webChunkMoveSuppressLogs;
++    private static int webMoveRecoverLogs;
+ 
+     public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_, CommonListenerCookie p_300908_) {
+         super(p_9770_, p_9771_, p_300908_);
+@@ -271,8 +278,71 @@ public class ServerGamePacketListenerImpl
+         this.chatMessageChain = new FutureChain(p_9770_);
+     }
+ 
++    @Override
++    public void onPacketError(Packet p_364882_, Exception p_362532_) throws ReportedException {
++        if (BuildFlags.WEB_RUNTIME && webPacketErrorLogs < 30) {
++            webPacketErrorLogs++;
++            String packetName = p_364882_ == null ? "<null>" : p_364882_.getClass().getName();
++            System.err.println(
++                "[mc-web/serverpkt] onPacketError packet="
++                    + packetName
++                    + " ex="
++                    + p_362532_.getClass().getName()
++                    + ": "
++                    + p_362532_.getMessage()
++            );
++            System.err.println(
++                "[mc-web/serverpkt] state tick="
++                    + this.tickCount
++                    + " awaitingTeleport="
++                    + this.awaitingTeleport
++                    + " awaitingPosNull="
++                    + (this.awaitingPositionFromClient == null)
++                    + " receivedMovePacketCount="
++                    + this.receivedMovePacketCount
++                    + " knownMovePacketCount="
++                    + this.knownMovePacketCount
++                    + " playerPos="
++                    + this.player.getX()
++                    + ","
++                    + this.player.getY()
++                    + ","
++                    + this.player.getZ()
++            );
++
++            if (p_364882_ instanceof ServerboundMovePlayerPacket serverboundmoveplayerpacket) {
++                double px = serverboundmoveplayerpacket.getX(Double.NaN);
++                double py = serverboundmoveplayerpacket.getY(Double.NaN);
++                double pz = serverboundmoveplayerpacket.getZ(Double.NaN);
++                float yaw = serverboundmoveplayerpacket.getYRot(Float.NaN);
++                float pitch = serverboundmoveplayerpacket.getXRot(Float.NaN);
++                System.err.println(
++                    "[mc-web/serverpkt] movePacket x="
++                        + px
++                        + " y="
++                        + py
++                        + " z="
++                        + pz
++                        + " yaw="
++                        + yaw
++                        + " pitch="
++                        + pitch
++                        + " onGround="
++                        + serverboundmoveplayerpacket.isOnGround()
++                        + " horizCollision="
++                        + serverboundmoveplayerpacket.horizontalCollision()
++                );
++            }
++            p_362532_.printStackTrace();
++        }
++        super.onPacketError(p_364882_, p_362532_);
++    }
++
+     @Override
+     public void tick() {
++        if (BuildFlags.WEB_RUNTIME && this.tickCount <= 3) {
++            System.out.println("[mc-web/servergame] tick.begin tick=" + this.tickCount);
++        }
+         if (this.ackBlockChangesUpTo > -1) {
+             this.send(new ClientboundBlockChangedAckPacket(this.ackBlockChangesUpTo));
+             this.ackBlockChangesUpTo = -1;
+@@ -282,7 +352,13 @@ public class ServerGamePacketListenerImpl
+         this.player.xo = this.player.getX();
+         this.player.yo = this.player.getY();
+         this.player.zo = this.player.getZ();
++        if (BuildFlags.WEB_RUNTIME && this.tickCount <= 3) {
++            System.out.println("[mc-web/servergame] tick.beforeDoTick tick=" + this.tickCount);
++        }
+         this.player.doTick();
++        if (BuildFlags.WEB_RUNTIME && this.tickCount <= 3) {
++            System.out.println("[mc-web/servergame] tick.afterDoTick tick=" + this.tickCount);
++        }
+         this.player.absSnapTo(this.firstGoodX, this.firstGoodY, this.firstGoodZ, this.player.getYRot(), this.player.getXRot());
+         this.tickCount++;
+         this.knownMovePacketCount = this.receivedMovePacketCount;
+@@ -321,7 +397,13 @@ public class ServerGamePacketListenerImpl
+             this.aboveGroundVehicleTickCount = 0;
+         }
+ 
++        if (BuildFlags.WEB_RUNTIME && this.tickCount <= 4) {
++            System.out.println("[mc-web/servergame] tick.beforeKeepAlive tick=" + this.tickCount);
++        }
+         this.keepConnectionAlive();
++        if (BuildFlags.WEB_RUNTIME && this.tickCount <= 4) {
++            System.out.println("[mc-web/servergame] tick.afterKeepAlive tick=" + this.tickCount);
++        }
+         this.chatSpamThrottler.tick();
+         this.dropSpamThrottler.tick();
+         if (this.player.getLastActionTime() > 0L
+@@ -486,6 +568,28 @@ public class ServerGamePacketListenerImpl
+         return p_9794_.level().getBlockStates(p_9794_.getBoundingBox().inflate(0.0625).expandTowards(0.0, -0.55, 0.0)).allMatch(BlockBehaviour.BlockStateBase::isAir);
+     }
+ 
++    private boolean tryHandleWebBootstrapMove(ServerboundMovePlayerPacket p_409594_, float p_409946_, float p_410174_) {
++        if (!BuildFlags.WEB_RUNTIME || !this.player.hasClientLoaded() || this.awaitingPositionFromClient != null) {
++            return false;
++        }
++
++        double d0 = clampHorizontal(p_409594_.getX(this.player.getX()));
++        double d1 = clampVertical(p_409594_.getY(this.player.getY()));
++        double d2 = clampHorizontal(p_409594_.getZ(this.player.getZ()));
++        double d3 = d0 - this.player.getX();
++        double d4 = d1 - this.player.getY();
++        double d5 = d2 - this.player.getZ();
++        if (d3 * d3 + d4 * d4 + d5 * d5 > 1.0E-7) {
++            return false;
++        }
++
++        this.player.absSnapTo(d0, d1, d2, p_409946_, p_410174_);
++        this.player.setOnGround(p_409594_.isOnGround());
++        this.player.resetFallDistance();
++        this.resetPosition();
++        return true;
++    }
++
+     @Override
+     public void handleAcceptTeleportPacket(ServerboundAcceptTeleportationPacket p_9835_) {
+         PacketUtils.ensureRunningOnSameThread(p_9835_, this, this.player.level());
+@@ -507,7 +611,19 @@ public class ServerGamePacketListenerImpl
+     @Override
+     public void handleAcceptPlayerLoad(ServerboundPlayerLoadedPacket p_376469_) {
+         PacketUtils.ensureRunningOnSameThread(p_376469_, this, this.player.level());
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println(
++                "[mc-web/serverchunks] handleAcceptPlayerLoad before playerLoaded=" + this.player.hasClientLoaded()
++            );
++        }
+         this.player.setClientLoaded(true);
++        this.player.level().getChunkSource().chunkMap.replayChunkTrackingView(this.player);
++        this.chunkSender.sendNextChunks(this.player);
++        if (BuildFlags.WEB_RUNTIME) {
++            System.err.println(
++                "[mc-web/serverchunks] handleAcceptPlayerLoad after playerLoaded=" + this.player.hasClientLoaded()
++            );
++        }
+     }
+ 
+     @Override
+@@ -969,138 +1085,241 @@ public class ServerGamePacketListenerImpl
+ 
+     @Override
+     public void handleMovePlayer(ServerboundMovePlayerPacket p_9874_) {
+-        PacketUtils.ensureRunningOnSameThread(p_9874_, this, this.player.level());
+-        if (containsInvalidValues(p_9874_.getX(0.0), p_9874_.getY(0.0), p_9874_.getZ(0.0), p_9874_.getYRot(0.0F), p_9874_.getXRot(0.0F))) {
+-            this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"));
+-        } else {
+-            ServerLevel serverlevel = this.player.level();
+-            if (!this.player.wonGame) {
+-                if (this.tickCount == 0) {
+-                    this.resetPosition();
+-                }
++        int webStage = 0;
++        try {
++            webStage = 1;
++            PacketUtils.ensureRunningOnSameThread(p_9874_, this, this.player.level());
++            webStage = 2;
++            if (containsInvalidValues(p_9874_.getX(0.0), p_9874_.getY(0.0), p_9874_.getZ(0.0), p_9874_.getYRot(0.0F), p_9874_.getXRot(0.0F))) {
++                webStage = 3;
++                this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"));
++            } else {
++                webStage = 4;
++                ServerLevel serverlevel = this.player.level();
++                if (!this.player.wonGame) {
++                    webStage = 5;
++                    if (this.tickCount == 0) {
++                        webStage = 6;
++                        this.resetPosition();
++                    }
+ 
+-                if (this.player.hasClientLoaded()) {
+-                    float f = Mth.wrapDegrees(p_9874_.getYRot(this.player.getYRot()));
+-                    float f1 = Mth.wrapDegrees(p_9874_.getXRot(this.player.getXRot()));
+-                    if (this.updateAwaitingTeleport()) {
+-                        this.player.absSnapRotationTo(f, f1);
+-                    } else {
+-                        double d0 = clampHorizontal(p_9874_.getX(this.player.getX()));
+-                        double d1 = clampVertical(p_9874_.getY(this.player.getY()));
+-                        double d2 = clampHorizontal(p_9874_.getZ(this.player.getZ()));
+-                        if (this.player.isPassenger()) {
+-                            this.player.absSnapTo(this.player.getX(), this.player.getY(), this.player.getZ(), f, f1);
+-                            this.player.level().getChunkSource().move(this.player);
++                    webStage = 7;
++                    if (this.player.hasClientLoaded()) {
++                        webStage = 8;
++                        float f = Mth.wrapDegrees(p_9874_.getYRot(this.player.getYRot()));
++                        float f1 = Mth.wrapDegrees(p_9874_.getXRot(this.player.getXRot()));
++                        if (this.tryHandleWebBootstrapMove(p_9874_, f, f1)) {
++                            webStage = 8;
++                            return;
++                        }
++
++                        webStage = 9;
++                        if (this.updateAwaitingTeleport()) {
++                            webStage = 10;
++                            this.player.absSnapRotationTo(f, f1);
+                         } else {
+-                            double d3 = this.player.getX();
+-                            double d4 = this.player.getY();
+-                            double d5 = this.player.getZ();
+-                            double d6 = d0 - this.firstGoodX;
+-                            double d7 = d1 - this.firstGoodY;
+-                            double d8 = d2 - this.firstGoodZ;
+-                            double d9 = this.player.getDeltaMovement().lengthSqr();
+-                            double d10 = d6 * d6 + d7 * d7 + d8 * d8;
+-                            if (this.player.isSleeping()) {
+-                                if (d10 > 1.0) {
+-                                    this.teleport(this.player.getX(), this.player.getY(), this.player.getZ(), f, f1);
+-                                }
++                            webStage = 11;
++                            double d0 = clampHorizontal(p_9874_.getX(this.player.getX()));
++                            double d1 = clampVertical(p_9874_.getY(this.player.getY()));
++                            double d2 = clampHorizontal(p_9874_.getZ(this.player.getZ()));
++                            if (this.player.isPassenger()) {
++                                webStage = 12;
++                                this.player.absSnapTo(this.player.getX(), this.player.getY(), this.player.getZ(), f, f1);
++                                webStage = 13;
++                                this.movePlayerChunkSourceWithWebFallback(13);
+                             } else {
+-                                boolean flag = this.player.isFallFlying();
+-                                if (serverlevel.tickRateManager().runsNormally()) {
+-                                    this.receivedMovePacketCount++;
+-                                    int i = this.receivedMovePacketCount - this.knownMovePacketCount;
+-                                    if (i > 5) {
+-                                        LOGGER.debug(
+-                                            "{} is sending move packets too frequently ({} packets since last tick)", this.player.getName().getString(), i
+-                                        );
+-                                        i = 1;
++                                webStage = 14;
++                                double d3 = this.player.getX();
++                                double d4 = this.player.getY();
++                                double d5 = this.player.getZ();
++                                double d6 = d0 - this.firstGoodX;
++                                double d7 = d1 - this.firstGoodY;
++                                double d8 = d2 - this.firstGoodZ;
++                                double d9 = this.player.getDeltaMovement().lengthSqr();
++                                double d10 = d6 * d6 + d7 * d7 + d8 * d8;
++                                if (this.player.isSleeping()) {
++                                    if (d10 > 1.0) {
++                                        webStage = 15;
++                                        this.teleport(this.player.getX(), this.player.getY(), this.player.getZ(), f, f1);
+                                     }
+-
+-                                    if (this.shouldCheckPlayerMovement(flag)) {
+-                                        float f2 = flag ? 300.0F : 100.0F;
+-                                        if (d10 - d9 > f2 * i) {
+-                                            LOGGER.warn("{} moved too quickly! {},{},{}", this.player.getName().getString(), d6, d7, d8);
+-                                            this.teleport(
+-                                                this.player.getX(),
+-                                                this.player.getY(),
+-                                                this.player.getZ(),
+-                                                this.player.getYRot(),
+-                                                this.player.getXRot()
++                                } else {
++                                    webStage = 16;
++                                    boolean flag = this.player.isFallFlying();
++                                    if (serverlevel.tickRateManager().runsNormally()) {
++                                        webStage = 17;
++                                        this.receivedMovePacketCount++;
++                                        int i = this.receivedMovePacketCount - this.knownMovePacketCount;
++                                        if (i > 5) {
++                                            LOGGER.debug(
++                                                "{} is sending move packets too frequently ({} packets since last tick)", this.player.getName().getString(), i
+                                             );
+-                                            return;
++                                            i = 1;
+                                         }
+-                                    }
+-                                }
+ 
+-                                AABB aabb = this.player.getBoundingBox();
+-                                d6 = d0 - this.lastGoodX;
+-                                d7 = d1 - this.lastGoodY;
+-                                d8 = d2 - this.lastGoodZ;
+-                                boolean flag4 = d7 > 0.0;
+-                                if (this.player.onGround() && !p_9874_.isOnGround() && flag4) {
+-                                    this.player.jumpFromGround();
+-                                }
++                                        if (this.shouldCheckPlayerMovement(flag)) {
++                                            float f2 = flag ? 300.0F : 100.0F;
++                                            if (d10 - d9 > f2 * i) {
++                                                webStage = 18;
++                                                LOGGER.warn("{} moved too quickly! {},{},{}", this.player.getName().getString(), d6, d7, d8);
++                                                this.teleport(
++                                                    this.player.getX(),
++                                                    this.player.getY(),
++                                                    this.player.getZ(),
++                                                    this.player.getYRot(),
++                                                    this.player.getXRot()
++                                                );
++                                                return;
++                                            }
++                                        }
++                                    }
+ 
+-                                boolean flag1 = this.player.verticalCollisionBelow;
+-                                this.player.move(MoverType.PLAYER, new Vec3(d6, d7, d8));
+-                                d6 = d0 - this.player.getX();
+-                                d7 = d1 - this.player.getY();
+-                                if (d7 > -0.5 || d7 < 0.5) {
+-                                    d7 = 0.0;
+-                                }
++                                    webStage = 19;
++                                    AABB aabb = this.player.getBoundingBox();
++                                    d6 = d0 - this.lastGoodX;
++                                    d7 = d1 - this.lastGoodY;
++                                    d8 = d2 - this.lastGoodZ;
++                                    boolean flag4 = d7 > 0.0;
++                                    if (this.player.onGround() && !p_9874_.isOnGround() && flag4) {
++                                        webStage = 20;
++                                        this.player.jumpFromGround();
++                                    }
+ 
+-                                d8 = d2 - this.player.getZ();
+-                                d10 = d6 * d6 + d7 * d7 + d8 * d8;
+-                                boolean flag2 = false;
+-                                if (!this.player.isChangingDimension() && d10 > 0.0625 && !this.player.isSleeping() && !this.player.isCreative() && !this.player.isSpectator()) {
+-                                    flag2 = true;
+-                                    LOGGER.warn("{} moved wrongly!", this.player.getName().getString());
+-                                }
++                                    webStage = 21;
++                                    boolean flag1 = this.player.verticalCollisionBelow;
++                                    Vec3 vec31 = new Vec3(d6, d7, d8);
++                                    try {
++                                        this.player.move(MoverType.PLAYER, vec31);
++                                    } catch (RuntimeException runtimeexception) {
++                                        if (this.tryRecoverWebMoveException(runtimeexception, p_9874_, d0, d1, d2, d3, d4, d5, f, f1)) {
++                                            return;
++                                        }
+ 
+-                                if (this.player.noPhysics
+-                                    || this.player.isSleeping()
+-                                    || (!flag2 || !serverlevel.noCollision(this.player, aabb)) && !this.isEntityCollidingWithAnythingNew(serverlevel, this.player, aabb, d0, d1, d2)) {
+-                                    this.player.absSnapTo(d0, d1, d2, f, f1);
+-                                    boolean flag3 = this.player.isAutoSpinAttack();
+-                                    this.clientIsFloating = d7 >= -0.03125
+-                                        && !flag1
+-                                        && !this.player.isSpectator()
+-                                        && !this.server.isFlightAllowed()
+-                                        && !this.player.getAbilities().mayfly
+-                                        && !this.player.hasEffect(MobEffects.LEVITATION)
+-                                        && !flag
+-                                        && !flag3
+-                                        && this.noBlocksAround(this.player);
+-                                    this.player.level().getChunkSource().move(this.player);
+-                                    Vec3 vec3 = new Vec3(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
+-                                    this.player.setOnGroundWithMovement(p_9874_.isOnGround(), p_9874_.horizontalCollision(), vec3);
+-                                    this.player.doCheckFallDamage(vec3.x, vec3.y, vec3.z, p_9874_.isOnGround());
+-                                    this.handlePlayerKnownMovement(vec3);
+-                                    if (flag4) {
+-                                        this.player.resetFallDistance();
++                                        throw runtimeexception;
++                                    }
++                                    d6 = d0 - this.player.getX();
++                                    d7 = d1 - this.player.getY();
++                                    if (d7 > -0.5 || d7 < 0.5) {
++                                        d7 = 0.0;
+                                     }
+ 
+-                                    if (p_9874_.isOnGround() || this.player.hasLandedInLiquid() || this.player.onClimbable() || this.player.isSpectator() || flag || flag3) {
+-                                        this.player.tryResetCurrentImpulseContext();
++                                    d8 = d2 - this.player.getZ();
++                                    d10 = d6 * d6 + d7 * d7 + d8 * d8;
++                                    boolean flag2 = false;
++                                    if (!this.player.isChangingDimension() && d10 > 0.0625 && !this.player.isSleeping() && !this.player.isCreative() && !this.player.isSpectator()) {
++                                        flag2 = true;
++                                        LOGGER.warn("{} moved wrongly!", this.player.getName().getString());
+                                     }
+ 
+-                                    this.player.checkMovementStatistics(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
+-                                    this.lastGoodX = this.player.getX();
+-                                    this.lastGoodY = this.player.getY();
+-                                    this.lastGoodZ = this.player.getZ();
+-                                } else {
+-                                    this.teleport(d3, d4, d5, f, f1);
+-                                    this.player
+-                                        .doCheckFallDamage(
+-                                            this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5, p_9874_.isOnGround()
+-                                        );
+-                                    this.player.removeLatestMovementRecording();
++                                    if (this.player.noPhysics
++                                        || this.player.isSleeping()
++                                        || (!flag2 || !serverlevel.noCollision(this.player, aabb)) && !this.isEntityCollidingWithAnythingNew(serverlevel, this.player, aabb, d0, d1, d2)) {
++                                        webStage = 22;
++                                        this.player.absSnapTo(d0, d1, d2, f, f1);
++                                        boolean flag3 = this.player.isAutoSpinAttack();
++                                        this.clientIsFloating = d7 >= -0.03125
++                                            && !flag1
++                                            && !this.player.isSpectator()
++                                            && !this.server.isFlightAllowed()
++                                            && !this.player.getAbilities().mayfly
++                                            && !this.player.hasEffect(MobEffects.LEVITATION)
++                                            && !flag
++                                            && !flag3
++                                            && this.noBlocksAround(this.player);
++                                        webStage = 23;
++                                        this.movePlayerChunkSourceWithWebFallback(23);
++                                        Vec3 vec3 = new Vec3(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
++                                        webStage = 24;
++                                        this.player.setOnGroundWithMovement(p_9874_.isOnGround(), p_9874_.horizontalCollision(), vec3);
++                                        webStage = 25;
++                                        this.player.doCheckFallDamage(vec3.x, vec3.y, vec3.z, p_9874_.isOnGround());
++                                        webStage = 26;
++                                        this.handlePlayerKnownMovement(vec3);
++                                        if (flag4) {
++                                            this.player.resetFallDistance();
++                                        }
++
++                                        if (p_9874_.isOnGround() || this.player.hasLandedInLiquid() || this.player.onClimbable() || this.player.isSpectator() || flag || flag3) {
++                                            webStage = 27;
++                                            this.player.tryResetCurrentImpulseContext();
++                                        }
++
++                                        webStage = 28;
++                                        this.player.checkMovementStatistics(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
++                                        this.lastGoodX = this.player.getX();
++                                        this.lastGoodY = this.player.getY();
++                                        this.lastGoodZ = this.player.getZ();
++                                    } else {
++                                        webStage = 29;
++                                        this.teleport(d3, d4, d5, f, f1);
++                                        this.player
++                                            .doCheckFallDamage(
++                                                this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5, p_9874_.isOnGround()
++                                            );
++                                        webStage = 30;
++                                        this.player.removeLatestMovementRecording();
++                                    }
+                                 }
+                             }
+                         }
+                     }
+                 }
+             }
++        } catch (RunningOnDifferentThreadException runningondifferentthreadexception) {
++            throw runningondifferentthreadexception;
++        } catch (Exception exception) {
++            if (BuildFlags.WEB_RUNTIME && webPacketErrorLogs < 30) {
++                System.err.println(
++                    "[mc-web/serverpkt] handleMovePlayer.exception stage="
++                        + webStage
++                        + " packetType="
++                        + p_9874_.getClass().getName()
++                        + " x="
++                        + p_9874_.getX(this.player.getX())
++                        + " y="
++                        + p_9874_.getY(this.player.getY())
++                        + " z="
++                        + p_9874_.getZ(this.player.getZ())
++                        + " yaw="
++                        + p_9874_.getYRot(this.player.getYRot())
++                        + " pitch="
++                        + p_9874_.getXRot(this.player.getXRot())
++                        + " awaitingTeleport="
++                        + this.awaitingTeleport
++                        + " awaitingPosNull="
++                        + (this.awaitingPositionFromClient == null)
++                );
++                exception.printStackTrace();
++            }
++            throw exception;
++        }
++    }
++
++    private void movePlayerChunkSourceWithWebFallback(int stage) {
++        if (!BuildFlags.WEB_RUNTIME) {
++            this.player.level().getChunkSource().move(this.player);
++            return;
++        }
++
++        try {
++            this.player.level().getChunkSource().move(this.player);
++        } catch (RuntimeException runtimeexception) {
++            if (webChunkMoveSuppressLogs < 20) {
++                webChunkMoveSuppressLogs++;
++                System.err.println(
++                    "[mc-web/serverpkt] chunkSource.move suppressed stage="
++                        + stage
++                        + " ex="
++                        + runtimeexception.getClass().getName()
++                        + ": "
++                        + runtimeexception.getMessage()
++                        + " pos="
++                        + this.player.getX()
++                        + ","
++                        + this.player.getY()
++                        + ","
++                        + this.player.getZ()
++                );
++            }
+         }
+     }
+ 
+@@ -1129,6 +1348,97 @@ public class ServerGamePacketListenerImpl
+         }
+     }
+ 
++    private boolean tryRecoverWebMoveException(
++        RuntimeException p_409513_,
++        ServerboundMovePlayerPacket p_409619_,
++        double p_409842_,
++        double p_410093_,
++        double p_410205_,
++        double p_410266_,
++        double p_410332_,
++        double p_410404_,
++        float p_409552_,
++        float p_409640_
++    ) {
++        Throwable throwable = unwrapWebMoveException(p_409513_);
++        if (throwable == null) {
++            return false;
++        }
++
++        if (webMoveRecoverLogs < 20) {
++            webMoveRecoverLogs++;
++            System.err.println(
++                "[mc-web/serverpkt] handleMovePlayer.recovered packet="
++                    + p_409619_.getClass().getName()
++                    + " root="
++                    + throwable.getClass().getName()
++                    + ": "
++                    + throwable.getMessage()
++                    + " target="
++                    + p_409842_
++                    + ","
++                    + p_410093_
++                    + ","
++                    + p_410205_
++                    + " from="
++                    + p_410266_
++                    + ","
++                    + p_410332_
++                    + ","
++                    + p_410404_
++            );
++        }
++
++        try {
++            this.player.setPos(p_409842_, p_410093_, p_410205_);
++            this.player.absSnapRotationTo(p_409552_, p_409640_);
++            this.player.setOnGround(p_409619_.isOnGround());
++            this.player.resetFallDistance();
++            this.lastGoodX = p_409842_;
++            this.lastGoodY = p_410093_;
++            this.lastGoodZ = p_410205_;
++            this.firstGoodX = p_409842_;
++            this.firstGoodY = p_410093_;
++            this.firstGoodZ = p_410205_;
++            this.player.xo = p_409842_;
++            this.player.yo = p_410093_;
++            this.player.zo = p_410205_;
++            this.clientIsFloating = false;
++            return true;
++        } catch (Throwable throwable1) {
++            if (webMoveRecoverLogs < 20) {
++                webMoveRecoverLogs++;
++                System.err.println(
++                    "[mc-web/serverpkt] handleMovePlayer.recoverFailed ex="
++                        + throwable1.getClass().getName()
++                        + ": "
++                        + throwable1.getMessage()
++                );
++            }
++
++            return false;
++        }
++    }
++
++    @Nullable
++    private static Throwable unwrapWebMoveException(Throwable p_409918_) {
++        if (!BuildFlags.WEB_RUNTIME) {
++            return null;
++        }
++
++        Throwable throwable = p_409918_;
++        while (throwable instanceof CompletionException completionexception && completionexception.getCause() != null) {
++            throwable = completionexception.getCause();
++        }
++
++        while (throwable.getCause() != null && throwable.getCause() != throwable) {
++            throwable = throwable.getCause();
++        }
++
++        String s = throwable.getMessage();
++        return s != null && s.contains("Maximum call stack size exceeded") ? throwable : null;
++    }
++
+     private boolean isEntityCollidingWithAnythingNew(LevelReader p_407553_, Entity p_406012_, AABB p_409267_, double p_406132_, double p_409660_, double p_410365_) {
+         AABB aabb = p_406012_.getBoundingBox().move(p_406132_ - p_406012_.getX(), p_409660_ - p_406012_.getY(), p_410365_ - p_406012_.getZ());
+         Iterable<VoxelShape> iterable = p_407553_.getPreMoveCollisions(p_406012_, aabb.deflate(1.0E-5F), p_409267_.getBottomCenter());

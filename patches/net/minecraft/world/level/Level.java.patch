@@ -1,0 +1,112 @@
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -78,10 +78,12 @@
+ import net.minecraft.world.level.saveddata.maps.MapId;
+ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+ import net.minecraft.world.level.storage.LevelData;
++import top.steve3184.webmc.web.BuildFlags;
+ import net.minecraft.world.level.storage.WritableLevelData;
+ import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.Vec3;
+ import net.minecraft.world.scores.Scoreboard;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCloseable {
+     public static final Codec<ResourceKey<Level>> RESOURCE_KEY_CODEC = ResourceKey.codec(Registries.DIMENSION);
+@@ -118,7 +120,7 @@
+     private final BiomeManager biomeManager;
+     private final ResourceKey<Level> dimension;
+     private final RegistryAccess registryAccess;
+-    private final DamageSources damageSources;
++    private DamageSources damageSources;
+     private long subTickCount;
+ 
+     protected Level(
+@@ -131,9 +133,11 @@
+         long p_270248_,
+         int p_270466_
+     ) {
++        System.out.println("[mc-web/level] ctor begin dim=" + p_270683_.location());
+         this.levelData = p_270739_;
+         this.dimensionTypeRegistration = p_270240_;
+         final DimensionType dimensiontype = p_270240_.value();
++        System.out.println("[mc-web/level] ctor after dimensionType dim=" + p_270683_.location());
+         this.dimension = p_270683_;
+         this.isClientSide = p_270904_;
+         if (dimensiontype.coordinateScale() != 1.0) {
+@@ -151,13 +155,22 @@
+         } else {
+             this.worldBorder = new WorldBorder();
+         }
++        System.out.println("[mc-web/level] ctor after worldBorder dim=" + p_270683_.location());
+ 
+         this.thread = Thread.currentThread();
+         this.biomeManager = new BiomeManager(this, p_270248_);
++        System.out.println("[mc-web/level] ctor after biomeManager dim=" + p_270683_.location());
+         this.isDebug = p_270470_;
+         this.neighborUpdater = new CollectingNeighborUpdater(this, p_270466_);
++        System.out.println("[mc-web/level] ctor after neighborUpdater dim=" + p_270683_.location());
+         this.registryAccess = p_270200_;
+-        this.damageSources = new DamageSources(p_270200_);
++        if (BuildFlags.WEB_RUNTIME && p_270904_) {
++            System.out.println("[mc-web/level] ctor defer damageSources dim=" + p_270683_.location());
++            this.damageSources = null;
++        } else {
++            this.damageSources = new DamageSources(p_270200_);
++        }
++        System.out.println("[mc-web/level] ctor end dim=" + p_270683_.location());
+     }
+ 
+     @Override
+@@ -530,6 +543,31 @@
+         try {
+             p_46654_.accept(p_46655_);
+         } catch (Throwable throwable) {
++            if (BuildFlags.WEB_RUNTIME) {
++                System.out.println(
++                    "[mc-web/entitytick] caught class="
++                        + p_46655_.getClass().getName()
++                        + " type="
++                        + p_46655_.getType()
++                        + " id="
++                        + p_46655_.getId()
++                        + " tickCount="
++                        + p_46655_.tickCount
++                        + " error="
++                        + throwable.getClass().getName()
++                        + ": "
++                        + throwable.getMessage()
++                );
++                StackTraceElement[] stacktraceelement = throwable.getStackTrace();
++                int i = Math.min(stacktraceelement.length, 30);
++                for (int j = 0; j < i; j++) {
++                    System.out.println("[mc-web/entitytick] at " + stacktraceelement[j]);
++                }
++                if (p_46655_.getClass().getName().equals("net.minecraft.client.player.LocalPlayer")) {
++                    System.out.println("[mc-web/entitytick] swallowed LocalPlayer tick failure in web runtime");
++                    return;
++                }
++            }
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Ticking entity");
+             CrashReportCategory crashreportcategory = crashreport.addCategory("Entity being ticked");
+             p_46655_.fillCrashReportCategory(crashreportcategory);
+@@ -1054,6 +1092,12 @@
+     }
+ 
+     public DamageSources damageSources() {
++        if (this.damageSources == null) {
++            this.damageSources = new DamageSources(this.registryAccess);
++            if (BuildFlags.WEB_RUNTIME) {
++                System.out.println("[mc-web/level] damageSources lazy init dim=" + this.dimension.location());
++            }
++        }
+         return this.damageSources;
+     }
+ 
+@@ -1084,4 +1128,4 @@
+             return this.id;
+         }
+     }
+-}
+\ No newline at end of file
++}

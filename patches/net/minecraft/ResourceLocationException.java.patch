@@ -1,0 +1,20 @@
+--- a/net/minecraft/ResourceLocationException.java
++++ b/net/minecraft/ResourceLocationException.java
+@@ -1,13 +1,11 @@
+ package net.minecraft;
+ 
+-import org.apache.commons.lang3.StringEscapeUtils;
+-
+ public class ResourceLocationException extends RuntimeException {
+     public ResourceLocationException(String p_135421_) {
+-        super(StringEscapeUtils.escapeJava(p_135421_));
++        super(p_135421_);
+     }
+ 
+     public ResourceLocationException(String p_135423_, Throwable p_135424_) {
+-        super(StringEscapeUtils.escapeJava(p_135423_), p_135424_);
++        super(p_135423_, p_135424_);
+     }
+-}
+\ No newline at end of file
++}

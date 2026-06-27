@@ -1,0 +1,160 @@
+diff --git a/net/minecraft/client/renderer/texture/SpriteLoader.java b/net/minecraft/client/renderer/texture/SpriteLoader.java
+index 7595dd8..27982e1 100644
+--- a/net/minecraft/client/renderer/texture/SpriteLoader.java
++++ b/net/minecraft/client/renderer/texture/SpriteLoader.java
+@@ -1,6 +1,7 @@
+ package net.minecraft.client.renderer.texture;
+ 
+ import com.mojang.logging.LogUtils;
++import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.HashMap;
+ import java.util.List;
+@@ -28,10 +29,12 @@ import net.minecraft.util.profiling.Zone;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class SpriteLoader {
+     public static final Set<MetadataSectionType<?>> DEFAULT_METADATA_SECTIONS = Set.of(AnimationMetadataSection.TYPE);
++    private static final int WEB_SPRITE_SUPPLIER_BATCH_SIZE = 64;
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private final ResourceLocation location;
+     private final int maxSupportedTextureSize;
+@@ -100,19 +103,38 @@ public class SpriteLoader {
+                 crashreportcategory.setDetail("Max Texture Size", i);
+                 throw new ReportedException(crashreport);
+             }
++            System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " post-stitcher.stitch");
+ 
+             int i1 = Math.max(stitcher.getWidth(), this.minWidth);
+             int i2 = Math.max(stitcher.getHeight(), this.minHeight);
++            System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " gatherSprites start");
+             Map<ResourceLocation, TextureAtlasSprite> map = this.getStitchedSprites(stitcher, i1, i2);
++            System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " gatherSprites done size=" + map.size());
+             TextureAtlasSprite textureatlassprite = map.get(MissingTextureAtlasSprite.getLocation());
+             CompletableFuture<Void> completablefuture;
+             if (l1 > 0) {
+-                completablefuture = CompletableFuture.runAsync(() -> map.values().forEach(p_251202_ -> p_251202_.contents().increaseMipLevel(l1)), p_261665_);
++                System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " scheduling mipmap l=" + l1);
++                completablefuture = CompletableFuture.runAsync(() -> {
++                    long tm0 = System.currentTimeMillis();
++                    System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " mipmap begin");
++                    final int mtot = map.size();
++                    final int[] mc = {0};
++                    map.values().forEach(p_251202_ -> {
++                        p_251202_.contents().increaseMipLevel(l1);
++                        mc[0]++;
++                        if (mc[0] % 100 == 0 || mc[0] == mtot) {
++                            System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " mipmap " + mc[0] + "/" + mtot + " ms=" + (System.currentTimeMillis() - tm0));
++                        }
++                    });
++                    System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " mipmap done total=" + (System.currentTimeMillis() - tm0) + "ms");
++                }, p_261665_);
+             } else {
+                 completablefuture = CompletableFuture.completedFuture(null);
+             }
++            System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " building Preparations");
+ 
+             spriteloader$preparations = new SpriteLoader.Preparations(i1, i2, l1, textureatlassprite, map, completablefuture);
++            System.err.println("[mc-probe] SpriteLoader.stitch " + this.location + " Preparations built");
+         }
+ 
+         return spriteloader$preparations;
+@@ -121,8 +143,61 @@ public class SpriteLoader {
+     public static CompletableFuture<List<SpriteContents>> runSpriteSuppliers(
+         SpriteResourceLoader p_297457_, List<Function<SpriteResourceLoader, SpriteContents>> p_261516_, Executor p_261791_
+     ) {
++        final int total = p_261516_.size();
++        System.err.println("[mc-probe] SpriteLoader.runSpriteSuppliers: scheduling " + total + " sprites");
++        final java.util.concurrent.atomic.AtomicInteger done = new java.util.concurrent.atomic.AtomicInteger();
++        if (BuildFlags.WEB_RUNTIME) {
++            List<CompletableFuture<List<SpriteContents>>> list = new ArrayList<>(
++                (total + WEB_SPRITE_SUPPLIER_BATCH_SIZE - 1) / WEB_SPRITE_SUPPLIER_BATCH_SIZE
++            );
++
++            for (int batchStart = 0; batchStart < total; batchStart += WEB_SPRITE_SUPPLIER_BATCH_SIZE) {
++                final int start = batchStart;
++                final int end = Math.min(total, start + WEB_SPRITE_SUPPLIER_BATCH_SIZE);
++                list.add(
++                    CompletableFuture.supplyAsync(
++                        () -> {
++                            List<SpriteContents> list1 = new ArrayList<>(end - start);
++
++                            for (int i = start; i < end; i++) {
++                                SpriteContents spritecontents = p_261516_.get(i).apply(p_297457_);
++                                int n = done.incrementAndGet();
++                                if (n % 200 == 0 || n == total) {
++                                    System.err.println("[mc-probe] SpriteLoader.runSpriteSuppliers: " + n + "/" + total);
++                                }
++
++                                if (spritecontents != null) {
++                                    list1.add(spritecontents);
++                                }
++                            }
++
++                            return list1;
++                        },
++                        p_261791_
++                    )
++                );
++            }
++
++            return Util.sequence(list).thenApply(p_398001_ -> {
++                List<SpriteContents> list1 = new ArrayList<>();
++
++                for (List<SpriteContents> list2 : p_398001_) {
++                    list1.addAll(list2);
++                }
++
++                return list1;
++            });
++        }
++
+         List<CompletableFuture<SpriteContents>> list = p_261516_.stream()
+-            .map(p_296294_ -> CompletableFuture.supplyAsync(() -> (SpriteContents)p_296294_.apply(p_297457_), p_261791_))
++            .map(p_296294_ -> CompletableFuture.supplyAsync(() -> {
++                SpriteContents sc = (SpriteContents)p_296294_.apply(p_297457_);
++                int n = done.incrementAndGet();
++                if (n % 200 == 0 || n == total) {
++                    System.err.println("[mc-probe] SpriteLoader.runSpriteSuppliers: " + n + "/" + total);
++                }
++                return sc;
++            }, p_261791_))
+             .toList();
+         return Util.sequence(list).thenApply(p_252234_ -> p_252234_.stream().filter(Objects::nonNull).toList());
+     }
+@@ -134,12 +209,22 @@ public class SpriteLoader {
+     public CompletableFuture<SpriteLoader.Preparations> loadAndStitch(
+         ResourceManager p_300124_, ResourceLocation p_301196_, int p_300787_, Executor p_300950_, Collection<MetadataSectionType<?>> p_298047_
+     ) {
++        System.err.println("[mc-probe] SpriteLoader.loadAndStitch start atlas=" + p_301196_);
+         SpriteResourceLoader spriteresourceloader = SpriteResourceLoader.create(p_298047_);
+         return CompletableFuture.<List<Function<SpriteResourceLoader, SpriteContents>>>supplyAsync(
+-                () -> SpriteSourceList.load(p_300124_, p_301196_).list(p_300124_), p_300950_
++                () -> {
++                    List<Function<SpriteResourceLoader, SpriteContents>> r = SpriteSourceList.load(p_300124_, p_301196_).list(p_300124_);
++                    System.err.println("[mc-probe] SpriteLoader.loadAndStitch " + p_301196_ + " sources=" + r.size());
++                    return r;
++                }, p_300950_
+             )
+             .thenCompose(p_296297_ -> runSpriteSuppliers(spriteresourceloader, (List<Function<SpriteResourceLoader, SpriteContents>>)p_296297_, p_300950_))
+-            .thenApply(p_261393_ -> this.stitch((List<SpriteContents>)p_261393_, p_300787_, p_300950_));
++            .thenApply(p_261393_ -> {
++                System.err.println("[mc-probe] SpriteLoader.loadAndStitch " + p_301196_ + " stitching " + p_261393_.size() + " sprites");
++                SpriteLoader.Preparations prep = this.stitch((List<SpriteContents>)p_261393_, p_300787_, p_300950_);
++                System.err.println("[mc-probe] SpriteLoader.loadAndStitch " + p_301196_ + " stitched " + prep.width() + "x" + prep.height());
++                return prep;
++            });
+     }
+ 
+     private Map<ResourceLocation, TextureAtlasSprite> getStitchedSprites(Stitcher<SpriteContents> p_276117_, int p_276111_, int p_276112_) {
+@@ -165,4 +250,4 @@ public class SpriteLoader {
+             return this.readyForUpload.thenApply(p_249056_ -> this);
+         }
+     }
+-}
+\ No newline at end of file
++}

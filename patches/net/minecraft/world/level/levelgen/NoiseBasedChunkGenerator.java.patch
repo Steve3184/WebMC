@@ -1,0 +1,96 @@
+diff --git a/net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java b/net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java
+index 7923aa6..eeac494 100644
+--- a/net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java
++++ b/net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java
+@@ -34,6 +34,7 @@ import net.minecraft.world.level.biome.BiomeGenerationSettings;
+ import net.minecraft.world.level.biome.BiomeManager;
+ import net.minecraft.world.level.biome.BiomeResolver;
+ import net.minecraft.world.level.biome.BiomeSource;
++import net.minecraft.world.level.biome.Climate;
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.chunk.CarvingMask;
+@@ -46,6 +47,7 @@ import net.minecraft.world.level.levelgen.blending.Blender;
+ import net.minecraft.world.level.levelgen.carver.CarvingContext;
+ import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
+ import org.apache.commons.lang3.mutable.MutableObject;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public final class NoiseBasedChunkGenerator extends ChunkGenerator {
+     public static final MapCodec<NoiseBasedChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(
+@@ -56,6 +58,7 @@ public final class NoiseBasedChunkGenerator extends ChunkGenerator {
+             .apply(p_255585_, p_255585_.stable(NoiseBasedChunkGenerator::new))
+     );
+     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
++    private static int webBiomeDiagLogs;
+     private final Holder<NoiseGeneratorSettings> settings;
+     private final Supplier<Aquifer.FluidPicker> globalFluidPicker;
+ 
+@@ -73,6 +76,10 @@ public final class NoiseBasedChunkGenerator extends ChunkGenerator {
+         return (p_224274_, p_224275_, p_224276_) -> p_224275_ < Math.min(-54, i) ? aquifer$fluidstatus : aquifer$fluidstatus1;
+     }
+ 
++    private static boolean shouldLogWebBiomeDiag() {
++        return BuildFlags.WEB_RUNTIME && webBiomeDiagLogs++ < 80;
++    }
++
+     @Override
+     public CompletableFuture<ChunkAccess> createBiomes(RandomState p_224299_, Blender p_224300_, StructureManager p_224301_, ChunkAccess p_224302_) {
+         return CompletableFuture.supplyAsync(() -> {
+@@ -82,9 +89,47 @@ public final class NoiseBasedChunkGenerator extends ChunkGenerator {
+     }
+ 
+     private void doCreateBiomes(Blender p_224292_, RandomState p_224293_, StructureManager p_224294_, ChunkAccess p_224295_) {
+-        NoiseChunk noisechunk = p_224295_.getOrCreateNoiseChunk(p_224340_ -> this.createNoiseChunk(p_224340_, p_224294_, p_224292_, p_224293_));
++        if (shouldLogWebBiomeDiag()) {
++            ChunkPos chunkpos = p_224295_.getPos();
++            System.err.println("[mc-web/biomes] noiseChunk.begin chunk=" + chunkpos.x + "," + chunkpos.z);
++        }
++
++        NoiseChunk noisechunk = p_224295_.getOrCreateNoiseChunk(p_224340_ -> {
++            if (shouldLogWebBiomeDiag()) {
++                ChunkPos chunkpos2 = p_224340_.getPos();
++                System.err.println("[mc-web/biomes] createNoiseChunk.begin chunk=" + chunkpos2.x + "," + chunkpos2.z);
++            }
++
++            NoiseChunk noisechunk1 = this.createNoiseChunk(p_224340_, p_224294_, p_224292_, p_224293_);
++            if (shouldLogWebBiomeDiag()) {
++                ChunkPos chunkpos3 = p_224340_.getPos();
++                System.err.println("[mc-web/biomes] createNoiseChunk.end chunk=" + chunkpos3.x + "," + chunkpos3.z);
++            }
++
++            return noisechunk1;
++        });
++        if (shouldLogWebBiomeDiag()) {
++            ChunkPos chunkpos1 = p_224295_.getPos();
++            System.err.println("[mc-web/biomes] noiseChunk.ready chunk=" + chunkpos1.x + "," + chunkpos1.z);
++        }
++
+         BiomeResolver biomeresolver = BelowZeroRetrogen.getBiomeResolver(p_224292_.getBiomeResolver(this.biomeSource), p_224295_);
+-        p_224295_.fillBiomesFromNoise(biomeresolver, noisechunk.cachedClimateSampler(p_224293_.router(), this.settings.value().spawnTarget()));
++        if (shouldLogWebBiomeDiag()) {
++            ChunkPos chunkpos4 = p_224295_.getPos();
++            System.err.println("[mc-web/biomes] biomeResolver.ready chunk=" + chunkpos4.x + "," + chunkpos4.z);
++        }
++
++        Climate.Sampler climate$sampler = noisechunk.cachedClimateSampler(p_224293_.router(), this.settings.value().spawnTarget());
++        if (shouldLogWebBiomeDiag()) {
++            ChunkPos chunkpos5 = p_224295_.getPos();
++            System.err.println("[mc-web/biomes] sampler.ready chunk=" + chunkpos5.x + "," + chunkpos5.z);
++        }
++
++        p_224295_.fillBiomesFromNoise(biomeresolver, climate$sampler);
++        if (shouldLogWebBiomeDiag()) {
++            ChunkPos chunkpos6 = p_224295_.getPos();
++            System.err.println("[mc-web/biomes] fillBiomes.done chunk=" + chunkpos6.x + "," + chunkpos6.z);
++        }
+     }
+ 
+     private NoiseChunk createNoiseChunk(ChunkAccess p_224257_, StructureManager p_224258_, Blender p_224259_, RandomState p_224260_) {
+@@ -434,4 +479,4 @@ public final class NoiseBasedChunkGenerator extends ChunkGenerator {
+             NaturalSpawner.spawnMobsForChunkGeneration(p_64379_, holder, chunkpos, worldgenrandom);
+         }
+     }
+-}
+\ No newline at end of file
++}

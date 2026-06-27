@@ -1,0 +1,219 @@
+--- a/net/minecraft/client/renderer/ShaderManager.java
++++ b/net/minecraft/client/renderer/ShaderManager.java
+@@ -25,7 +25,6 @@
+ import java.util.Set;
+ import java.util.Map.Entry;
+ import java.util.function.Consumer;
+-import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
+ import net.minecraft.FileUtil;
+ import net.minecraft.ResourceLocationException;
+@@ -41,6 +40,8 @@
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.apache.commons.io.IOUtils;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
++import top.steve3184.webmc.web.WebDiagnostics;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class ShaderManager extends SimplePreparableReloadListener<ShaderManager.Configs> implements AutoCloseable {
+@@ -60,22 +61,49 @@
+     }
+ 
+     protected ShaderManager.Configs prepare(ResourceManager p_363890_, ProfilerFiller p_362646_) {
++        boolean diagnostics = WebDiagnostics.enabled();
++        if (diagnostics) {
++            System.err.println("[mc-probe] ShaderManager.prepare ENTER");
++        }
+         Builder<ShaderManager.ShaderSourceKey, String> builder = ImmutableMap.builder();
+         Map<ResourceLocation, Resource> map = p_363890_.listResources("shaders", ShaderManager::isShader);
++        if (diagnostics) {
++            System.err.println("[mc-probe] ShaderManager.prepare shaders=" + map.size());
++        }
+ 
+         for (Entry<ResourceLocation, Resource> entry : map.entrySet()) {
+             ResourceLocation resourcelocation = entry.getKey();
+             ShaderType shadertype = ShaderType.byLocation(resourcelocation);
+             if (shadertype != null) {
+-                loadShader(resourcelocation, entry.getValue(), shadertype, map, builder);
++                try {
++                    loadShader(resourcelocation, entry.getValue(), shadertype, map, builder);
++                } catch (Throwable t) {
++                    if (diagnostics) {
++                        System.err.println("[mc-probe] loadShader threw on " + resourcelocation + ": " + t);
++                        t.printStackTrace();
++                    }
++                }
+             }
+         }
++        if (diagnostics) {
++            System.err.println("[mc-probe] ShaderManager.prepare shaders done");
++        }
+ 
+         Builder<ResourceLocation, PostChainConfig> builder1 = ImmutableMap.builder();
+ 
+-        for (Entry<ResourceLocation, Resource> entry1 : POST_CHAIN_ID_CONVERTER.listMatchingResources(p_363890_).entrySet()) {
++        Map<ResourceLocation, Resource> postMap = POST_CHAIN_ID_CONVERTER.listMatchingResources(p_363890_);
++        // Web fallback: if post_effects returns nothing, try post_effect (non-plural)
++        if (BuildFlags.WEB_RUNTIME && postMap.isEmpty()) {
++            if (diagnostics) {
++                System.err.println("[mc-probe] ShaderManager.prepare: post_effects empty, trying post_effect");
++            }
++            postMap = p_363890_.listResources("post_effect", rl -> true);
++        }
++        if (diagnostics) {
++            System.err.println("[mc-probe] ShaderManager.prepare post entries=" + postMap.size());
++        }
++        for (Entry<ResourceLocation, Resource> entry1 : postMap.entrySet()) {
++            if (diagnostics) {
++                System.err.println("[mc-probe] ShaderManager.prepare: post entry " + entry1.getKey());
++            }
+             loadPostChain(entry1.getKey(), entry1.getValue(), builder1);
+         }
++        if (diagnostics) {
++            System.err.println("[mc-probe] ShaderManager.prepare EXIT");
++        }
+ 
+         return new ShaderManager.Configs(builder.build(), builder1.build());
+     }
+@@ -142,8 +170,16 @@
+         try (Reader reader = p_365135_.openAsReader()) {
+             JsonElement jsonelement = StrictJsonParser.parse(reader);
+             p_362996_.put(resourcelocation, PostChainConfig.CODEC.parse(JsonOps.INSTANCE, jsonelement).getOrThrow(JsonSyntaxException::new));
++            if (WebDiagnostics.enabled()) {
++                System.err.println("[mc-probe] loadPostChain OK " + resourcelocation);
++            }
+         } catch (JsonParseException | IOException ioexception) {
+             LOGGER.error("Failed to parse post chain at {}", p_365599_, ioexception);
++        } catch (Throwable t) {
++            if (WebDiagnostics.enabled()) {
++                System.err.println("[mc-probe] loadPostChain " + p_365599_ + " uncaught " + t);
++                t.printStackTrace();
++            }
+         }
+     }
+ 
+@@ -152,27 +188,97 @@
+     }
+ 
+     protected void apply(ShaderManager.Configs p_360858_, ResourceManager p_369986_, ProfilerFiller p_364135_) {
++        boolean diagnostics = WebDiagnostics.enabled();
++        long webShaderApplyStartMs = diagnostics ? System.currentTimeMillis() : 0L;
++        if (diagnostics) {
++            WebDiagnostics.timelineEvent(
++                "shaderReloadEvents", "apply:start", "postChains=" + p_360858_.postChains().size(), p_360858_.postChains().size(), webShaderApplyStartMs
++            );
++            System.err.println("[mc-probe] ShaderManager.apply enter, postChains=" + p_360858_.postChains().size());
++        }
+         ShaderManager.CompilationCache shadermanager$compilationcache = new ShaderManager.CompilationCache(p_360858_);
+         Set<RenderPipeline> set = new HashSet<>(RenderPipelines.getStaticPipelines());
++        if (BuildFlags.WEB_RUNTIME) {
++            set.remove(RenderPipelines.CLOUDS);
++            set.remove(RenderPipelines.FLAT_CLOUDS);
++        }
+         List<ResourceLocation> list = new ArrayList<>();
+         GpuDevice gpudevice = RenderSystem.getDevice();
+         gpudevice.clearPipelineCache();
+ 
++        if (diagnostics && BuildFlags.WEB_RUNTIME) {
++            WebDiagnostics.timelineEvent(
++                "shaderReloadEvents",
++                "precompile:start",
++                "static=" + RenderPipelines.getStaticPipelines().size(),
++                set.size(),
++                webShaderApplyStartMs
++            );
++            System.err.println(
++                "[mc-probe] ShaderManager.apply web pipelines="
++                    + set.size()
++                    + "/"
++                    + RenderPipelines.getStaticPipelines().size()
++            );
++        }
++
++        int webPipelineIndex = 0;
+         for (RenderPipeline renderpipeline : set) {
+-            CompiledRenderPipeline compiledrenderpipeline = gpudevice.precompilePipeline(renderpipeline, shadermanager$compilationcache::getShaderSource);
+-            if (!compiledrenderpipeline.isValid()) {
++            CompiledRenderPipeline compiledrenderpipeline;
++            long webPipelineStartMs = diagnostics ? System.currentTimeMillis() : 0L;
++            try {
++                compiledrenderpipeline = gpudevice.precompilePipeline(renderpipeline, shadermanager$compilationcache::getShaderSource);
++            } catch (Throwable t) {
++                if (diagnostics) {
++                    int durationMs = (int)Math.min((long)Integer.MAX_VALUE, Math.max(0L, System.currentTimeMillis() - webPipelineStartMs));
++                    WebDiagnostics.timelineEvent(
++                        "shaderReloadEvents",
++                        "precompile:throw",
++                        (webPipelineIndex + 1) + "/" + set.size() + " " + renderpipeline.getLocation() + " durationMs=" + durationMs + " err=" + t.getClass().getName(),
++                        durationMs,
++                        webShaderApplyStartMs
++                    );
++                    System.err.println("[mc-probe] precompilePipeline threw on " + renderpipeline.getLocation() + ": " + t);
++                    t.printStackTrace();
++                }
++                list.add(renderpipeline.getLocation());
++                webPipelineIndex++;
++                continue;
++            }
++            boolean valid = compiledrenderpipeline.isValid();
++            if (diagnostics) {
++                int durationMs = (int)Math.min((long)Integer.MAX_VALUE, Math.max(0L, System.currentTimeMillis() - webPipelineStartMs));
++                WebDiagnostics.timelineEvent(
++                    "shaderReloadEvents",
++                    "precompile:pipeline",
++                    webPipelineIndex + 1 + "/" + set.size() + " " + renderpipeline.getLocation() + " durationMs=" + durationMs + " valid=" + valid,
++                    durationMs,
++                    webShaderApplyStartMs
++                );
++            }
++            webPipelineIndex++;
++            if (!valid) {
++                if (diagnostics) {
++                    System.err.println("[mc-probe] pipeline isValid=false: " + renderpipeline.getLocation() + " class=" + compiledrenderpipeline.getClass().getName());
++                }
+                 list.add(renderpipeline.getLocation());
+             }
+         }
+ 
++        if (diagnostics) {
++            WebDiagnostics.timelineEvent("shaderReloadEvents", "precompile:done", "invalid=" + list.size(), list.size(), webShaderApplyStartMs);
++            System.err.println("[mc-probe] ShaderManager.apply: " + list.size() + " invalid of " + set.size());
++        }
+         if (!list.isEmpty()) {
+-            gpudevice.clearPipelineCache();
+-            throw new RuntimeException(
+-                "Failed to load required shader programs:\n" + list.stream().map(p_389461_ -> " - " + p_389461_).collect(Collectors.joining("\n"))
+-            );
+-        } else {
+-            this.compilationCache.close();
+-            this.compilationCache = shadermanager$compilationcache;
++            if (diagnostics) {
++                System.err.println("[mc-probe] ShaderManager.apply: tolerating invalid pipelines to keep post chain cache alive");
++            }
++        }
++        this.compilationCache.close();
++        this.compilationCache = shadermanager$compilationcache;
++        if (diagnostics) {
++            WebDiagnostics.timelineEvent("shaderReloadEvents", "apply:done", "postChains=" + p_360858_.postChains().size(), list.size(), webShaderApplyStartMs);
++            System.err.println("[mc-probe] ShaderManager.apply: cache updated, post chains=" + p_360858_.postChains().size());
+         }
+     }
+ 
+@@ -234,6 +340,9 @@
+ 
+         private PostChain loadPostChain(ResourceLocation p_366740_, Set<ResourceLocation> p_366419_) throws ShaderManager.CompilationException {
+             PostChainConfig postchainconfig = this.configs.postChains.get(p_366740_);
++            if (WebDiagnostics.enabled()) {
++                System.err.println("[mc-probe] CompilationCache.loadPostChain id=" + p_366740_ + " configsSize=" + this.configs.postChains.size() + " keys=" + this.configs.postChains.keySet() + " contains=" + this.configs.postChains.containsKey(p_366740_) + " hit=" + (postchainconfig != null));
++            }
+             if (postchainconfig == null) {
+                 throw new ShaderManager.CompilationException("Could not find post chain with id: " + p_366740_);
+             } else {
+@@ -271,4 +380,4 @@
+             return this.id + " (" + this.type + ")";
+         }
+     }
+-}
+\ No newline at end of file
++}

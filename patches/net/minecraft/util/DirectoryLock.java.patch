@@ -1,0 +1,72 @@
+--- a/net/minecraft/util/DirectoryLock.java
++++ b/net/minecraft/util/DirectoryLock.java
+@@ -10,14 +10,21 @@
+ import java.nio.file.Path;
+ import java.nio.file.StandardOpenOption;
+ import net.minecraft.FileUtil;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ public class DirectoryLock implements AutoCloseable {
+     public static final String LOCK_FILE = "session.lock";
+     private final FileChannel lockFile;
+     private final FileLock lock;
++    private final boolean webNoopLock;
+     private static final ByteBuffer DUMMY;
+ 
+     public static DirectoryLock create(Path p_13641_) throws IOException {
++        if (BuildFlags.WEB_RUNTIME) {
++            FileUtil.createDirectoriesSafe(p_13641_);
++            return new DirectoryLock(null, null, true);
++        }
++
+         Path path = p_13641_.resolve("session.lock");
+         FileUtil.createDirectoriesSafe(p_13641_);
+         FileChannel filechannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+@@ -43,12 +50,21 @@
+     }
+ 
+     private DirectoryLock(FileChannel p_13637_, FileLock p_13638_) {
++        this(p_13637_, p_13638_, false);
++    }
++
++    private DirectoryLock(FileChannel p_13637_, FileLock p_13638_, boolean p_410300_) {
+         this.lockFile = p_13637_;
+         this.lock = p_13638_;
++        this.webNoopLock = p_410300_;
+     }
+ 
+     @Override
+     public void close() throws IOException {
++        if (this.webNoopLock) {
++            return;
++        }
++
+         try {
+             if (this.lock.isValid()) {
+                 this.lock.release();
+@@ -61,10 +77,18 @@
+     }
+ 
+     public boolean isValid() {
++        if (this.webNoopLock) {
++            return true;
++        }
++
+         return this.lock.isValid();
+     }
+ 
+     public static boolean isLocked(Path p_13643_) throws IOException {
++        if (BuildFlags.WEB_RUNTIME) {
++            return false;
++        }
++
+         Path path = p_13643_.resolve("session.lock");
+ 
+         try {
+@@ -100,4 +124,4 @@
+             return new DirectoryLock.LockException(p_13649_, "already locked (possibly by other Minecraft instance?)");
+         }
+     }
+-}
+\ No newline at end of file
++}

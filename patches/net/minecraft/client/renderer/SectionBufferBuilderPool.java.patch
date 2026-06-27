@@ -1,0 +1,28 @@
+--- a/net/minecraft/client/renderer/SectionBufferBuilderPool.java
++++ b/net/minecraft/client/renderer/SectionBufferBuilderPool.java
+@@ -9,6 +9,7 @@
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
+ import org.slf4j.Logger;
++import top.steve3184.webmc.web.BuildFlags;
+ 
+ @OnlyIn(Dist.CLIENT)
+ public class SectionBufferBuilderPool {
+@@ -22,7 +23,9 @@
+     }
+ 
+     public static SectionBufferBuilderPool allocate(int p_310783_) {
+-        int i = Math.max(1, (int)(Runtime.getRuntime().maxMemory() * 0.3) / SectionBufferBuilderPack.TOTAL_BUFFERS_SIZE);
++        int i = BuildFlags.WEB_RUNTIME
++            ? Math.max(1, p_310783_)
++            : Math.max(1, (int)(Runtime.getRuntime().maxMemory() * 0.3) / SectionBufferBuilderPack.TOTAL_BUFFERS_SIZE);
+         int j = Math.max(1, Math.min(p_310783_, i));
+         List<SectionBufferBuilderPack> list = new ArrayList<>(j);
+ 
+@@ -65,4 +68,4 @@
+     public int getFreeBufferCount() {
+         return this.freeBufferCount;
+     }
+-}
+\ No newline at end of file
++}

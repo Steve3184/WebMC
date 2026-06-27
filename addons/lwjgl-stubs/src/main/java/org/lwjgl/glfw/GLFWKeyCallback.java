@@ -1,0 +1,15 @@
+package org.lwjgl.glfw;
+
+/**
+ * GLFW callback shims. LWJGL's real classes extend a {@code Callback} base for
+ * native trampoline support; we ignore that and only expose the SAM Java side.
+ *
+ * MC subclasses these (or uses lambdas via {@code create(...)}). Both work.
+ */
+public abstract class GLFWKeyCallback implements GLFWKeyCallbackI {
+    public static GLFWKeyCallback create(GLFWKeyCallbackI lambda) {
+        return new GLFWKeyCallback() { @Override public void invoke(long w, int k, int s, int a, int m) { lambda.invoke(w, k, s, a, m); } };
+    }
+    public void free() {}
+    public GLFWKeyCallback set(long window) { GLFW.glfwSetKeyCallback(window, this); return this; }
+}
