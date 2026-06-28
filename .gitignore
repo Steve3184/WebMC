@@ -38,4 +38,4 @@ addons/web/game.vfs
 addons/web/game.vfs.gz
 addons/web/game.vfs.xz
 dist/
-work/build/
+work/build/upstream/
