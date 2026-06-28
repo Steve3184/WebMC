@@ -124,11 +124,13 @@ const server = http.createServer((req, res) => {
         urlPath = '/index.html';
     }
 
+    // Normalize both paths to forward slashes for reliable comparison
     const filePath = path.join(STATIC_DIR, urlPath);
-    const normalizedPath = path.normalize(filePath);
+    const normalizedPath = path.normalize(filePath).replace(/\\/g, '/');
+    const staticDirNorm = STATIC_DIR.replace(/\\/g, '/');
 
     // Ensure file is within static directory
-    if (!normalizedPath.startsWith(STATIC_DIR)) {
+    if (!normalizedPath.startsWith(staticDirNorm)) {
         res.writeHead(403);
         res.end('Forbidden');
         return;

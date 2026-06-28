@@ -2,6 +2,7 @@ package top.steve3184.webmc.teavm.runtime;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.teavm.jso.JSBody;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWCharCallback;
 import org.lwjgl.glfw.GLFWCursorPosCallback;
@@ -78,17 +79,51 @@ public final class CanvasWindowBackend implements WindowBackend {
 
     @Override
     public void setSize(long handle, int width, int height) {
+        jsResizeCanvas(width, height);
     }
+
+    @JSBody(params = {"w", "h"}, script =
+        "try {" +
+        "  var c = document.getElementById('game-canvas');" +
+        "  if (!c) return;" +
+        "  // Set canvas pixel dimensions to match rendered size" +
+        "  c.width = w;" +
+        "  c.height = h;" +
+        "  // Also ensure CSS fills viewport" +
+        "  c.style.width = w + 'px';" +
+        "  c.style.height = h + 'px';" +
+        "  // Update WebGL viewport" +
+        "  var gl = c.getContext('webgl2');" +
+        "  if (gl) gl.viewport(0, 0, w, h);" +
+        "} catch(e) {}")
+    private static native void jsResizeCanvas(int w, int h);
 
     @Override
     public void getFramebufferSize(long handle, int[] width, int[] height) {
+        int[] real = jsGetCanvasSize();
         if (width != null && width.length > 0) {
-            width[0] = 1280;
+            width[0] = real[0];
         }
         if (height != null && height.length > 0) {
-            height[0] = 720;
+            height[0] = real[1];
         }
     }
+
+    @JSBody(script =
+        "try {" +
+        "  var c = document.getElementById('game-canvas');" +
+        "  if (!c) return [1280, 720];" +
+        "  // Always try CSS bounding rect first - this is the actual rendered size" +
+        "  var r = c.getBoundingClientRect();" +
+        "  if (r && r.width > 0 && r.height > 0) {" +
+        "    return [Math.round(r.width), Math.round(r.height)];" +
+        "  }" +
+        "  // Fallback to canvas attribute" +
+        "  var w = c.width || 1280;" +
+        "  var h = c.height || 720;" +
+        "  return [w, h];" +
+        "} catch(e) { return [1280, 720]; }")
+    private static native int[] jsGetCanvasSize();
 
     @Override
     public void getWindowSize(long handle, int[] width, int[] height) {
