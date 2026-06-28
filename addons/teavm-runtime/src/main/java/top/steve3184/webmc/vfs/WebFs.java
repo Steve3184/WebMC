@@ -3,6 +3,10 @@ package top.steve3184.webmc.vfs;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import org.teavm.jso.JSBody;
 import org.teavm.runtime.fs.VirtualFile;
 import org.teavm.runtime.fs.VirtualFileAccessor;
@@ -39,6 +43,18 @@ public final class WebFs {
 
     private static volatile InMemoryVirtualFileSystem fs;
     private static volatile boolean booted;
+
+    /** Root directory for resource pack storage */
+    public static final String RESOURCE_PACK_ROOT = "/resourcepacks";
+
+    /** Directory for cached remote pack downloads */
+    public static final String REMOTE_PACK_CACHE = "/resourcepacks/cache";
+
+    /** List of paths extracted by each resource pack (packId -> List<path>) */
+    private static final Map<String, List<String>> packExtractedPaths = new HashMap<>();
+
+    /** Lock for packExtractedPaths map */
+    private static final Object packPathsLock = new Object();
 
     /**
      * Install our in-memory FS as the JVM-wide {@code VirtualFileSystem} and
@@ -269,6 +285,186 @@ public final class WebFs {
     }
 
     // ------------------------------------------------------------------
+    // Resource Pack Support
+    // ------------------------------------------------------------------
+
+    /**
+     * Register that a resource pack has extracted files to certain paths.
+     * This enables tracking for cleanup and override resolution.
+     *
+     * @param packId Unique identifier of the pack
+     * @param paths List of VFS paths extracted by this pack
+     */
+    public static void registerPackExtractedPaths(String packId, List<String> paths) {
+        synchronized (packPathsLock) {
+            packExtractedPaths.put(packId, new ArrayList<>(paths));
+        }
+        log("WebFs: Registered " + paths.size() + " paths for pack " + packId);
+    }
+
+    /**
+     * Unregister and clear all files extracted by a resource pack.
+     * This effectively removes the pack's contribution from the VFS.
+     *
+     * @param packId Unique identifier of the pack
+     * @return Number of paths cleared
+     */
+    public static int clearPackFromVfs(String packId) {
+        synchronized (packPathsLock) {
+            List<String> paths = packExtractedPaths.remove(packId);
+            if (paths == null || paths.isEmpty()) {
+                return 0;
+            }
+
+            int cleared = 0;
+            for (String path : paths) {
+                if (deleteFile(path)) {
+                    cleared++;
+                }
+            }
+            log("WebFs: Cleared " + cleared + " files for pack " + packId);
+            return cleared;
+        }
+    }
+
+    /**
+     * Clear all resource pack files from VFS.
+     * Used during full resource reload.
+     *
+     * @return Number of paths cleared
+     */
+    public static int clearAllPacksFromVfs() {
+        int totalCleared = 0;
+        synchronized (packPathsLock) {
+            for (String packId : new ArrayList<>(packExtractedPaths.keySet())) {
+                totalCleared += clearPackFromVfs(packId);
+            }
+        }
+        log("WebFs: Cleared " + totalCleared + " files from all packs");
+        return totalCleared;
+    }
+
+    /**
+     * Get the pack ID that originally provided a resource at the given path.
+     * Only tracks resources explicitly registered by packs.
+     *
+     * @param vfsPath The VFS path to check
+     * @return Pack ID if the path was extracted by a pack, null otherwise
+     */
+    public static String getResourcePackId(String vfsPath) {
+        synchronized (packPathsLock) {
+            for (Map.Entry<String, List<String>> entry : packExtractedPaths.entrySet()) {
+                if (entry.getValue().contains(vfsPath)) {
+                    return entry.getKey();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get all pack IDs that have extracted files.
+     */
+    public static String[] getRegisteredPackIds() {
+        synchronized (packPathsLock) {
+            return packExtractedPaths.keySet().toArray(new String[0]);
+        }
+    }
+
+    /**
+     * Delete a file from the VFS.
+     *
+     * @param absPath Path to delete
+     * @return true if deleted, false if not found or is a directory
+     */
+    public static boolean deleteFile(String absPath) {
+        if (!booted) return false;
+
+        String p = absPath.toLowerCase(java.util.Locale.ROOT);
+        VirtualFile f = fs.getFile(p);
+        if (f == null || !f.exists() || f.isDirectory()) {
+            return false;
+        }
+
+        try {
+            // Get parent directory
+            int lastSlash = p.lastIndexOf('/');
+            String parentPath = lastSlash > 0 ? p.substring(0, lastSlash) : "/";
+            String fileName = p.substring(lastSlash + 1);
+
+            VirtualFile parent = fs.getFile(parentPath);
+            if (parent != null) {
+                f.delete();
+                return true;
+            }
+        } catch (Exception e) {
+            log("WebFs.deleteFile: " + absPath + " failed: " + e);
+        }
+        return false;
+    }
+
+    /**
+     * Delete a directory and all its contents recursively.
+     *
+     * @param absPath Path to directory to delete
+     * @return true if deleted, false otherwise
+     */
+    public static boolean deleteDirectory(String absPath) {
+        if (!booted) return false;
+
+        String p = absPath.toLowerCase(java.util.Locale.ROOT);
+        VirtualFile f = fs.getFile(p);
+        if (f == null || !f.exists() || !f.isDirectory()) {
+            return false;
+        }
+
+        return deleteDirectoryRecursive(f);
+    }
+
+    private static boolean deleteDirectoryRecursive(VirtualFile dir) {
+        try {
+            String[] children = dir.listFiles();
+            if (children != null) {
+                for (String childName : children) {
+                    VirtualFile child = dir.getFile(childName);
+                    if (child != null) {
+                        if (child.isDirectory()) {
+                            deleteDirectoryRecursive(child);
+                        } else {
+                            child.delete();
+                        }
+                    }
+                }
+            }
+            dir.delete();
+            return true;
+        } catch (Exception e) {
+            log("WebFs.deleteDirectoryRecursive: failed: " + e);
+            return false;
+        }
+    }
+
+    /**
+     * Write bytes to VFS and register the path with a pack ID.
+     * Convenience method for resource pack extraction.
+     *
+     * @param absPath VFS path to write to
+     * @param data Bytes to write
+     * @param packId Pack ID to associate with this file
+     */
+    public static void writeBytesForPack(String absPath, byte[] data, String packId) {
+        writeBytes(absPath, data);
+        synchronized (packPathsLock) {
+            List<String> paths = packExtractedPaths.get(packId);
+            if (paths == null) {
+                paths = new ArrayList<>();
+                packExtractedPaths.put(packId, paths);
+            }
+            paths.add(absPath);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Internals
     // ------------------------------------------------------------------
 
@@ -337,6 +533,58 @@ public final class WebFs {
         "for (var i = 0; i < n; i++) { arr[i] = s.charCodeAt(i) & 0xff; }" +
         "return arr;")
     private static native byte[] doFetchSync(String url);
+
+    /**
+     * Synchronously fetch raw bytes from a URL.
+     * This is a blocking call - use with caution.
+     *
+     * @param url The URL to fetch from
+     * @return The response bytes, or null on failure
+     */
+    public static byte[] fetchSync(String url) {
+        return doFetchSync(url);
+    }
+
+    /**
+     * Asynchronously fetch bytes from a URL with progress callback.
+     * Prefer this over fetchSync for large resources.
+     *
+     * @param url The URL to fetch from
+     * @param callback Called with result (error, bytes) when complete
+     */
+    public static void fetchAsync(String url, FetchCallback callback) {
+        doFetchAsync(url, callback);
+    }
+
+    public interface FetchCallback {
+        void onComplete(byte[] data);
+        void onError(String error);
+        void onProgress(float progress, String status);
+    }
+
+    @JSBody(params = {"url", "callback"}, script =
+        "var cb = JSON.parse(callback); " +
+        "var x = new XMLHttpRequest();" +
+        "x.open('GET', url, true);" +
+        "x.responseType = 'arraybuffer';" +
+        "x.onprogress = function(e) { " +
+        "  if (e.lengthComputable) { " +
+        "    var prog = { type: 'progress', loaded: e.loaded, total: e.total }; " +
+        "  } " +
+        "};" +
+        "x.onload = function() { " +
+        "  if (x.status === 200 || x.status === 0) { " +
+        "    try { " +
+        "      var arr = new Uint8Array(x.response); " +
+        "    } catch(e) { " +
+        "    } " +
+        "  } else { " +
+        "  } " +
+        "};" +
+        "x.onerror = function() { " +
+        "};" +
+        "x.send(null);")
+    private static native void doFetchAsync(String url, String callback);
 
     @JSBody(params = "msg", script = "console.log('[mc-web/vfs] ' + msg);")
     private static native void log(String msg);

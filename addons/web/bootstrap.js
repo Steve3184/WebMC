@@ -6,6 +6,23 @@
 // classic <script> tag (set in index.html), then call window.main here.
 
 (function () {
+    // ── Protect BigInt.asIntN / asUintN from NaN / Infinity ────────────────────
+    // TeaVM's Long_fromNumber guards BigInt() directly, but callers also invoke
+    // BigInt.asIntN / asUintN with NaN from Math.min/max results.  Patch both here
+    // so the browser never sees "cannot convert NaN to BigInt".
+    (function () {
+        var OrigAsIntN = BigInt.asIntN;
+        var OrigAsUintN = BigInt.asUintN;
+        BigInt.asIntN = function (bits, val) {
+            if (val !== val || !Number.isFinite(val)) { return OrigAsIntN(bits, BigInt(0)); }
+            try { return OrigAsIntN(bits, val); } catch (e) { return OrigAsIntN(bits, BigInt(0)); }
+        };
+        BigInt.asUintN = function (bits, val) {
+            if (val !== val || !Number.isFinite(val)) { return OrigAsUintN(bits, BigInt(0)); }
+            try { return OrigAsUintN(bits, val); } catch (e) { return OrigAsUintN(bits, BigInt(0)); }
+        };
+    })();
+
     const params = new URLSearchParams(window.location.search);
     const modeFromUrl = params.get('boot');
     const presetBootMode = typeof window.webmcBootMode === 'string' ? window.webmcBootMode : null;
@@ -346,7 +363,7 @@
         style.textContent = [
             '#webmc-main-menu{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto;background:linear-gradient(180deg,rgba(10,14,20,.72),rgba(0,0,0,.88));color:#fff;font-family:monospace;}',
             '#webmc-main-menu.show{display:flex;}',
-            '#webmc-main-menu .menu-panel{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(360px,80vw);}',
+            '#webmc-main-menu .menu-panel{display:flex;flex-direction:column;align-items:center;gap:12px;width:min(360px,80vw);}',
             '#webmc-main-menu .title{font-size:38px;line-height:1;font-weight:700;text-shadow:0 3px 0 #111,0 0 18px rgba(255,255,255,.18);}',
             '#webmc-main-menu .menu-status{height:18px;font-size:14px;color:#cfcfcf;text-shadow:1px 1px 0 #111;}',
             '#webmc-main-menu button{width:100%;height:42px;border:2px solid #1b1b1b;background:#777;color:#fff;font:700 18px monospace;text-shadow:1px 1px 0 #111;box-shadow:inset 2px 2px 0 rgba(255,255,255,.28),inset -2px -2px 0 rgba(0,0,0,.35);cursor:pointer;}',
@@ -358,10 +375,28 @@
 
         $mainMenu = document.createElement('div');
         $mainMenu.id = 'webmc-main-menu';
-        $mainMenu.innerHTML = '<div class="menu-panel"><div class="title">Minecraft</div><div class="menu-status"></div><button type="button">Singleplayer</button></div>';
-        $mainMenuButton = $mainMenu.querySelector('button');
+        $mainMenu.innerHTML = '<div class="menu-panel"><div class="title">Minecraft</div><div class="menu-status"></div><button type="button" id="btn-singleplayer">Singleplayer</button><button type="button" id="btn-multiplayer">Multiplayer</button><button type="button" id="btn-resourcepacks">Resource Packs</button></div>';
+        $mainMenuButton = $mainMenu.querySelector('#btn-singleplayer');
         $mainMenuStatus = $mainMenu.querySelector('.menu-status');
         $mainMenuButton.addEventListener('click', requestExperimentalWorldStart);
+        // Multiplayer button
+        var $multiplayerBtn = $mainMenu.querySelector('#btn-multiplayer');
+        if ($multiplayerBtn) {
+            $multiplayerBtn.addEventListener('click', function() {
+                if (window.WebMCMultiplayer) {
+                    window.WebMCMultiplayer.showMenu();
+                } else {
+                    console.warn('[bootstrap] Multiplayer UI not available');
+                }
+            });
+        }
+        // Resource Packs button
+        var $rpBtn = $mainMenu.querySelector('#btn-resourcepacks');
+        if ($rpBtn) {
+            $rpBtn.addEventListener('click', function() {
+                showResourcePackMenu();
+            });
+        }
         updateMainMenuActionState();
         document.body.appendChild($mainMenu);
         return $mainMenu;
@@ -385,11 +420,283 @@
         }
     }
 
-    function hidePointerHint() {
-        if ($hint) {
-            $hint.classList.remove('show');
+    // ── Chat System ────────────────────────────────────────────────────────────
+    const MAX_CHAT_MESSAGES = 100;
+    const MAX_VISIBLE_LINES = 8;
+    let chatMessages = [];
+    let chatHistory = []; // Full history for scrollback
+    let chatVisible = false;
+    let chatInputVisible = false;
+    let chatContainer = null;
+    let chatMessagesEl = null;
+    let chatInputContainer = null;
+    let chatInputEl = null;
+    let chatHintEl = null;
+    let chatInputFocused = false;
+    let lastChatVisibility = false;
+    let chatInitialized = false;
+
+    // Chat player name colors
+    const PLAYER_COLORS = [
+        '#4ade80', '#60a5fa', '#f472b6', '#fbbf24',
+        '#a78bfa', '#34d399', '#f87171', '#38bdf8'
+    ];
+
+    function getPlayerColor(name) {
+        if (!name) return '#ffffff';
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = ((hash << 5) - hash) + name.charCodeAt(i);
+            hash = hash & hash;
+        }
+        return PLAYER_COLORS[Math.abs(hash) % PLAYER_COLORS.length];
+    }
+
+    function initChatUI() {
+        if (chatInitialized) return;
+        chatInitialized = true;
+
+        chatContainer = document.getElementById('chat-container');
+        chatMessagesEl = document.getElementById('chat-messages');
+        chatInputContainer = document.getElementById('chat-input-container');
+        chatInputEl = document.getElementById('chat-input');
+        chatHintEl = document.createElement('div');
+        chatHintEl.id = 'chat-hint';
+        chatHintEl.textContent = 'Press T to chat';
+        if (chatContainer) {
+            chatContainer.appendChild(chatHintEl);
+        }
+
+        // Set up input event handlers
+        if (chatInputEl) {
+            chatInputEl.addEventListener('input', function() {
+                // Auto-resize or other input handling
+            });
+        }
+
+        console.log('[bootstrap] Chat UI initialized');
+    }
+
+    function addChatMessage(text, type, sender) {
+        if (!text) return;
+
+        type = type || 'chat';
+        const timestamp = Date.now();
+        const message = { text, type, sender, time: timestamp };
+
+        // Add to messages array
+        chatMessages.push(message);
+        chatHistory.push(message);
+
+        // Trim old messages
+        if (chatMessages.length > MAX_CHAT_MESSAGES) {
+            chatMessages = chatMessages.slice(-MAX_CHAT_MESSAGES);
+        }
+        if (chatHistory.length > MAX_CHAT_MESSAGES) {
+            chatHistory = chatHistory.slice(-MAX_CHAT_MESSAGES);
+        }
+
+        renderChatMessages();
+
+        // Log for debugging
+        if (type !== 'sent') {
+            console.log('[Chat] ' + (sender ? '<' + sender + '> ' : '') + text);
         }
     }
+
+    function renderChatMessages() {
+        if (!chatMessagesEl) return;
+
+        // Only show recent messages
+        const visibleMessages = chatMessages.slice(-MAX_VISIBLE_LINES);
+        chatMessagesEl.innerHTML = '';
+
+        visibleMessages.forEach(function(msg) {
+            const div = document.createElement('div');
+            div.className = 'chat-message ' + (msg.type || 'chat');
+
+            // Add timestamp for older messages
+            if (msg.time && Date.now() - msg.time > 60000) {
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'timestamp';
+                const date = new Date(msg.time);
+                timeSpan.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ';
+                div.appendChild(timeSpan);
+            }
+
+            if (msg.sender) {
+                const senderSpan = document.createElement('span');
+                senderSpan.className = 'sender';
+                senderSpan.textContent = msg.sender + ': ';
+                senderSpan.style.color = getPlayerColor(msg.sender);
+                div.appendChild(senderSpan);
+            }
+
+            // Handle formatted text
+            const textNode = document.createTextNode(msg.text);
+            div.appendChild(textNode);
+            chatMessagesEl.appendChild(div);
+        });
+
+        // Scroll to bottom
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    }
+
+    function showChat() {
+        if (!chatContainer) return;
+        chatContainer.classList.remove('hidden');
+        chatVisible = true;
+        lastChatVisibility = true;
+    }
+
+    function hideChat() {
+        if (!chatContainer) return;
+        chatContainer.classList.add('hidden');
+        chatVisible = false;
+    }
+
+    function showChatInput() {
+        if (!chatInputContainer || !chatInputEl) return;
+        chatInputVisible = true;
+        chatInputContainer.classList.add('visible');
+        chatInputEl.value = '';
+        chatInputEl.focus();
+
+        // Show chat container
+        showChat();
+
+        // Request pointer lock release for text input
+        if (document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+    }
+
+    function hideChatInput() {
+        if (!chatInputContainer) return;
+        chatInputVisible = false;
+        chatInputContainer.classList.remove('visible');
+        if (chatInputEl) {
+            chatInputEl.blur();
+        }
+    }
+
+    function sendChatMessage(text) {
+        text = (text || '').trim();
+        if (!text) return;
+
+        // Send to Java side via the global bridge
+        if (window.__webmcSendChatMessage) {
+            window.__webmcSendChatMessage(text);
+        } else {
+            console.warn('[bootstrap] __webmcSendChatMessage not available, simulating send');
+        }
+
+        // Echo the message locally (will be replaced by server echo in multiplayer)
+        addChatMessage(text, 'sent');
+        hideChatInput();
+    }
+
+    function handleChatKeyDown(e) {
+        // T or / key opens chat
+        if ((e.key === 't' || e.key === 'T' || e.key === '/') && !chatInputVisible) {
+            if (!chatInputFocused) {
+                // Only if not in another text field and game is loaded
+                if (window.__webmcState && window.__webmcState.levelPresent) {
+                    showChat();
+                    showChatInput();
+                    // If / was pressed, add it to input
+                    if (e.key === '/') {
+                        setTimeout(function() {
+                            if (chatInputEl) chatInputEl.value = '/';
+                        }, 0);
+                    }
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+
+        // Escape closes chat
+        if (e.key === 'Escape') {
+            if (chatInputVisible) {
+                hideChatInput();
+                e.preventDefault();
+            }
+        }
+
+        // Enter sends chat
+        if (e.key === 'Enter' && chatInputVisible) {
+            if (chatInputEl) {
+                sendChatMessage(chatInputEl.value);
+            }
+            e.preventDefault();
+        }
+    }
+
+    function handleChatFocus() {
+        chatInputFocused = true;
+    }
+
+    function handleChatBlur() {
+        chatInputFocused = false;
+        setTimeout(function() {
+            if (!chatInputFocused && chatInputEl && !chatInputEl.matches(':focus')) {
+                // Keep chat visible but hide input
+            }
+        }, 100);
+    }
+
+    // Install chat keyboard handler
+    function installChatHandler() {
+        if (window.__webmcChatHandlerInstalled) return;
+        window.__webmcChatHandlerInstalled = true;
+
+        document.addEventListener('keydown', handleChatKeyDown, { capture: true });
+
+        // Also handle clicking on chat input
+        if (chatInputEl) {
+            chatInputEl.addEventListener('focus', handleChatFocus);
+            chatInputEl.addEventListener('blur', handleChatBlur);
+        }
+
+        // Handle canvas click to release chat focus
+        document.addEventListener('click', function(e) {
+            if (chatInputVisible && e.target === document.getElementById('game-canvas')) {
+                hideChatInput();
+            }
+        });
+
+        console.log('[bootstrap] Chat handler installed');
+    }
+
+    // Expose chat API for Java side
+    window.__webmcAddChatMessage = addChatMessage;
+    window.__webmcShowChat = showChat;
+    window.__webmcHideChat = hideChat;
+    window.__webmcGetChatHistory = function() { return chatHistory; };
+
+    // Handle outgoing chat messages from Java bridge
+    window.__webmcHandleOutgoingChat = function(msg) {
+        msg = (msg || '').trim();
+        if (!msg) return;
+
+        // Check if this is a command
+        if (msg.startsWith('/')) {
+            console.log('[bootstrap] Command (via chat UI):', msg);
+            // Commands are handled by the game engine
+        } else {
+            console.log('[bootstrap] Chat message to send:', msg);
+            // Send via MultiplayerManager if connected
+            if (window.SocketRedirect && window.SocketRedirect._ws) {
+                SocketRedirect.sendChat(msg);
+            } else {
+                // Local message - add to chat directly
+                addChatMessage(msg, 'sent');
+            }
+        }
+    };
+
+    // ── Chat System End ────────────────────────────────────────────────────────
 
     function setBootStatus(text, progressPercent) {
         if (!$status || !text) {
@@ -462,6 +769,26 @@
             }
             hideMainMenu();
             hideBoot();
+
+            // Initialize chat system when world is loaded
+            if (!window.__webmcChatInitialized) {
+                window.__webmcChatInitialized = true;
+                // Register the chat bridge for JavaScript -> Java communication
+                window.webmcChatBridge = {
+                    onOutgoingChatMessage: function(msg) {
+                        if (window.__webmcHandleOutgoingChat) {
+                            window.__webmcHandleOutgoingChat(msg);
+                        } else {
+                            console.warn('[bootstrap] Chat bridge not ready for:', msg);
+                        }
+                    }
+                };
+                // Show chat hint after a short delay
+                setTimeout(function() {
+                    if (chatHintEl) chatHintEl.style.display = 'block';
+                }, 2000);
+            }
+
             if (document.pointerLockElement === $canvas) {
                 hidePointerHint();
             } else {
@@ -635,6 +962,8 @@
 
     if (window.webmcBootMode === 'mcMain') {
         ensureWebAudioState();
+        initChatUI();
+        installChatHandler();
         installStateBeaconObserver();
         installStatePollingFallback();
         if (autoStartEnabled) {
@@ -732,4 +1061,478 @@
     } else {
         setTimeout(initializeAndLoadGame, 0);
     }
+
+    // ── Resource Pack Menu System ─────────────────────────────────────────────
+    let resourcePackMenuInitialized = false;
+    let $resourcePackMenu = null;
+    let $packList = null;
+    let $rpProgress = null;
+    let $rpProgressBar = null;
+    let $rpProgressStatus = null;
+
+    function initResourcePackMenu() {
+        if (resourcePackMenuInitialized) return;
+        resourcePackMenuInitialized = true;
+
+        $resourcePackMenu = document.getElementById('resourcepack-menu');
+        $packList = document.getElementById('pack-list');
+        $rpProgress = document.getElementById('rp-progress');
+        $rpProgressBar = $rpProgress ? $rpProgress.querySelector('.bar div') : null;
+        $rpProgressStatus = $rpProgress ? $rpProgress.querySelector('.status') : null;
+
+        // Close button
+        var $closeBtn = document.getElementById('rp-close');
+        if ($closeBtn) {
+            $closeBtn.addEventListener('click', hideResourcePackMenu);
+        }
+
+        // Add local pack button
+        var $addLocalBtn = document.getElementById('rp-add-local');
+        var $fileInput = document.getElementById('rp-file-input');
+        if ($addLocalBtn && $fileInput) {
+            $addLocalBtn.addEventListener('click', function() {
+                $fileInput.click();
+            });
+            $fileInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files.length > 0) {
+                    handleAddLocalPack(e.target.files[0]);
+                    e.target.value = ''; // Reset for re-selection
+                }
+            });
+        }
+
+        // Add URL button
+        var $addUrlBtn = document.getElementById('rp-add-url');
+        var $urlInput = document.getElementById('rp-url-input');
+        if ($addUrlBtn && $urlInput) {
+            $addUrlBtn.addEventListener('click', function() {
+                var url = $urlInput.value.trim();
+                if (url) {
+                    handleAddRemotePack(url);
+                    $urlInput.value = '';
+                }
+            });
+            $urlInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    var url = $urlInput.value.trim();
+                    if (url) {
+                        handleAddRemotePack(url);
+                        $urlInput.value = '';
+                    }
+                }
+            });
+        }
+
+        // Reload button
+        var $reloadBtn = document.getElementById('rp-reload');
+        if ($reloadBtn) {
+            $reloadBtn.addEventListener('click', handleReloadPacks);
+        }
+
+        // Clear all button
+        var $clearBtn = document.getElementById('rp-clear');
+        if ($clearBtn) {
+            $clearBtn.addEventListener('click', handleClearAllPacks);
+        }
+
+        // Set up ResourcePackBridge callbacks
+        if (typeof ResourcePackBridge !== 'undefined') {
+            ResourcePackBridge.onPackAdded(function(pack) {
+                renderPackList();
+                showResourcePackProgress(50, 'Pack added: ' + pack.name);
+                setTimeout(function() { hideResourcePackProgress(); }, 1500);
+            });
+
+            ResourcePackBridge.onPackRemoved(function(pack) {
+                renderPackList();
+            });
+
+            ResourcePackBridge.onPackLoaded(function(pack, err) {
+                renderPackList();
+                if (!err) {
+                    showResourcePackProgress(100, 'Pack loaded: ' + pack.name);
+                    setTimeout(function() { hideResourcePackProgress(); }, 1000);
+                }
+            });
+
+            ResourcePackBridge.onProgress(function(percent, status) {
+                showResourcePackProgress(percent, status);
+            });
+
+            ResourcePackBridge.onError(function(err) {
+                console.error('[ResourcePackBridge UI]', err);
+                showResourcePackProgress(0, 'Error: ' + err);
+                setTimeout(function() { hideResourcePackProgress(); }, 3000);
+            });
+        }
+
+        // Initial render
+        renderPackList();
+    }
+
+    function showResourcePackMenu() {
+        if (!resourcePackMenuInitialized) {
+            initResourcePackMenu();
+        }
+        if ($resourcePackMenu) {
+            renderPackList();
+            $resourcePackMenu.classList.add('show');
+        }
+    }
+
+    function hideResourcePackMenu() {
+        if ($resourcePackMenu) {
+            $resourcePackMenu.classList.remove('show');
+        }
+    }
+
+    function renderPackList() {
+        if (!$packList) return;
+
+        var packs = [];
+        if (typeof ResourcePackBridge !== 'undefined') {
+            packs = ResourcePackBridge.getPacks();
+        }
+
+        $packList.innerHTML = '';
+
+        packs.forEach(function(pack) {
+            var li = document.createElement('li');
+            li.className = 'pack-item';
+            if (!pack.enabled) li.classList.add('disabled');
+            li.dataset.packId = pack.id;
+
+            // Drag handle
+            var dragHandle = document.createElement('span');
+            dragHandle.className = 'drag-handle';
+            dragHandle.textContent = '☰'; // Hamburger icon
+            dragHandle.title = 'Drag to reorder';
+            li.appendChild(dragHandle);
+
+            // Checkbox
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = pack.enabled;
+            checkbox.title = 'Enable/disable pack';
+            checkbox.addEventListener('change', function() {
+                handleTogglePack(pack.id, checkbox.checked);
+            });
+            li.appendChild(checkbox);
+
+            // Pack icon
+            var icon = document.createElement('div');
+            icon.className = 'pack-icon';
+            icon.textContent = pack.sourceType === 'local' ? '\u{1F4C1}' : '\u{1F310}';
+            li.appendChild(icon);
+
+            // Pack info
+            var info = document.createElement('div');
+            info.className = 'pack-info';
+
+            var name = document.createElement('div');
+            name.className = 'pack-name';
+            name.textContent = pack.name;
+            name.title = pack.name;
+            info.appendChild(name);
+
+            var meta = document.createElement('div');
+            meta.className = 'pack-meta';
+
+            // Pack format
+            var format = document.createElement('span');
+            format.textContent = 'v' + (pack.packFormat || '?');
+            if (!pack.compatible) {
+                format.className = 'error';
+                format.title = 'May not be compatible with this version';
+            }
+            meta.appendChild(format);
+
+            // File size
+            if (pack.fileSizeFormatted) {
+                var size = document.createElement('span');
+                size.textContent = pack.fileSizeFormatted;
+                meta.appendChild(size);
+            }
+
+            // Status
+            if (pack.loaded) {
+                var status = document.createElement('span');
+                status.textContent = 'Loaded';
+                status.style.color = '#4ade80';
+                meta.appendChild(status);
+            } else if (pack.error) {
+                var error = document.createElement('span');
+                error.className = 'error';
+                error.textContent = 'Error';
+                error.title = pack.error;
+                meta.appendChild(error);
+            }
+
+            // Source type
+            var source = document.createElement('span');
+            source.textContent = pack.sourceType === 'local' ? 'Local' : 'Remote';
+            meta.appendChild(source);
+
+            info.appendChild(meta);
+            li.appendChild(info);
+
+            // Actions
+            var actions = document.createElement('div');
+            actions.className = 'pack-actions';
+
+            var removeBtn = document.createElement('button');
+            removeBtn.className = 'danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.title = 'Remove this pack';
+            removeBtn.addEventListener('click', function() {
+                handleRemovePack(pack.id);
+            });
+            actions.appendChild(removeBtn);
+
+            li.appendChild(actions);
+
+            // Drag and drop for reordering
+            makePackItemDraggable(li);
+
+            $packList.appendChild(li);
+        });
+
+        if (packs.length === 0) {
+            var empty = document.createElement('li');
+            empty.className = 'pack-item';
+            empty.style.justifyContent = 'center';
+            empty.style.color = '#888';
+            empty.textContent = 'No resource packs added';
+            $packList.appendChild(empty);
+        }
+    }
+
+    function makePackItemDraggable(li) {
+        var dragHandle = li.querySelector('.drag-handle');
+        if (!dragHandle) return;
+
+        var startY, startIndex;
+
+        dragHandle.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            startY = e.clientY;
+            startIndex = Array.from($packList.children).indexOf(li);
+            li.style.opacity = '0.5';
+            document.body.style.cursor = 'grabbing';
+
+            function onMouseMove(e) {
+                var deltaY = e.clientY - startY;
+                var items = Array.from($packList.children).filter(function(c) {
+                    return c.classList.contains('pack-item');
+                });
+
+                var currentIndex = Array.from($packList.children).indexOf(li);
+                var newIndex = currentIndex;
+
+                // Find new position based on mouse movement
+                for (var i = 0; i < items.length; i++) {
+                    var rect = items[i].getBoundingClientRect();
+                    var midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY && i < currentIndex) {
+                        newIndex = i;
+                    } else if (e.clientY > midY && i > currentIndex) {
+                        newIndex = i;
+                    }
+                }
+
+                if (newIndex !== currentIndex && newIndex >= 0) {
+                    // Move DOM element
+                    var targetItem = items[newIndex];
+                    if (newIndex > currentIndex) {
+                        $packList.insertBefore(li, targetItem.nextSibling);
+                    } else {
+                        $packList.insertBefore(li, targetItem);
+                    }
+                }
+            }
+
+            function onMouseUp() {
+                li.style.opacity = '';
+                document.body.style.cursor = '';
+
+                // Update pack order in bridge
+                var items = Array.from($packList.children).filter(function(c) {
+                    return c.classList.contains('pack-item');
+                });
+                var newOrder = items.map(function(item) { return item.dataset.packId; });
+
+                // Apply new order to bridge
+                if (typeof ResourcePackBridge !== 'undefined') {
+                    for (var i = 0; i < newOrder.length; i++) {
+                        var currentPos = -1;
+                        var packs = ResourcePackBridge.getPacks();
+                        for (var j = 0; j < packs.length; j++) {
+                            if (packs[j].id === newOrder[i]) {
+                                currentPos = j;
+                                break;
+                            }
+                        }
+                        if (currentPos !== i && currentPos >= 0) {
+                            ResourcePackBridge.movePack(newOrder[i], i);
+                        }
+                    }
+                }
+
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    function handleAddLocalPack(file) {
+        if (typeof ResourcePackBridge !== 'undefined') {
+            showResourcePackProgress(0, 'Adding ' + file.name + '...');
+            ResourcePackBridge.addLocalPack(file, function(err, pack) {
+                if (err) {
+                    showResourcePackProgress(0, 'Error: ' + err);
+                    setTimeout(function() { hideResourcePackProgress(); }, 3000);
+                } else {
+                    showResourcePackProgress(100, 'Pack added!');
+                    setTimeout(function() { hideResourcePackProgress(); }, 1500);
+                }
+            });
+        }
+    }
+
+    function handleAddRemotePack(url) {
+        if (typeof ResourcePackBridge !== 'undefined') {
+            var name = url.split('/').pop().replace(/\.(zip|mcpack)$/i, '') || 'Remote Pack';
+            showResourcePackProgress(0, 'Adding remote pack...');
+            ResourcePackBridge.addRemotePack(name, url, function(err, pack) {
+                if (err) {
+                    showResourcePackProgress(0, 'Error: ' + err);
+                    setTimeout(function() { hideResourcePackProgress(); }, 3000);
+                } else {
+                    showResourcePackProgress(100, 'Pack added!');
+                    setTimeout(function() { hideResourcePackProgress(); }, 1500);
+                }
+            });
+        }
+    }
+
+    function handleRemovePack(packId) {
+        if (typeof ResourcePackBridge !== 'undefined') {
+            ResourcePackBridge.removePack(packId);
+        }
+    }
+
+    function handleTogglePack(packId, enabled) {
+        if (typeof ResourcePackBridge !== 'undefined') {
+            ResourcePackBridge.setPackEnabled(packId, enabled);
+            renderPackList();
+        }
+    }
+
+    function handleReloadPacks() {
+        if (typeof ResourcePackBridge !== 'undefined') {
+            showResourcePackProgress(0, 'Reloading packs...');
+            ResourcePackBridge.reload(function(err) {
+                if (err) {
+                    showResourcePackProgress(0, 'Error: ' + err);
+                    setTimeout(function() { hideResourcePackProgress(); }, 3000);
+                } else {
+                    showResourcePackProgress(100, 'All packs reloaded!');
+                    setTimeout(function() { hideResourcePackProgress(); }, 1500);
+                }
+            });
+        }
+    }
+
+    function handleClearAllPacks() {
+        if (confirm('Remove all resource packs?')) {
+            if (typeof ResourcePackBridge !== 'undefined') {
+                var packs = ResourcePackBridge.getPacks();
+                for (var i = 0; i < packs.length; i++) {
+                    ResourcePackBridge.removePack(packs[i].id);
+                }
+            }
+        }
+    }
+
+    function showResourcePackProgress(percent, status) {
+        if ($rpProgress) {
+            $rpProgress.classList.add('show');
+            if ($rpProgressBar) {
+                $rpProgressBar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+            }
+            if ($rpProgressStatus) {
+                $rpProgressStatus.textContent = status || '';
+            }
+        }
+    }
+
+    function hideResourcePackProgress() {
+        if ($rpProgress) {
+            $rpProgress.classList.remove('show');
+        }
+    }
+
+    // Expose resource pack menu API for Java side
+    window.__webmcShowResourcePackMenu = showResourcePackMenu;
+    window.__webmcHideResourcePackMenu = hideResourcePackMenu;
+
+    // ── Resource Pack Menu System End ─────────────────────────────────────────
+    // Provides JavaScript-side VFS write capability for resource packs
+
+    /**
+     * Write bytes to the VFS at a given path.
+     * This bridges to the TeaVM Java side via the Game global.
+     */
+    window.writeVfsFile = function(path, bytes) {
+        if (typeof Game !== 'undefined' && typeof Game.writeVfsFile === 'function') {
+            return Game.writeVfsFile(path, bytes);
+        }
+        console.warn('[bootstrap] writeVfsFile: Game.writeVfsFile not available');
+        return false;
+    };
+
+    /**
+     * Read bytes from VFS at a given path.
+     */
+    window.readVfsFile = function(path, callback) {
+        if (typeof Game !== 'undefined' && typeof Game.readVfsFile === 'function') {
+            return Game.readVfsFile(path, callback);
+        }
+        console.warn('[bootstrap] readVfsFile: Game.readVfsFile not available');
+        if (callback) callback(null, 'VFS not available');
+        return false;
+    };
+
+    /**
+     * Check if a path exists in VFS.
+     */
+    window.vfsExists = function(path) {
+        if (typeof Game !== 'undefined' && typeof Game.vfsExists === 'function') {
+            return Game.vfsExists(path);
+        }
+        return false;
+    };
+
+    /**
+     * Get resource pack loading status for UI.
+     */
+    window.getResourcePackStatus = function() {
+        if (typeof ResourcePackBridge !== 'undefined') {
+            return {
+                packCount: ResourcePackBridge.getPacks().length,
+                enabled: ResourcePackBridge._enabled,
+                ready: true
+            };
+        }
+        return {
+            packCount: 0,
+            enabled: false,
+            ready: false
+        };
+    };
+
+    // ── Resource Pack VFS Bridge End ─────────────────────────────────────────
 })();
