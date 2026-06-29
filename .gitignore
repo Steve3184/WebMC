@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .gradle
 build/
 
@@ -19,3 +20,49 @@ gradle-app.setting
 run/
 
 out/
+=======
+dataset/
+output/
+node_modules/
+Microsoft/
+backups/
+models/
+stable-diffusion-webui/models/
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.log
+__pycache__/
+*.pyc
+.temp/
+.workbuddy/
+kohya_ss/.git/
+stable-diffusion-webui/.git/
+config.toml
+DownloadWrapper.class
+dump.rdb
+web/game.js
+web/game.js.gz
+web/game_fixed.js
+web/game_patched.js
+web/game.vfs
+web/game.vfs.gz
+web/game.vfs.xz
+web/standalone.html
+web/parts/
+addons/web/game.js
+addons/web/game.js.gz
+addons/web/game.vfs
+addons/web/game.vfs.gz
+addons/web/game.vfs.xz
+dist/
+work/build/upstream/
+upstream/
+*.cjs
+analysis_output.json
+>>>>>>> 38fa0cb2a281dfd8aad87b7129d79fb5177adad7

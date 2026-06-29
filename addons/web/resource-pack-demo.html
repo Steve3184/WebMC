@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebMC Resource Pack Demo</title>
+<style>
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+  margin: 0;
+  padding: 20px;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+h1 {
+  color: #4ade80;
+  margin-bottom: 20px;
+}
+
+.panel {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.panel h2 {
+  font-size: 16px;
+  color: #94a3b8;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.btn-primary { background: #4ade80; color: #1a1a2e; }
+.btn-secondary { background: #334155; color: #eee; }
+.btn-danger { background: #ef4444; color: #fff; }
+
+.btn:hover { opacity: 0.9; }
+
+.file-input {
+  display: none;
+}
+
+.drop-zone {
+  border: 2px dashed #334155;
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: #4ade80;
+}
+
+.drop-zone-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.pack-list {
+  margin-top: 15px;
+}
+
+.pack-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: #0f172a;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.pack-item .name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.pack-item .meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-right: 15px;
+}
+
+.pack-item .btn-remove {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+}
+
+.pack-item .btn-remove:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+}
+
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #334155;
+  border-radius: 22px;
+  transition: 0.3s;
+}
+
+.toggle-slider:before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: #4ade80;
+}
+
+.toggle input:checked + .toggle-slider:before {
+  transform: translateX(18px);
+}
+
+.log-container {
+  background: #0f172a;
+  border-radius: 6px;
+  padding: 15px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.log-entry {
+  margin-bottom: 4px;
+  padding: 4px 0;
+  border-bottom: 1px solid #1e293b;
+}
+
+.log-entry.info { color: #4ade80; }
+.log-entry.warn { color: #fbbf24; }
+.log-entry.error { color: #f87171; }
+
+.progress-bar {
+  height: 8px;
+  background: #334155;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #4ade80;
+  transition: width 0.3s;
+}
+
+.status {
+  padding: 10px;
+  background: #0f172a;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.status-label {
+  color: #94a3b8;
+}
+
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>WebMC Resource Pack Manager</h1>
+
+  <div class="panel">
+    <h2>Add Resource Pack</h2>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-zone-icon">&#128230;</div>
+      <div>Drop .zip or .mcpack files here</div>
+      <div style="margin-top: 8px; color: #64748b; font-size: 12px;">or click to browse</div>
+    </div>
+    <input type="file" class="file-input" id="fileInput" multiple accept=".zip,.mcpack">
+
+    <div style="margin-top: 20px;">
+      <h3 style="font-size: 14px; color: #94a3b8; margin-bottom: 10px;">Add from URL</h3>
+      <input type="text" id="remoteUrl" placeholder="https://example.com/resourcepack.zip"
+             style="width: 100%; padding: 10px; border: 1px solid #334155; border-radius: 6px;
+                    background: #0f172a; color: #eee; font-size: 14px; box-sizing: border-box;">
+      <button class="btn btn-primary" id="addRemoteBtn" style="margin-top: 10px;">Add Remote Pack</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Installed Packs <span id="packCount" style="color: #4ade80;">(0)</span></h2>
+    <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">
+      Packs at the top have highest priority. Drag to reorder.
+    </p>
+    <div class="pack-list" id="packList">
+      <div style="color: #64748b; text-align: center; padding: 20px;">
+        No resource packs added yet
+      </div>
+    </div>
+
+    <div id="loadProgress" class="hidden">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      <div id="progressText" style="font-size: 12px; color: #94a3b8;"></div>
+    </div>
+
+    <div style="margin-top: 15px;">
+      <button class="btn btn-primary" id="loadAllBtn">Load All Packs</button>
+      <button class="btn btn-secondary" id="reloadBtn">Reload</button>
+      <button class="btn btn-danger" id="clearBtn">Clear All</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Status</h2>
+    <div class="status">
+      <div class="status-row">
+        <span class="status-label">VFS Ready:</span>
+        <span id="vfsStatus">Checking...</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Packs Loaded:</span>
+        <span id="loadedCount">0</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Resources Indexed:</span>
+        <span id="resourceCount">0</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Overrides:</span>
+        <span id="overrideCount">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Activity Log</h2>
+    <div class="log-container" id="logContainer"></div>
+  </div>
+</div>
+
+<script src="vfs.js"></script>
+<script src="resourcepack-bridge.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const remoteUrlInput = document.getElementById('remoteUrl');
+  const addRemoteBtn = document.getElementById('addRemoteBtn');
+  const packList = document.getElementById('packList');
+  const packCount = document.getElementById('packCount');
+  const loadAllBtn = document.getElementById('loadAllBtn');
+  const reloadBtn = document.getElementById('reloadBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const loadProgress = document.getElementById('loadProgress');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  const logContainer = document.getElementById('logContainer');
+
+  let packs = [];
+
+  // Logging
+  function log(message, level = 'info') {
+    const entry = document.createElement('div');
+    entry.className = 'log-entry ' + level;
+    const time = new Date().toLocaleTimeString();
+    entry.textContent = '[' + time + '] ' + message;
+    logContainer.insertBefore(entry, logContainer.firstChild);
+
+    // Keep only last 50 entries
+    while (logContainer.children.length > 50) {
+      logContainer.removeChild(logContainer.lastChild);
+    }
+  }
+
+  // UI Updates
+  function updatePackList() {
+    packCount.textContent = '(' + packs.length + ')';
+
+    if (packs.length === 0) {
+      packList.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;">No resource packs added yet</div>';
+      return;
+    }
+
+    packList.innerHTML = '';
+    packs.forEach(function(pack, index) {
+      const item = document.createElement('div');
+      item.className = 'pack-item';
+      item.draggable = true;
+      item.dataset.index = index;
+
+      item.innerHTML = '
+        <div class="name">' + escapeHtml(pack.name) + '</div>
+        <div class="meta">' + pack.sourceType + (pack.fileSize ? ' | ' + formatSize(pack.fileSize) : '') + '</div>
+        <label class="toggle">
+          <input type="checkbox" ' + (pack.enabled ? 'checked' : '') + ' data-index="' + index + '">
+          <span class="toggle-slider"></span>
+        </label>
+        <button class="btn-remove" data-index="' + index + '" title="Remove">&times;</button>
+      ';
+
+      packList.appendChild(item);
+    });
+
+    // Bind events
+    packList.querySelectorAll('input[type="checkbox"]').forEach(function(checkbox) {
+      checkbox.addEventListener('change', function() {
+        const idx = parseInt(this.dataset.index);
+        packs[idx].enabled = this.checked;
+        log('Pack ' + packs[idx].name + (this.checked ? ' enabled' : ' disabled'));
+        updateStatus();
+      });
+    });
+
+    packList.querySelectorAll('.btn-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = parseInt(this.dataset.index);
+        const removed = packs.splice(idx, 1)[0];
+        log('Removed pack: ' + removed.name);
+        updatePackList();
+        updateStatus();
+      });
+    });
+
+    // Drag and drop reordering
+    let draggedIndex = null;
+
+    packList.querySelectorAll('.pack-item').forEach(function(item) {
+      item.addEventListener('dragstart', function(e) {
+        draggedIndex = parseInt(this.dataset.index);
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      item.addEventListener('dragend', function() {
+        this.style.opacity = '1';
+        draggedIndex = null;
+      });
+
+      item.addEventListener('dragover', function(e) {
+        e.preventDefault();
+      });
+
+      item.addEventListener('drop', function(e) {
+        e.preventDefault();
+        const targetIndex = parseInt(this.dataset.index);
+        if (draggedIndex !== null && draggedIndex !== targetIndex) {
+          const moved = packs.splice(draggedIndex, 1)[0];
+          packs.splice(targetIndex, 0, moved);
+          log('Reordered packs');
+          updatePackList();
+        }
+      });
+    });
+  }
+
+  function updateStatus() {
+    document.getElementById('vfsStatus').textContent = (typeof VFS !== 'undefined' && VFS._ready) ? 'Yes' : 'No';
+    document.getElementById('loadedCount').textContent = packs.filter(function(p) { return p.loaded; }).length;
+
+    if (typeof ResourcePackBridge !== 'undefined') {
+      document.getElementById('resourceCount').textContent = 'N/A (use Java API)';
+      document.getElementById('overrideCount').textContent = 'N/A (use Java API)';
+    }
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return 'Unknown';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Event handlers
+  dropZone.addEventListener('click', function() {
+    fileInput.click();
+  });
+
+  dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', function() {
+    this.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+
+  fileInput.addEventListener('change', function() {
+    handleFiles(this.files);
+    this.value = '';
+  });
+
+  function handleFiles(files) {
+    Array.from(files).forEach(function(file) {
+      if (typeof ResourcePackBridge !== 'undefined') {
+        ResourcePackBridge.addLocalPack(file, function(err, packInfo) {
+          if (err) {
+            log('Failed to add ' + file.name + ': ' + err, 'error');
+          } else {
+            packs.push(packInfo);
+            log('Added local pack: ' + packInfo.name);
+            updatePackList();
+            updateStatus();
+          }
+        });
+      } else {
+        // Fallback without bridge
+        packs.push({
+          id: 'local_' + Date.now(),
+          name: file.name.replace(/\.(zip|mcpack)$/i, ''),
+          description: 'Local resource pack',
+          sourceType: 'local',
+          sourceLocation: file.name,
+          packFormat: 9,
+          fileSize: file.size,
+          enabled: true,
+          loaded: false
+        });
+        log('Added local pack (no bridge): ' + file.name);
+        updatePackList();
+        updateStatus();
+      }
+    });
+  }
+
+  addRemoteBtn.addEventListener('click', function() {
+    const url = remoteUrlInput.value.trim();
+    if (!url) {
+      log('Please enter a URL', 'warn');
+      return;
+    }
+
+    const name = url.split('/').pop().replace(/\.(zip|mcpack)$/i, '') || 'Remote Pack';
+
+    if (typeof ResourcePackBridge !== 'undefined') {
+      ResourcePackBridge.addRemotePack(name, url, function(err, packInfo) {
+        if (err) {
+          log('Failed to add remote pack: ' + err, 'error');
+        } else {
+          packs.push(packInfo);
+          log('Added remote pack: ' + packInfo.name);
+          updatePackList();
+          updateStatus();
+        }
+      });
+    } else {
+      packs.push({
+        id: 'remote_' + Date.now(),
+        name: name,
+        description: 'Remote resource pack',
+        sourceType: 'remote',
+        sourceLocation: url,
+        packFormat: 9,
+        fileSize: 0,
+        enabled: true,
+        loaded: false
+      });
+      log('Added remote pack (no bridge): ' + name);
+      updatePackList();
+      updateStatus();
+    }
+
+    remoteUrlInput.value = '';
+  });
+
+  loadAllBtn.addEventListener('click', function() {
+    loadProgress.classList.remove('hidden');
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Starting...';
+    log('Loading all packs...');
+
+    const enabledPacks = packs.filter(function(p) { return p.enabled; });
+
+    if (enabledPacks.length === 0) {
+      log('No enabled packs to load', 'warn');
+      loadProgress.classList.add('hidden');
+      return;
+    }
+
+    var loaded = 0;
+    var total = enabledPacks.length;
+
+    function loadNext(index) {
+      if (index >= enabledPacks.length) {
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Complete!';
+        log('All packs loaded successfully');
+        setTimeout(function() {
+          loadProgress.classList.add('hidden');
+        }, 1500);
+        updateStatus();
+        return;
+      }
+
+      var pack = enabledPacks[index];
+      var progress = ((index + 1) / total) * 100;
+      progressFill.style.width = progress + '%';
+      progressText.textContent = 'Loading ' + pack.name + '... (' + (index + 1) + '/' + total + ')';
+
+      // Simulate loading (in real usage, this would call ResourcePackBridge.loadAll)
+      setTimeout(function() {
+        pack.loaded = true;
+        log('Loaded: ' + pack.name);
+        updateStatus();
+        loadNext(index + 1);
+      }, 500);
+    }
+
+    loadNext(0);
+  });
+
+  reloadBtn.addEventListener('click', function() {
+    log('Reloading all packs...');
+    packs.forEach(function(p) { p.loaded = false; });
+    loadAllBtn.click();
+  });
+
+  clearBtn.addEventListener('click', function() {
+    if (packs.length === 0) return;
+    if (!confirm('Clear all ' + packs.length + ' packs?')) return;
+    packs = [];
+    log('Cleared all packs');
+    updatePackList();
+    updateStatus();
+  });
+
+  // Initialize
+  log('Resource Pack Demo initialized');
+  updateStatus();
+
+  // Check VFS
+  if (typeof VFS !== 'undefined') {
+    if (VFS._ready) {
+      log('VFS is ready');
+    } else {
+      log('VFS not ready yet', 'warn');
+    }
+  } else {
+    log('VFS bridge not available', 'warn');
+  }
+
+})();
+</script>
+</body>
+</html>

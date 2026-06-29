@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebMC Resource Packs</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: #4ade80;
+}
+
+.panel {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #4ade80;
+  color: #1a1a2e;
+}
+
+.btn-primary:hover {
+  background: #22c55e;
+}
+
+.btn-secondary {
+  background: #334155;
+  color: #eee;
+}
+
+.btn-secondary:hover {
+  background: #475569;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Add pack section */
+.add-pack-section {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.file-input-wrapper {
+  position: relative;
+}
+
+.file-input-wrapper input[type="file"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.file-input-wrapper .btn {
+  pointer-events: none;
+}
+
+.url-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 15px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #eee;
+  font-size: 14px;
+}
+
+.url-input:focus {
+  outline: none;
+  border-color: #4ade80;
+}
+
+/* Pack list */
+.pack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pack-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 12px 15px;
+  background: #0f172a;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.pack-item:hover {
+  border-color: #334155;
+}
+
+.pack-item.disabled {
+  opacity: 0.5;
+}
+
+.pack-icon {
+  width: 48px;
+  height: 48px;
+  background: #334155;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.pack-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pack-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pack-description {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pack-meta {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.pack-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #334155;
+  border-radius: 24px;
+  transition: 0.3s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked + .toggle-slider {
+  background: #4ade80;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #64748b;
+  font-size: 18px;
+  padding: 5px;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Load status */
+.load-status {
+  margin-top: 15px;
+  padding: 12px;
+  background: #0f172a;
+  border-radius: 6px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #334155;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #4ade80;
+  transition: width 0.3s;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #64748b;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  background: #16213e;
+  border-left: 4px solid #4ade80;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.3s ease;
+  z-index: 1000;
+}
+
+.toast.error {
+  border-left-color: #ef4444;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Resource Packs</h1>
+
+  <div class="panel">
+    <div class="panel-title">Add Resource Pack</div>
+    <div class="add-pack-section">
+      <div class="file-input-wrapper">
+        <button class="btn btn-secondary">Choose File (.zip, .mcpack)</button>
+        <input type="file" id="packFileInput" accept=".zip,.mcpack" multiple>
+      </div>
+      <input type="text" class="url-input" id="remoteUrlInput" placeholder="Or enter remote URL...">
+      <button class="btn btn-primary" id="addRemoteBtn">Add from URL</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Installed Packs</div>
+    <p style="font-size: 12px; color: #64748b; margin-bottom: 15px;">
+      Drag to reorder. Higher packs override lower ones. Drag builtin pack to the bottom.
+    </p>
+    <div class="pack-list" id="packList">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">&#128230;</div>
+        <div>No resource packs installed</div>
+        <div style="margin-top: 10px; font-size: 13px;">Add a local file or remote URL above</div>
+      </div>
+    </div>
+
+    <div class="load-status" id="loadStatus" style="display: none;">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      <div class="progress-text" id="progressText">Loading...</div>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; gap: 10px;">
+      <button class="btn btn-primary" id="reloadBtn">Reload All Packs</button>
+      <button class="btn btn-secondary" id="resetBtn">Reset to Defaults</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Resource Pack UI Controller
+(function () {
+  'use strict';
+
+  var PackUI = {
+    _packs: [],
+    _draggedItem: null,
+
+    init: function () {
+      this._bindEvents();
+      this._loadPacks();
+    },
+
+    _bindEvents: function () {
+      var self = this;
+
+      // File input
+      document.getElementById('packFileInput').addEventListener('change', function (e) {
+        self._handleFileSelect(e.target.files);
+        e.target.value = ''; // Reset
+      });
+
+      // Remote URL button
+      document.getElementById('addRemoteBtn').addEventListener('click', function () {
+        var url = document.getElementById('remoteUrlInput').value.trim();
+        if (url) {
+          self._addRemotePack(url);
+        }
+      });
+
+      // Reload button
+      document.getElementById('reloadBtn').addEventListener('click', function () {
+        self._reloadAll();
+      });
+
+      // Reset button
+      document.getElementById('resetBtn').addEventListener('click', function () {
+        self._resetToDefaults();
+      });
+    },
+
+    _handleFileSelect: function (files) {
+      var self = this;
+      Array.from(files).forEach(function (file) {
+        self._addLocalPack(file);
+      });
+    },
+
+    _addLocalPack: function (file) {
+      var self = this;
+
+      if (typeof ResourcePackBridge !== 'undefined') {
+        ResourcePackBridge.addLocalPack(file, function (err, packInfo) {
+          if (err) {
+            self._showToast('Failed to add pack: ' + err, true);
+            return;
+          }
+          self._packs.push(packInfo);
+          self._renderPackList();
+          self._showToast('Added: ' + packInfo.name);
+        });
+      } else {
+        // Fallback without bridge
+        this._packs.push({
+          id: 'local_' + Date.now(),
+          name: file.name.replace(/\.(zip|mcpack)$/i, ''),
+          description: 'Local resource pack',
+          sourceType: 'local',
+          sourceLocation: file.name,
+          packFormat: 9,
+          fileSize: file.size,
+          enabled: true,
+          loaded: false,
+          bytes: null // Would need to store for loading
+        });
+        this._renderPackList();
+        this._showToast('Added: ' + file.name);
+      }
+    },
+
+    _addRemotePack: function (url) {
+      var self = this;
+      var name = url.split('/').pop().replace(/\.(zip|mcpack)$/i, '');
+
+      if (typeof ResourcePackBridge !== 'undefined') {
+        ResourcePackBridge.addRemotePack(name, url, function (err, packInfo) {
+          if (err) {
+            self._showToast('Failed to add remote pack: ' + err, true);
+            return;
+          }
+          self._packs.push(packInfo);
+          self._renderPackList();
+          self._showToast('Added: ' + packInfo.name);
+        });
+      } else {
+        this._packs.push({
+          id: 'remote_' + Date.now(),
+          name: name,
+          description: 'Remote resource pack',
+          sourceType: 'remote',
+          sourceLocation: url,
+          packFormat: 9,
+          fileSize: 0,
+          enabled: true,
+          loaded: false
+        });
+        this._renderPackList();
+        this._showToast('Added: ' + name);
+      }
+
+      document.getElementById('remoteUrlInput').value = '';
+    },
+
+    _removePack: function (packId) {
+      var self = this;
+      var index = -1;
+
+      for (var i = 0; i < this._packs.length; i++) {
+        if (this._packs[i].id === packId) {
+          index = i;
+          break;
+        }
+      }
+
+      if (index >= 0) {
+        var removed = this._packs.splice(index, 1)[0];
+
+        if (typeof ResourcePackBridge !== 'undefined') {
+          ResourcePackBridge.removePack(packId);
+        }
+
+        this._renderPackList();
+        this._showToast('Removed: ' + removed.name);
+      }
+    },
+
+    _togglePack: function (packId) {
+      for (var i = 0; i < this._packs.length; i++) {
+        if (this._packs[i].id === packId) {
+          this._packs[i].enabled = !this._packs[i].enabled;
+
+          if (typeof ResourcePackBridge !== 'undefined') {
+            ResourcePackBridge.setPackEnabled(packId, this._packs[i].enabled);
+          }
+
+          this._renderPackList();
+          break;
+        }
+      }
+    },
+
+    _reloadAll: function () {
+      var self = this;
+      var loadStatus = document.getElementById('loadStatus');
+      var progressFill = document.getElementById('progressFill');
+      var progressText = document.getElementById('progressText');
+
+      loadStatus.style.display = 'block';
+
+      var enabledPacks = this._packs.filter(function (p) { return p.enabled; });
+
+      if (typeof ResourcePackBridge !== 'undefined') {
+        ResourcePackBridge.loadAll(function (percent, status) {
+          progressFill.style.width = percent + '%';
+          progressText.textContent = status;
+        }, function (err) {
+          loadStatus.style.display = 'none';
+          if (err) {
+            self._showToast('Load failed: ' + err, true);
+          } else {
+            self._showToast('All packs loaded successfully');
+          }
+        });
+      } else {
+        // Simulate loading without bridge
+        var progress = 0;
+        var interval = setInterval(function () {
+          progress += 10;
+          progressFill.style.width = progress + '%';
+          progressText.textContent = 'Loading... (' + progress + '%)';
+
+          if (progress >= 100) {
+            clearInterval(interval);
+            loadStatus.style.display = 'none';
+            self._showToast('Packs loaded (demo mode)');
+          }
+        }, 100);
+      }
+    },
+
+    _resetToDefaults: function () {
+      this._packs = [];
+      this._renderPackList();
+      this._showToast('Reset to defaults');
+    },
+
+    _loadPacks: function () {
+      if (typeof ResourcePackBridge !== 'undefined' && ResourcePackBridge.getPacks) {
+        this._packs = ResourcePackBridge.getPacks();
+      }
+      this._renderPackList();
+    },
+
+    _renderPackList: function () {
+      var container = document.getElementById('packList');
+      var emptyState = document.getElementById('emptyState');
+
+      // Clear existing items (except empty state)
+      var items = container.querySelectorAll('.pack-item');
+      items.forEach(function (item) { item.remove(); });
+
+      if (this._packs.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+
+      // Sort: local first, then remote, then builtin
+      var sorted = this._packs.slice().sort(function (a, b) {
+        var order = { 'local': 0, 'remote': 1, 'builtin': 2 };
+        return (order[a.sourceType] || 99) - (order[b.sourceType] || 99);
+      });
+
+      var self = this;
+
+      sorted.forEach(function (pack) {
+        var item = self._createPackItem(pack);
+        container.appendChild(item);
+      });
+    },
+
+    _createPackItem: function (pack) {
+      var item = document.createElement('div');
+      item.className = 'pack-item' + (pack.enabled ? '' : ' disabled');
+      item.draggable = true;
+      item.dataset.packId = pack.id;
+
+      var icon = this._getPackIcon(pack.sourceType);
+
+      item.innerHTML = `
+        <div class="drag-handle" title="Drag to reorder">&#9776;</div>
+        <div class="pack-icon">${icon}</div>
+        <div class="pack-info">
+          <div class="pack-name">${this._escapeHtml(pack.name)}</div>
+          <div class="pack-description">${this._escapeHtml(pack.description)}</div>
+          <div class="pack-meta">
+            ${pack.sourceType === 'local' ? 'Local file' : pack.sourceType === 'remote' ? 'Remote URL' : 'Built-in'} |
+            Format: ${pack.packFormat} |
+            ${this._formatSize(pack.fileSize)}
+          </div>
+        </div>
+        <div class="pack-controls">
+          <label class="toggle-switch">
+            <input type="checkbox" ${pack.enabled ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+          <button class="btn btn-danger btn-small" title="Remove pack">&times;</button>
+        </div>
+      `;
+
+      // Bind events
+      var self = this;
+      var toggle = item.querySelector('input[type="checkbox"]');
+      toggle.addEventListener('change', function () {
+        self._togglePack(pack.id);
+      });
+
+      var removeBtn = item.querySelector('.btn-danger');
+      removeBtn.addEventListener('click', function () {
+        if (confirm('Remove ' + pack.name + '?')) {
+          self._removePack(pack.id);
+        }
+      });
+
+      // Drag events
+      item.addEventListener('dragstart', function (e) {
+        self._draggedItem = item;
+        item.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      item.addEventListener('dragend', function () {
+        item.style.opacity = '1';
+        self._draggedItem = null;
+      });
+
+      item.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+
+      item.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (self._draggedItem && self._draggedItem !== item) {
+          var fromId = self._draggedItem.dataset.packId;
+          var toId = item.dataset.packId;
+          self._movePack(fromId, toId);
+        }
+      });
+
+      return item;
+    },
+
+    _movePack: function (fromId, toId) {
+      var fromIndex = -1, toIndex = -1;
+
+      for (var i = 0; i < this._packs.length; i++) {
+        if (this._packs[i].id === fromId) fromIndex = i;
+        if (this._packs[i].id === toId) toIndex = i;
+      }
+
+      if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) {
+        var pack = this._packs.splice(fromIndex, 1)[0];
+        this._packs.splice(toIndex, 0, pack);
+
+        if (typeof ResourcePackBridge !== 'undefined') {
+          ResourcePackBridge.movePack(fromId, toIndex);
+        }
+
+        this._renderPackList();
+      }
+    },
+
+    _getPackIcon: function (sourceType) {
+      switch (sourceType) {
+        case 'local': return '&#128193;'; // folder
+        case 'remote': return '&#127760;'; // globe
+        case 'builtin': return '&#127760;'; // or package
+        default: return '&#128230;'; // package
+      }
+    },
+
+    _formatSize: function (bytes) {
+      if (bytes === 0 || bytes === undefined) return 'Unknown size';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+      return (bytes / 1073741824).toFixed(2) + ' GB';
+    },
+
+    _escapeHtml: function (text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    },
+
+    _showToast: function (message, isError) {
+      var toast = document.createElement('div');
+      toast.className = 'toast' + (isError ? ' error' : '');
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(function () {
+        toast.remove();
+      }, 3000);
+    }
+  };
+
+  // Initialize when DOM is ready
+  PackUI.init();
+
+})();
+</script>
+</body>
+</html>

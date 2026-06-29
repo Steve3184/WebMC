@@ -1,0 +1,19 @@
+{
+  "name": "webmc-server",
+  "version": "1.0.0",
+  "description": "WebMC WebSocket Server for multiplayer functionality",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
