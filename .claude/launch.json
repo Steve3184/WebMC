@@ -4,7 +4,7 @@
     {
       "name": "webmc",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["scripts/serve-brotli.js", "9090", "work/build/web-run"],
+      "runtimeArgs": ["M:/Users/l/Desktop/webmc1/scripts/serve-brotli.js", "9090", "M:/Users/l/Desktop/webmc1/work/build/web-run"],
       "port": 9090,
       "autoPort": true
     }
