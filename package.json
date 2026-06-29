@@ -1,0 +1,26 @@
+{
+  "name": "webmc1",
+  "version": "1.0.0",
+  "description": "",
+  "main": "bootstrap.js",
+  "dependencies": {
+    "playwright": "^1.61.1",
+    "playwright-core": "^1.61.1",
+    "wabt": "^1.0.39"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://cnb.cool/star-mc.top/webmc1.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "acorn": "^8.17.0",
+    "escodegen": "^2.1.0"
+  }
+}
