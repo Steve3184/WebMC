@@ -40,3 +40,5 @@ addons/web/game.vfs.xz
 dist/
 work/build/upstream/
 upstream/
+*.cjs
+analysis_output.json
