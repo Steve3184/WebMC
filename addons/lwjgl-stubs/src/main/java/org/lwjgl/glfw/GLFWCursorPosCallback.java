@@ -1,6 +1,0 @@
-package org.lwjgl.glfw;
-public abstract class GLFWCursorPosCallback implements GLFWCursorPosCallbackI {
-    public static GLFWCursorPosCallback create(GLFWCursorPosCallbackI l) { return new GLFWCursorPosCallback() { @Override public void invoke(long w, double x, double y) { l.invoke(w, x, y); } }; }
-    public void free() {}
-    public GLFWCursorPosCallback set(long window) { GLFW.glfwSetCursorPosCallback(window, this); return this; }
-}

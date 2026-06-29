@@ -979,21 +979,7 @@ async function launchSession(contextLabel) {
     }
 
     const launchStart = nowMs();
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        // Enable WebGL2 in headless mode via SwiftShader (software renderer)
-        '--enable-webgl',
-        '--enable-webgl2',
-        '--use-gl=angle',
-        '--use-angle=swiftshader',
-        '--ignore-gpu-blocklist',
-        '--disable-gpu-sandbox',
-        // Disable features that may interfere
-        '--disable-software-rasterizer',
-        '--disable-dev-shm-usage'
-      ]
-    });
+    browser = await chromium.launch({ headless: true });
     log(`[scenario] ${contextLabel} launch.ok +${nowMs() - launchStart}ms`);
     const page = await browser.newPage();
     page.on('console', (msg) => {

@@ -1,5 +1,0 @@
---- a/javax/annotation/ParametersAreNonnullByDefault.java
-+++ b/javax/annotation/ParametersAreNonnullByDefault.java
-@@ -0,0 +1,2 @@
-+package javax.annotation;
-+public @interface ParametersAreNonnullByDefault {}

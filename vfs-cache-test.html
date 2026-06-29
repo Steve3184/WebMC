@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VFS Cache Test</title>
+    <style>
+        :root { color-scheme: dark; }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #4a9eff;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        .section {
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        button {
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #3a7ed8;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .log-error { color: #ff6b6b; }
+        .log-warn { color: #ffa500; }
+        .log-info { color: #4a9eff; }
+        .log-success { color: #51cf66; }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a9eff, #51cf66);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .stat {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+        .stat-label {
+            color: #888;
+            font-size: 12px;
+        }
+        .stat-value {
+            color: #4a9eff;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VFS Cache Test Suite</h1>
+
+        <div class="section">
+            <h2>Storage Information</h2>
+            <div class="stats" id="stats">
+                <div class="stat">
+                    <div class="stat-label">Cache Status</div>
+                    <div class="stat-value" id="cacheStatus">Unknown</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Storage Used</div>
+                    <div class="stat-value" id="storageUsed">—</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Storage Quota</div>
+                    <div class="stat-value" id="storageQuota">—</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Usage %</div>
+                    <div class="stat-value" id="storagePercent">—</div>
+                </div>
+            </div>
+            <button onclick="refreshStorageInfo()">Refresh Info</button>
+        </div>
+
+        <div class="section">
+            <h2>Test Operations</h2>
+            <div>
+                <button onclick="testCacheWrite()">Test Cache Write (10MB)</button>
+                <button onclick="testCacheRead()">Test Cache Read</button>
+                <button onclick="testVersionMismatch()">Test Version Mismatch</button>
+                <button onclick="clearCache()">Clear All Cache</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <button onclick="testDownload()">Test Download (Mock)</button>
+                <button onclick="testFullPipeline()">Test Full Pipeline</button>
+            </div>
+            <div class="progress-bar" style="margin-top: 20px;">
+                <div class="progress-fill" id="progress"></div>
+            </div>
+            <div id="progressText" style="text-align: center; color: #888; margin-top: 5px;">—</div>
+        </div>
+
+        <div class="section">
+            <h2>Console Log</h2>
+            <div class="log" id="log">
+                <div class="log-entry">Ready. Click buttons above to test VFS cache.</div>
+            </div>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+    </div>
+
+    <script src="vfs-cache.js"></script>
+    <script src="vfs-loader.js"></script>
+    <script>
+        const logEl = document.getElementById('log');
+        const progressEl = document.getElementById('progress');
+        const progressTextEl = document.getElementById('progressText');
+
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry log-' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log('[Test]', message);
+        }
+
+        function clearLog() {
+            logEl.innerHTML = '<div class="log-entry">Log cleared.</div>';
+        }
+
+        function setProgress(percent, text) {
+            progressEl.style.width = percent + '%';
+            progressTextEl.textContent = text || (percent + '%');
+        }
+
+        async function refreshStorageInfo() {
+            log('Fetching storage info...', 'info');
+            try {
+                const info = await VfsLoader.getStorageInfo();
+                document.getElementById('cacheStatus').textContent = 'Available';
+                document.getElementById('storageUsed').textContent = info.usageMB;
+                document.getElementById('storageQuota').textContent = info.quotaMB;
+                document.getElementById('storagePercent').textContent = info.percent + '%';
+                log('Storage info updated', 'success');
+            } catch (err) {
+                log('Storage info failed: ' + err.message, 'error');
+                document.getElementById('cacheStatus').textContent = 'Error';
+            }
+        }
+
+        async function testCacheWrite() {
+            log('Testing cache write (10MB test data)...', 'info');
+            setProgress(0, 'Preparing...');
+
+            try {
+                const cache = await VfsCache.create();
+
+                // Generate 10MB of test data
+                setProgress(20, 'Generating 10MB test data...');
+                const testData = new ArrayBuffer(10 * 1024 * 1024);
+                const view = new Uint8Array(testData);
+                for (let i = 0; i < view.length; i += 1024) {
+                    view[i] = Math.random() * 255;
+                }
+
+                // Write to cache
+                setProgress(50, 'Writing to cache...');
+                const startTime = Date.now();
+                await cache.set('test_data', '1.0.0', testData);
+                const elapsed = Date.now() - startTime;
+
+                setProgress(100, 'Complete!');
+                log('Cache write successful: 10MB in ' + elapsed + 'ms', 'success');
+
+                await refreshStorageInfo();
+            } catch (err) {
+                setProgress(0, 'Failed');
+                log('Cache write failed: ' + err.message, 'error');
+            }
+        }
+
+        async function testCacheRead() {
+            log('Testing cache read...', 'info');
+            setProgress(0, 'Reading...');
+
+            try {
+                const cache = await VfsCache.create();
+
+                const startTime = Date.now();
+                const data = await cache.get('test_data', '1.0.0');
+                const elapsed = Date.now() - startTime;
+
+                if (data) {
+                    const sizeMB = (data.byteLength / 1024 / 1024).toFixed(2);
+                    setProgress(100, 'Found!');
+                    log('Cache read successful: ' + sizeMB + 'MB in ' + elapsed + 'ms', 'success');
+                } else {
+                    setProgress(0, 'Not found');
+                    log('Cache miss: test_data not found', 'warn');
+                }
+            } catch (err) {
+                setProgress(0, 'Failed');
+                log('Cache read failed: ' + err.message, 'error');
+            }
+        }
+
+        async function testVersionMismatch() {
+            log('Testing version mismatch detection...', 'info');
+
+            try {
+                const cache = await VfsCache.create();
+
+                // Try to read with wrong version
+                const data = await cache.get('test_data', '2.0.0');
+
+                if (data === null) {
+                    log('Version mismatch correctly detected and entry invalidated', 'success');
+                } else {
+                    log('Warning: Got data despite version mismatch', 'warn');
+                }
+            } catch (err) {
+                log('Version test failed: ' + err.message, 'error');
+            }
+        }
+
+        async function clearCache() {
+            log('Clearing all cache entries...', 'warn');
+
+            try {
+                await VfsLoader.clearCache();
+                log('Cache cleared successfully', 'success');
+                await refreshStorageInfo();
+            } catch (err) {
+                log('Cache clear failed: ' + err.message, 'error');
+            }
+        }
+
+        async function testDownload() {
+            log('Testing mock download with progress...', 'info');
+
+            setProgress(0, 'Starting...');
+
+            // Simulate download
+            for (let i = 0; i <= 100; i += 5) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                setProgress(i, 'Downloading ' + i + '%...');
+            }
+
+            log('Mock download complete', 'success');
+        }
+
+        async function testFullPipeline() {
+            log('Testing full VFS load pipeline (mock)...', 'info');
+            setProgress(0, 'Initializing...');
+
+            try {
+                // Create mock VFS data (1MB for testing)
+                log('Creating mock VFS data (1MB)...', 'info');
+                const mockVfsData = new ArrayBuffer(1024 * 1024);
+                const view = new Uint8Array(mockVfsData);
+
+                // Fill with mock MCVF header + data
+                view[0] = 'M'.charCodeAt(0);
+                view[1] = 'C'.charCodeAt(0);
+                view[2] = 'V'.charCodeAt(0);
+                view[3] = 'F'.charCodeAt(0);
+                // version = 1
+                view[4] = 1; view[5] = 0; view[6] = 0; view[7] = 0;
+                // count = 0 (no entries for mock)
+                view[8] = 0; view[9] = 0; view[10] = 0; view[11] = 0;
+
+                setProgress(20, 'Mock download...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                setProgress(50, 'Mock decompress...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Cache the mock data
+                setProgress(70, 'Caching...');
+                const cache = await VfsCache.create();
+                await cache.set('game.vfs', 'test-1.0', mockVfsData);
+
+                setProgress(100, 'Complete!');
+                log('Full pipeline test complete', 'success');
+
+                await refreshStorageInfo();
+            } catch (err) {
+                setProgress(0, 'Failed');
+                log('Pipeline test failed: ' + err.message, 'error');
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            log('VFS Cache Test Suite initialized', 'info');
+            log('VfsCache available: ' + (typeof VfsCache !== 'undefined'), 'info');
+            log('VfsLoader available: ' + (typeof VfsLoader !== 'undefined'), 'info');
+            log('IndexedDB available: ' + ('indexedDB' in window), 'info');
+            refreshStorageInfo();
+        });
+    </script>
+</body>
+</html>

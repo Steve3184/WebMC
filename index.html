@@ -3,17 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebMC</title>
+    <title>Minecraft 1.21.8</title>
+    <link rel="icon" href="data:,">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; overflow: hidden; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        :root { color-scheme: dark; }
+        html, body { margin: 0; padding: 0; height: 100%; background: #111; font-family: monospace; color: #ddd; overflow: hidden; }
+        #stage   { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+        #canvas  { background: #000; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+        #boot    { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; pointer-events: none; }
+        #boot.hidden, .hidden { display: none !important; }
+        #status  { font-size: 1.2rem; max-width: 80vw; text-align: center; }
+        #progress { width: min(60vw, 600px); height: 4px; background: #333; border-radius: 2px; overflow: hidden; }
+        #progress > div { height: 100%; width: 0%; background: #6c6; transition: width 0.3s ease; }
+        #hint    { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: none; padding: 10px 14px; border-radius: 6px; background: rgba(0,0,0,.72); color: #eee; font-size: 13px; line-height: 1.35; pointer-events: none; box-shadow: 0 8px 24px rgba(0,0,0,.28); }
+        #hint.show { display: block; }
+        #error   { position: absolute; inset: 0; display: none; padding: 2rem; overflow: auto; background: #200; color: #faa; font-size: 0.9rem; white-space: pre-wrap; }
+        #error.show { display: block; }
     </style>
 </head>
 <body>
-    <canvas id="game"></canvas>
-    <script src="vfs.js"></script>
-    <script src="socket.js"></script>
-    <script src="main.js"></script>
+    <div id="stage">
+        <canvas id="canvas" width="1280" height="720" tabindex="0"></canvas>
+    </div>
+    <div id="boot">
+        <div id="status">Loading game.js…</div>
+        <div id="progress"><div></div></div>
+    </div>
+    <div id="hint">Click the canvas to lock the mouse. Press Esc to release it.</div>
+    <pre id="error"></pre>
+
+    <script>
+        (function () {
+            const params = new URLSearchParams(window.location.search);
+            const diagnosticsParam = params.get('diagnostics');
+            const diagnosticsEnabled = diagnosticsParam == null
+                ? !!window.webmcDiagnostics
+                : /^(1|true|on|yes)$/i.test(diagnosticsParam);
+            const noisyPrefixes = [
+                '[mc-probe]',
+                '[mc-web/renderGate]',
+                '[mc-web/renderGate/state]',
+                '[mc-web/render]',
+                '[mc-web/syncher]',
+                '[mc-main-stage]',
+                '[stdout-test]',
+                '[stderr-test]',
+                '[INFO] mc: [mc-web/',
+                '[WARN] mc: Couldn\'t find glyph',
+                '[mc-web/serverchunks]',
+                '[mc-web/clientpkt]',
+                '[mc-web/clientlogin]',
+                '[mc-web/clienttick]',
+                '[mc-web/chunks]',
+                '[mc-web/sectionCompile]',
+                '[mc-web/sectionDispatch]',
+                '[mc-web/sectionTask]',
+                '[mc-web/sectionCopy]',
+                '[mc-web/sectionMesh]',
+                '[mc-web/compileSections]',
+                '[mc-web/setupRender]',
+                '[mc-web/mainpass]',
+                '[mc-web/skypass]',
+                '[mc-web/collectVisibleEntities]',
+                '[mc-web/occlusion]',
+                '[mc-web/render/state]',
+                '[mc-web/renderLevel]',
+                '[mc-web/chunkgen]',
+                '[mc-web/servergame]',
+                '[mc-web/serverlevel]',
+                '[mc-web/server]',
+                '[mc-web/level]',
+                '[mc-web/gameload]',
+                '[mc-web/worldloader]',
+                '[mc-web/worldload]',
+                '[mc-web/ctor]',
+                '[mc-web/packrepo]',
+                '[mc-web/loopback]',
+                '[mc-web/packetutils]',
+                '[mc-web/entityRenderers]',
+                '[mc-web/regionCache]',
+                '[mc-web/poi]',
+                '[mc-web/run]',
+                '[mc-web/vfs] WebFs.boot:',
+                '[mc-web/vfs] WebFs.preload:',
+                '[mc-web/vfs] WebFs: parsing',
+                '[mc-web/vfs] WebFs: ... loaded',
+                '[mc-probe] SpriteLoader',
+                '[mc-probe] Stitcher',
+                '[mc-probe] TinyPng',
+                '[mc-probe] ModelManager',
+                '[mc-probe] SimpleReloadInstance'
+            ];
+
+            window.webmcDiagnostics = diagnosticsEnabled;
+            window.__webmcInstallConsoleFilter = function () {
+                if (window.webmcDiagnostics || window.__webmcConsoleFilterInstalled) {
+                    return;
+                }
+                window.__webmcConsoleFilterInstalled = true;
+                for (const level of ['log', 'info', 'warn', 'error']) {
+                    const original = console[level] && console[level].bind(console);
+                    if (!original) continue;
+                    console[level] = (...args) => {
+                        const text = args.length ? String(args[0]) : '';
+                        if (text.length > 8192) {
+                            return;
+                        }
+                        if (noisyPrefixes.some((prefix) => text.startsWith(prefix))) {
+                            return;
+                        }
+                        original(...args);
+                    };
+                }
+            };
+            window.__webmcInstallConsoleFilter();
+        })();
+    </script>
+    <!-- VFS caching modules: load before bootstrap.js -->
+    <script src="vfs-cache.js"></script>
+    <script src="vfs-loader.js"></script>
+    <!-- Page-side glue: paints the menu first, then loads game.js. -->
+    <script src="bootstrap.js"></script>
 </body>
 </html>

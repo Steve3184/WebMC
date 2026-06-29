@@ -1,0 +1,49 @@
+start 2026-06-28T05:51:13.147Z
+serve.root M:\Users\l\Desktop\webmc1\work\build\web-run
+probe.scenario smoke
+probe.repeatCount 3
+probe.soakMs 600000
+probe.waitMs 700000
+probe.smokeMaxAttempts 2
+probe.smokeRetryWaitMs 900000
+probe.smokeRetryDelayMs 2000
+probe.soakMaxAttempts 2
+probe.soakRetryWaitMs 900000
+probe.saveReloadMaxAttempts 2
+probe.saveReloadRetryWaitMs 900000
+probe.requireWorldloadSuccess true
+[scenario] smoke-attempt-1 server.begin root=M:\Users\l\Desktop\webmc1\work\build\web-run
+[scenario] smoke-attempt-1 reusing healthy server http://localhost:58080/
+[scenario] smoke-attempt-1 launch.ok +286ms
+[scenario] smoke-attempt-1 goto.begin http://localhost:58080/?boot=mcMain&autostart=1&world=Web%20World&diagnostics=1&t=1782625873553
+[scenario] smoke-attempt-1 goto.commit 200 +36ms
+[scenario] smoke-attempt-1 uiState.read.timeout 2000ms
+[frontier] [mc-web] WebMain.main start (args=0)
+probe.classification slow-startup
+probe.pass FAIL
+probe.progress.lastKind frontier-log
+probe.progress.sinceLastMs 689808
+probe.phase.worldloadRequestedAtMs null
+probe.phase.worldloadSuccessAtMs null
+probe.phase.serverReadyBeginAtMs null
+probe.phase.serverReadyEndAtMs null
+probe.phase.loopbackAtMs null
+probe.phase.playableLoopAtMs null
+probe.phase.serverConfigBeforeNewPlayerAtMs null
+probe.phase.serverConfigBeforePlaceCallAtMs null
+probe.phase.placeNewPlayerEnterAtMs null
+probe.phase.placeNewPlayerAfterLoginPacketAtMs null
+probe.phase.serverConfigAfterPlaceNewPlayerAtMs null
+probe.phase.firstWorldloadSuccessAtMs null
+probe.phase.secondWorldloadSuccessAtMs null
+probe.phase.maxPersistentTick -1
+probe.report.archive M:\Users\l\Desktop\webmc1\docs\reports\mcmain-phase197-2026-06-28T06-02-53-711Z.json
+[scenario] smoke-attempt-1 browser.closed
+[scenario] smoke smoke retry scheduled attempt=2/2 delayMs=2000
+[scenario] smoke-attempt-2 server.begin root=M:\Users\l\Desktop\webmc1\work\build\web-run
+[scenario] smoke-attempt-2 reusing healthy server http://localhost:58080/
+[scenario] smoke-attempt-2 launch.ok +244ms
+[scenario] smoke-attempt-2 goto.begin http://localhost:58080/?boot=mcMain&autostart=1&world=Web%20World&diagnostics=1&t=1782626576248
+[scenario] smoke-attempt-2 goto.commit 200 +47ms
+[scenario] smoke-attempt-2 uiState.read.timeout 2000ms
+[frontier] [mc-web] WebMain.main start (args=0)

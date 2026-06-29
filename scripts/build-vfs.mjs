@@ -27,9 +27,21 @@ if (!existsSync(mcResources)) {
 const projectRoot = path.basename(workDir) === 'build'
   ? path.resolve(workDir, '..', '..')
   : path.resolve(workDir, '..');
+const defaultBaseVfs = (() => {
+  const full = path.join(projectRoot, 'dist', 'mc-vfs.bin');
+  if (existsSync(full)) {
+    return full;
+  }
+  return path.join(projectRoot, 'dist', 'mc-vfs_lite.bin');
+})();
+
 const baseVfs = process.env.WEBMC_BASE_VFS
   ? path.resolve(process.env.WEBMC_BASE_VFS)
-  : path.join(projectRoot, 'dist', 'mc-vfs_lite.bin');
+  : defaultBaseVfs;
+
+const targetVfs = process.env.WEBMC_TARGET_VFS
+  ? path.resolve(process.env.WEBMC_TARGET_VFS)
+  : null;
 
 const roots = ['assets', 'data']
   .map((n) => ({ name: n, abs: path.join(mcResources, n) }))
@@ -90,10 +102,44 @@ function loadBaseVfs(abs) {
   console.log('[build-vfs] Base file count:', count);
 }
 
+function loadFilteredVfs(abs, predicate, label) {
+  const buf = readFileSync(abs);
+  let pos = 0;
+  if (buf.subarray(pos, pos + 4).toString('ascii') !== 'MCVF') {
+    throw new Error(`Bad VFS magic: ${abs}`);
+  }
+  pos += 4;
+  const version = readU32LE(buf, pos); pos += 4;
+  if (version !== 1) {
+    throw new Error(`Unsupported VFS version ${version}: ${abs}`);
+  }
+  const count = readU32LE(buf, pos); pos += 4;
+  let kept = 0;
+  for (let i = 0; i < count; i++) {
+    const pathLen = readU16LE(buf, pos); pos += 2;
+    const rel = normalizeRel(buf.subarray(pos, pos + pathLen).toString('utf8')); pos += pathLen;
+    const dataLen = readU32LE(buf, pos); pos += 4;
+    const data = Buffer.from(buf.subarray(pos, pos + dataLen)); pos += dataLen;
+    if (predicate(rel)) {
+      entries.set(rel, data);
+      kept++;
+    }
+  }
+  console.log('[build-vfs] Filtered VFS:', abs, 'label=', label, 'kept=', kept);
+}
+
 if (existsSync(baseVfs)) {
   loadBaseVfs(baseVfs);
 } else {
   console.log('[build-vfs] Base VFS not found, packing overlay resources only:', baseVfs);
+}
+
+if (targetVfs) {
+  loadFilteredVfs(targetVfs, (rel) => {
+    if (rel === 'assets/minecraft/sounds.json') return true;
+    if (rel.startsWith('assets/minecraft/sounds/music/')) return true;
+    return false;
+  }, 'sounds');
 }
 
 const files = [];

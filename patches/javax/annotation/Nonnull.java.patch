@@ -1,5 +1,0 @@
---- a/javax/annotation/Nonnull.java
-+++ b/javax/annotation/Nonnull.java
-@@ -0,0 +1,2 @@
-+package javax.annotation;
-+public @interface Nonnull {}

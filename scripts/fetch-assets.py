@@ -95,7 +95,8 @@ def collect_jar_entries(jar_bytes: bytes) -> dict[str, bytes]:
 
 def collect_indexed_objects(version_json: dict) -> dict[str, bytes]:
     """Download the asset index referenced by the version json and add files
-    under /assets/objects/<hash[:2]>/<hash> plus a manifest."""
+    under both /assets/objects/<hash[:2]>/<hash> and the logical asset path
+    used by Minecraft's resource loader."""
     asset_index = version_json["assetIndex"]
     index_url = asset_index["url"]
     index_id = asset_index["id"]
@@ -110,6 +111,7 @@ def collect_indexed_objects(version_json: dict) -> dict[str, bytes]:
         cache = CACHE_DIR / "objects" / rel
         body = fetch(url, cache)
         out[f"/assets/objects/{rel}"] = body
+        out[f"/assets/{logical}"] = body
         if (i + 1) % 100 == 0:
             print(f"    [{i + 1}/{len(objects)}] {logical}")
     return out

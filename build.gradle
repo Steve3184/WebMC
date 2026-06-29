@@ -1,0 +1,389 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        maven { url = 'https://maven.minecraftforge.net' }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:6+'
+        classpath "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext:gradle-idea-ext:1.1.3"
+    }
+}
+
+import net.minecraftforge.gradle.common.util.Utils
+import net.minecraftforge.gradle.common.util.VersionJson
+import org.jetbrains.gradle.ext.*
+
+apply plugin: 'eclipse'
+apply plugin: 'net.minecraftforge.gradle.patcher'
+apply plugin: "org.jetbrains.gradle.plugin.idea-ext"
+
+println(' Java: ' + System.getProperty('java.version') +
+        ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ')' +
+        ' Arch: ' + System.getProperty('os.arch'))
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+configurations {
+    shade
+    compile.extendsFrom shade
+}
+
+group = 'me.yourname'
+version = '1.0.0'
+
+ext {
+    minecraft_version = '1.21.8'
+    mcp_version = '20250717.105350'
+    mappings_channel = 'official'
+    mappings_version = '1.21.8'
+    spi_version = '7.0.0'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'net.minecraftforge:forgespi:' + spi_version
+//    Use the shade to add the lib to the jar
+//    or use compile if you want to load the lib from the version.json
+//    from a maven repo
+//    shade 'package-here'
+//    compile 'package-here'
+}
+
+project(':mcp') {
+    apply plugin: 'net.minecraftforge.gradle.mcp'
+    mcp {
+        config = minecraft_version + '-' + mcp_version
+        pipeline = 'joined'
+    }
+}
+
+evaluationDependsOn(':mcp')
+
+patcher {
+    parent = project(':mcp')
+    patchedSrc = file('src/main/java')
+    mappings channel: mappings_channel, version: mappings_version
+    mcVersion = minecraft_version
+}
+
+jar {
+    configurations.shade.each { dep ->
+        from(project.zipTree(dep)) {
+            exclude 'META-INF', 'META-INF/**'
+        }
+    }
+}
+
+var assetsFolder = file('run/assets')
+
+tasks.register('runclient', JavaExec) {
+    group = "MCP"
+    description = "Runs the client"
+    classpath sourceSets.main.runtimeClasspath
+    if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+        jvmArgs '-XstartOnFirstThread'
+    }
+
+    var runFolder = file('run')
+    var versionJson = Utils.loadJson(downloadAssets.getMeta().get().getAsFile(), VersionJson.class)
+
+    workingDir runFolder
+    args '--gameDir', '.'
+    args '--version', minecraft_version
+    args '--assetsDir', runFolder.relativePath(assetsFolder)
+    args '--assetIndex', versionJson.assetIndex.id
+    args '--accessToken', '0'
+    main 'net.minecraft.client.main.Main'
+}
+
+
+tasks.register('setup') {
+    group = "MCP"
+    description = "Setups the dev workspace"
+    dependsOn ':extractMapped'
+    mkdir assetsFolder
+    copy {
+        from downloadAssets.output.path
+        into assetsFolder
+    }
+}
+
+tasks.register('copyAssets') {
+    group = "MCP"
+    description = "Download and place the assets into the run folder"
+    dependsOn ':downloadAssets'
+    mkdir 'run/assets'
+    copy {
+        from downloadAssets.output.path
+        into assetsFolder
+    }
+}
+
+tasks.register('runserver', JavaExec) {
+    mkdir 'runserver'
+    group = "MCP"
+    description = "Runs the server"
+    standardInput = System.in
+    classpath sourceSets.main.runtimeClasspath
+    main 'net.minecraft.server.Main'
+    workingDir 'runserver'
+}
+
+idea.project.settings {
+    runConfigurations {
+        "Minecraft"(Application) {
+            mainClass = 'mcp.client.Start'
+            workingDirectory = "$projectDir/run"
+            moduleName = idea.module.name + '.main'
+        }
+    }
+}
+
+// === injected by scripts/apply-patches.sh: kick real LWJGL off the classpath ===
+afterEvaluate {
+    ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath'].each { n ->
+        def c = configurations.findByName(n)
+        if (c != null) {
+            c.exclude group: 'org.lwjgl'
+            c.exclude group: 'com.mojang', module: 'logging'
+            c.exclude group: 'org.apache.logging.log4j'
+        }
+    }
+}
+repositories { mavenCentral() }
+dependencies {
+    implementation 'org.teavm:teavm-jso:0.13.1'
+    compileOnly 'org.teavm:teavm-core:0.13.1'
+}
+
+// === TeaVM web compilation (from addons/teavm-runtime/build.gradle.fragment) ===
+
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'org.teavm:teavm-gradle-plugin:0.13.1'
+    }
+}
+
+apply plugin: 'org.teavm'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.teavm:teavm-jso:0.13.1'
+    implementation 'org.teavm:teavm-jso-apis:0.13.1'
+}
+
+teavm {
+    all {
+        mainClass = 'top.steve3184.webmc.web.WebMain'
+        outOfProcess = true
+        processMemory = 8192
+    }
+    js {
+        targetFileName = 'game.js'
+        sourceMap = false
+        optimization = org.teavm.gradle.api.OptimizationLevel.NONE
+        fastGlobalAnalysis = true
+        obfuscated = false
+        strict = false
+        moduleType = org.teavm.gradle.api.JSModuleType.NONE
+    }
+}
+
+def jdkStubsRoot    = file("$rootDir/../addons/jdk-stubs")
+def jdkStubsClasses = file("$buildDir/jdk-stubs-classes")
+def jdkPluginClasses = file("$buildDir/jdk-stubs-plugin-classes")
+def jdkPluginJar    = file("$buildDir/jdk-stubs-plugin.jar")
+
+task compileLockStubs(type: JavaCompile) {
+    source = fileTree("$jdkStubsRoot/locks") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "java.base=$jdkStubsRoot/locks"]
+}
+
+task compileSunMiscStubs(type: JavaCompile) {
+    source = fileTree("$jdkStubsRoot/sun-misc") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "jdk.unsupported=$jdkStubsRoot/sun-misc"]
+    mustRunAfter compileLockStubs
+}
+
+task compileJdkExtraStubs(type: JavaCompile) {
+    source = fileTree("$jdkStubsRoot/jdk-extra") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "java.base=$jdkStubsRoot/jdk-extra"]
+    mustRunAfter compileSunMiscStubs
+}
+
+task compileJdkExtraThirdpartyStubs(type: JavaCompile) {
+    source = fileTree("$jdkStubsRoot/jdk-extra-thirdparty") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    mustRunAfter compileJdkExtraStubs
+}
+
+def teavmPluginClasspath = buildscript.configurations.classpath
+
+task compileJdkStubsPlugin(type: JavaCompile) {
+    source = fileTree("$jdkStubsRoot/plugin-src") { include '**/*.java' }
+    destinationDirectory = jdkPluginClasses
+    classpath = teavmPluginClasspath
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+}
+
+task generateStubIndex {
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
+    def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
+    outputs.file(indexFile)
+    doLast {
+        indexFile.parentFile.mkdirs()
+        def skipExact = ["java/lang/Thread.class"] as Set
+        def lines = []
+        fileTree(jdkStubsClasses).matching { include '**/*.class' }.each { f ->
+            def rel = jdkStubsClasses.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, (char) '/')
+            if (skipExact.contains(rel)) return
+            lines << rel
+        }
+        indexFile.text = lines.sort().join("\n") + "\n"
+        println "[generateStubIndex] wrote ${lines.size()} entries"
+    }
+}
+
+task packageJdkStubsPlugin(type: Jar) {
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
+    archiveFileName = 'jdk-stubs-plugin.jar'
+    destinationDirectory = file("$buildDir")
+    from(jdkPluginClasses)
+    from(file("$jdkStubsRoot/plugin-meta"))
+    from(file("$buildDir/jdk-stubs-meta"))
+    from(jdkStubsClasses) {
+        into 'shadow-classes'
+        exclude 'java/lang/Thread.class'
+    }
+}
+
+tasks.named('generateJavaScript').configure {
+    dependsOn packageJdkStubsPlugin
+    daemonClasspath.from(jdkPluginJar)
+    doFirst {
+        def prev = System.getenv('JAVA_TOOL_OPTIONS') ?: ''
+        if (!prev.contains('-Xss')) {
+            org.gradle.internal.nativeintegration.ProcessEnvironment pe =
+                services.get(org.gradle.internal.nativeintegration.ProcessEnvironment)
+            pe.setEnvironmentVariable('JAVA_TOOL_OPTIONS', (prev + ' -Xss32m').trim())
+        }
+        println "[teavm-debug] generateJavaScript daemonClasspath:"
+        daemonClasspath.files.each { println "  " + it }
+    }
+}
+
+tasks.named('compileJava').configure {
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin
+}
+
+tasks.register('assembleWebRun') {
+    dependsOn tasks.named('generateJavaScript')
+    doLast {
+        def dest = file("$buildDir/web-run")
+        dest.mkdirs()
+        // Copy TeaVM generated JS (game.js)
+        copy {
+            from "$buildDir/generated/teavm/js"
+            into dest
+            include '*.js'
+        }
+        // Copy web resources (index.html, bootstrap.js, vfs.js, socket.js, game.vfs)
+        // Exclude game.js - the real one comes from TeaVM output
+        copy {
+            from "$projectDir/../addons/web"
+            into dest
+            include '*.html'
+            include '*.js'
+            include '*.vfs'
+            exclude 'game.js'
+        }
+    }
+}
+
+tasks.register('assembleWebRunFinal', Copy) {
+    dependsOn 'assembleWebRun'
+    doFirst {
+        // Try multiple times in case of file locks
+        for (int i = 0; i < 3; i++) {
+            try {
+                delete "$buildDir/web-run-temp"
+                break
+            } catch (Exception e) {
+                if (i < 2) {
+                    sleep 500
+                }
+            }
+        }
+    }
+    // Copy VFS file if present
+    from "$buildDir/generated/teavm/vfs"
+    into "$buildDir/web-run"
+    include 'game.vfs'
+}
+
+// Generate Brotli-compressed (.br) versions for faster delivery
+// game.js: 290MB → ~19MB brotli, game.vfs: 14MB → ~4MB brotli
+task compressWebAssets {
+    dependsOn 'assembleWebRunFinal'
+    outputs.dir "$buildDir/web-run"
+    doLast {
+        def webRunDir = file("$buildDir/web-run")
+        def filesToCompress = ['game.js', 'game.vfs']
+
+        filesToCompress.each { fname ->
+            def source = new File(webRunDir, fname)
+            def target = new File(webRunDir, fname + ".br")
+
+            if (source.exists()) {
+                println "[compressWebAssets] Compressing $fname with Brotli..."
+                def startTime = System.currentTimeMillis()
+
+                def process = "brotli -f -o ${target.absolutePath} ${source.absolutePath}".execute()
+                process.waitFor()
+
+                if (process.exitValue() == 0 && target.exists()) {
+                    def origSize = source.length() / 1024 / 1024
+                    def compSize = target.length() / 1024 / 1024
+                    def ratio = (origSize / compSize * 100).trunc()
+                    def elapsed = System.currentTimeMillis() - startTime
+                    println "[compressWebAssets] ✓ $fname: ${origSize.trunc()}MB → ${compSize.trunc()}MB (${ratio}% compression) in ${elapsed}ms"
+                } else {
+                    println "[compressWebAssets] ✗ Failed to compress $fname"
+                }
+            }
+        }
+    }
+}
+
+// Alias for backward compatibility
+tasks.register('buildWebRun') {
+    dependsOn 'compressWebAssets'
+}

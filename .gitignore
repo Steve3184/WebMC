@@ -1,41 +1,21 @@
-dataset/
-output/
-node_modules/
-Microsoft/
-backups/
-models/
-stable-diffusion-webui/models/
-*.safetensors
-*.ckpt
-*.pt
-*.bin
-*.zip
-*.7z
-*.tar
-*.tar.gz
-*.log
-__pycache__/
-*.pyc
-.temp/
-.workbuddy/
-kohya_ss/.git/
-stable-diffusion-webui/.git/
-config.toml
-DownloadWrapper.class
-dump.rdb
-web/game.js
-web/game.js.gz
-web/game_fixed.js
-web/game_patched.js
-web/game.vfs
-web/game.vfs.gz
-web/game.vfs.xz
-web/standalone.html
-web/parts/
-addons/web/game.js
-addons/web/game.js.gz
-addons/web/game.vfs
-addons/web/game.vfs.gz
-addons/web/game.vfs.xz
-dist/
-work/build/upstream/
+.gradle
+build/
+
+# Source code
+src/*
+
+#Run files
+runclient
+
+# Ignore Gradle GUI config
+gradle-app.setting
+
+# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
+!gradle-wrapper.jar
+
+#IDE files
+.idea
+*.iml
+run/
+
+out/
