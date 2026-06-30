@@ -254,6 +254,16 @@ task compileJdkStubsPlugin(type: JavaCompile) {
     targetCompatibility = '21'
 }
 
+def lwjglStubsRoot = file("$rootDir/../addons/lwjgl-stubs")
+def lwjglStubsClasses = file("$buildDir/lwjgl-stubs-classes")
+task compileLwjglStubs(type: JavaCompile) {
+    source = fileTree("$lwjglStubsRoot/src") { include '**/*.java' }
+    destinationDirectory = lwjglStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+}
+
 task generateStubIndex {
     dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
@@ -286,8 +296,9 @@ task packageJdkStubsPlugin(type: Jar) {
 }
 
 tasks.named('generateJavaScript').configure {
-    dependsOn packageJdkStubsPlugin
+    dependsOn packageJdkStubsPlugin, compileLwjglStubs
     daemonClasspath.from(jdkPluginJar)
+    daemonClasspath.from(lwjglStubsClasses)
     doFirst {
         def prev = System.getenv('JAVA_TOOL_OPTIONS') ?: ''
         if (!prev.contains('-Xss')) {
@@ -301,7 +312,7 @@ tasks.named('generateJavaScript').configure {
 }
 
 tasks.named('compileJava').configure {
-    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, compileLwjglStubs
 }
 
 tasks.register('assembleWebRun') {
