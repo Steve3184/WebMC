@@ -1,44 +1,52 @@
-<<<<<<< HEAD
+# Gradle
 .gradle
 build/
+gradle-app.setting
+!gradle-wrapper.jar
 
 # Source code
 src/*
+bin/
+out/
 
-#Run files
+# Run files
+run/
 runclient
+runserver
 
-# Ignore Gradle GUI config
-gradle-app.setting
-
-# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
-!gradle-wrapper.jar
-
-#IDE files
+# IDE files
 .idea
 *.iml
-run/
+*.ipr
+*.iws
 
-out/
-=======
+# Java class files
+*.class
+
+# Python / AI models
 dataset/
 output/
-node_modules/
-Microsoft/
-backups/
 models/
 stable-diffusion-webui/models/
 *.safetensors
 *.ckpt
 *.pt
 *.bin
+*.pth
+
+# Archives
 *.zip
 *.7z
 *.tar
 *.tar.gz
+*.rar
+
+# Logs
 *.log
 __pycache__/
 *.pyc
+
+# Temporary / work files
 .temp/
 .workbuddy/
 kohya_ss/.git/
@@ -46,6 +54,8 @@ stable-diffusion-webui/.git/
 config.toml
 DownloadWrapper.class
 dump.rdb
+
+# Web build output
 web/game.js
 web/game.js.gz
 web/game_fixed.js
@@ -55,14 +65,27 @@ web/game.vfs.gz
 web/game.vfs.xz
 web/standalone.html
 web/parts/
+
+# Addons build artifacts
 addons/web/game.js
 addons/web/game.js.gz
 addons/web/game.vfs
 addons/web/game.vfs.gz
 addons/web/game.vfs.xz
+
+# Work build artifacts
 dist/
 work/build/upstream/
 upstream/
+
+# Scripts
 *.cjs
 analysis_output.json
->>>>>>> 38fa0cb2a281dfd8aad87b7129d79fb5177adad7
+
+# Claude Code
+.claude/
+.codegraph/
+
+# Node
+node_modules/
+backups/
