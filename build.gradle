@@ -387,3 +387,15 @@ task compressWebAssets {
 tasks.register('buildWebRun') {
     dependsOn 'compressWebAssets'
 }
+
+// Phase 197 runtime verification
+// Tests that the web build successfully loads to main menu
+tasks.register('runtimeCheckMcMainPhase197', Exec) {
+    group = "MCP"
+    description = "Verify WebMC loads to main menu (phase 197 = McMain entry)"
+    dependsOn 'buildWebRun'
+
+    workingDir projectDir
+    // Runs the Playwright test
+    commandLine 'node', '../scripts/phase197-test.js'
+}
