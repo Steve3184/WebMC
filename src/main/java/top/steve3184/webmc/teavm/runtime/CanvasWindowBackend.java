@@ -5,6 +5,7 @@ import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
 import org.lwjgl.glfw.*;
+import static org.lwjgl.glfw.GLFW.*;
 
 import java.util.HashMap;
 import java.util.Map;
