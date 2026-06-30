@@ -9,7 +9,8 @@
     "wabt": "^1.0.39"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "phase197:test": "node scripts/phase197-test.js",
+    "test": "node scripts/phase197-test.js"
   },
   "repository": {
     "type": "git",
