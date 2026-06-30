@@ -671,7 +671,7 @@
 
     function loadGameScript() {
         const script = document.createElement('script');
-        script.src = 'game.js';
+        script.src = 'game.js?t=' + 1782803944862;
         script.async = true;
         setBootStatus('Loading game.js...', 20);
         recordStartup('game-js:request', script.src);
