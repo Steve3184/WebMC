@@ -22,6 +22,13 @@ jobs:
         run: |
           git submodule update --init --recursive
 
+      - name: Setup addons for work submodule
+        run: |
+          # work/addons is a symlink/copy of the main repo's addons/
+          if [ ! -d "work/addons/teavm-runtime" ]; then
+            cp -r addons work/addons
+          fi
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
