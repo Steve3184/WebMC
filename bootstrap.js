@@ -6,6 +6,39 @@
 // classic <script> tag (set in index.html), then call window.main here.
 
 (function () {
+    // ── Guard BigInt / Math from NaN / Infinity before game.js runs ──────────
+    // TeaVM callers invoke BigInt(x) and BigInt.asIntN/asUintN(bits, x) with
+    // Math.min/max results that can be NaN.  Without this, Chrome throws
+    // "RangeError: The number NaN cannot be converted to a BigInt".
+    (function () {
+        var OrigBigInt  = BigInt;
+        var OrigAsIntN  = BigInt.asIntN;
+        var OrigAsUintN = BigInt.asUintN;
+        BigInt = function (v) {
+            if (v !== v || !Number.isFinite(v)) return OrigBigInt(0);
+            try { return OrigAsIntN(32, v); } catch (e) { return OrigBigInt(0); }
+        };
+        BigInt.asIntN  = function (bits, val) {
+            if (val !== val || !Number.isFinite(val)) return OrigAsIntN(bits, OrigBigInt(0));
+            try { return OrigAsIntN(bits, val); } catch (e) { return OrigAsIntN(bits, OrigBigInt(0)); }
+        };
+        BigInt.asUintN = function (bits, val) {
+            if (val !== val || !Number.isFinite(val)) return OrigAsUintN(bits, OrigBigInt(0));
+            try { return OrigAsUintN(bits, val); } catch (e) { return OrigAsUintN(bits, OrigBigInt(0)); }
+        };
+        // Also protect Math.min/max which produce NaN
+        var OrigMath_min = Math.min;
+        var OrigMath_max = Math.max;
+        Math.min = function () {
+            for (var i = 0; i < arguments.length; i++) if (arguments[i] !== arguments[i]) return 0;
+            return OrigMath_min.apply(this, arguments);
+        };
+        Math.max = function () {
+            for (var i = 0; i < arguments.length; i++) if (arguments[i] !== arguments[i]) return 0;
+            return OrigMath_max.apply(this, arguments);
+        };
+    })();
+
     const params = new URLSearchParams(window.location.search);
     const modeFromUrl = params.get('boot');
     const presetBootMode = typeof window.webmcBootMode === 'string' ? window.webmcBootMode : null;
