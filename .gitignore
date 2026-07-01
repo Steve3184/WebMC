@@ -85,6 +85,7 @@ analysis_output.json
 # Claude Code
 .claude/
 .codegraph/
+graphify-out/
 
 # Node
 node_modules/
