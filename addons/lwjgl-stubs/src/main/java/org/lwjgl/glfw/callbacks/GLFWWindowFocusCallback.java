@@ -1,0 +1,5 @@
+package org.lwjgl.glfw.callbacks;
+
+public abstract class GLFWWindowFocusCallback {
+    public abstract void invoke(long window, boolean focused);
+}

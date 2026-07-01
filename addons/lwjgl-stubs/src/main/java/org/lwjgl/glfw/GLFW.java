@@ -1,5 +1,9 @@
 package org.lwjgl.glfw;
 
+// Pure LWJGL stubs - TeaVM implementations live in webmc module
+
+import org.lwjgl.glfw.callbacks.*;
+
 public final class GLFW {
     public static final int GLFW_RELEASE = 0;
     public static final int GLFW_PRESS = 1;
@@ -7,6 +11,7 @@ public final class GLFW {
     public static final int GLFW_CURSOR_NORMAL = 0;
     public static final int GLFW_CURSOR_HIDDEN = 0;
     public static final int GLFW_CURSOR_DISABLED = 0;
+    public static final int GLFW_CURSOR = 0x00033001;
     public static final int GLFW_KEY_UNKNOWN = -1;
     public static final int GLFW_KEY_SPACE = 32;
     public static final int GLFW_KEY_ESCAPE = 256;
@@ -71,10 +76,21 @@ public final class GLFW {
     public static native double glfwGetCursorX(long window);
     public static native double glfwGetCursorY(long window);
     public static native long glfwGetPrimaryMonitor();
-    public static native int glfwGetVideoMode(long monitor);
+    public static native int glfwGetVideoMode(int monitor);
     public static native void glfwInit();
     public static native void glfwTerminate();
     public static native long glfwGetWindowUserPointer(long window);
     public static native void glfwSetWindowUserPointer(long window, long ptr);
     public static native long glfwGetMonitors();
+
+    // ========== Callback Setters (implemented as native in webmc module) ==========
+
+    public static native void glfwSetKeyCallback(long window, GLFWKeyCallback cb);
+    public static native void glfwSetCharCallback(long window, GLFWCharCallback cb);
+    public static native void glfwSetCharModsCallback(long window, GLFWCharModsCallback cb);
+    public static native void glfwSetMouseButtonCallback(long window, GLFWMouseButtonCallback cb);
+    public static native void glfwSetCursorPosCallback(long window, GLFWCursorPosCallback cb);
+    public static native void glfwSetScrollCallback(long window, GLFWScrollCallback cb);
+    public static native void glfwSetFramebufferSizeCallback(long window, GLFWFramebufferSizeCallback cb);
+    public static native void glfwSetWindowFocusCallback(long window, GLFWWindowFocusCallback cb);
 }
