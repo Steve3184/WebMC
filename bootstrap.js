@@ -638,6 +638,103 @@
         return;
     }
 
+    // ── Input Bridge: DOM Events → TeaVM InputBridge ────────────────────────
+    function setupInputBridge() {
+        if (typeof window.initialize !== 'function') {
+            console.warn('[bootstrap] InputBridge.initialize not found, skipping input setup');
+            return;
+        }
+
+        // Initialize Java side
+        window.initialize();
+
+        const canvas = $canvas;
+
+        // Key events
+        canvas.addEventListener('keydown', (e) => {
+            if (window.queueKeyEvent) {
+                window.queueKeyEvent(e.keyCode || e.which, 0, 1, getMods(e));
+            }
+        }, { passive: true });
+        canvas.addEventListener('keyup', (e) => {
+            if (window.queueKeyEvent) {
+                window.queueKeyEvent(e.keyCode || e.which, 0, 0, getMods(e));
+            }
+        }, { passive: true });
+        canvas.addEventListener('keypress', (e) => {
+            if (window.queueCharEvent) {
+                window.queueCharEvent(e.keyCode || e.charCode);
+            }
+        }, { passive: true });
+
+        // Mouse button events
+        canvas.addEventListener('mousedown', (e) => {
+            if (window.queueMouseButtonEvent) {
+                window.queueMouseButtonEvent(mapMouseButton(e.button), 1, getMods(e));
+            }
+        });
+        canvas.addEventListener('mouseup', (e) => {
+            if (window.queueMouseButtonEvent) {
+                window.queueMouseButtonEvent(mapMouseButton(e.button), 0, getMods(e));
+            }
+        });
+
+        // Mouse move events
+        canvas.addEventListener('mousemove', (e) => {
+            if (window.queueCursorPosEvent) {
+                window.queueCursorPosEvent(e.clientX, e.clientY);
+            }
+        }, { passive: true });
+
+        // Scroll events
+        canvas.addEventListener('wheel', (e) => {
+            if (window.queueScrollEvent) {
+                e.preventDefault();
+                window.queueScrollEvent(-Math.sign(e.deltaX), -Math.sign(e.deltaY));
+            }
+        }, { passive: false });
+
+        // Focus events
+        window.addEventListener('blur', () => {
+            if (window.queueFocusEvent) window.queueFocusEvent(false);
+        });
+        window.addEventListener('focus', () => {
+            if (window.queueFocusEvent) window.queueFocusEvent(true);
+        });
+
+        // Framebuffer resize
+        function updateFramebufferSize() {
+            if (window.queueFramebufferSizeEvent) {
+                const dpr = window.devicePixelRatio || 1;
+                window.queueFramebufferSizeEvent(
+                    Math.floor(canvas.clientWidth * dpr),
+                    Math.floor(canvas.clientHeight * dpr)
+                );
+            }
+        }
+        window.addEventListener('resize', updateFramebufferSize);
+        updateFramebufferSize();
+
+        console.log('[bootstrap] InputBridge initialized');
+    }
+
+    function getMods(e) {
+        return (e.ctrlKey ? 2 : 0) | (e.shiftKey ? 1 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+    }
+
+    function mapMouseButton(button) {
+        // Maps DOM button to GLFW mouse button
+        // 0=left, 1=middle, 2=right, 3=back, 4=forward
+        switch (button) {
+            case 0: return 0;  // left
+            case 1: return 2;  // middle
+            case 2: return 1;  // right
+            case 3: return 3;  // back
+            case 4: return 4;  // forward
+            default: return button;
+        }
+    }
+
     if (window.webmcBootMode === 'mcMain') {
         ensureWebAudioState();
         installStateBeaconObserver();
@@ -666,6 +763,8 @@
         recordStartup('teavm-main:begin', 'boot=' + window.webmcBootMode);
         window.main([], function () {
             recordStartup('teavm-main:callback', 'boot=' + window.webmcBootMode);
+            // Set up input bridge after TeaVM is initialized
+            setupInputBridge();
             if (window.webmcBootMode !== 'mcMain') {
                 setTimeout(hideBoot, 250);
             }

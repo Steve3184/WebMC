@@ -273,19 +273,42 @@ const $canvas = document.getElementById('canvas');
 
 ### Input Handling
 
-The `CanvasWindowBackend` class bridges DOM events to LWJGL-style callbacks:
+The `InputBridge` class bridges DOM events to LWJGL-style callbacks:
 
 ```
-DOM Event          │  Mapping                 │  LWJGL Callback
+DOM Event          │  InputBridge (JS)         │  LWJGL Callback
 ───────────────────┼──────────────────────────┼────────────────────
-keydown            │  glfwKey(e)              │  GLFWKeyCallback
-keyup              │  glfwKey(e)              │  GLFWKeyCallback
-keypress           │  e.key.codePointAt(0)    │  GLFWCharCallback
-mousemove          │  movementX/Y or delta    │  GLFWCursorPosCallback
-mousedown          │  mapMouseButton()        │  GLFWMouseButtonCallback
-mouseup            │  mapMouseButton()        │  GLFWMouseButtonCallback
-wheel              │  -Math.sign(delta)       │  GLFWScrollCallback
-contextmenu        │  preventDefault()        │  (suppressed)
+keydown            │  queueKeyEvent()          │  GLFWKeyCallback
+keyup              │  queueKeyEvent()          │  GLFWKeyCallback
+keypress           │  queueCharEvent()         │  GLFWCharCallback
+mousemove          │  queueCursorPosEvent()    │  GLFWCursorPosCallback
+mousedown          │  queueMouseButtonEvent()  │  GLFWMouseButtonCallback
+mouseup            │  queueMouseButtonEvent()  │  GLFWMouseButtonCallback
+wheel              │  queueScrollEvent()       │  GLFWScrollCallback
+focus/blur         │  queueFocusEvent()        │  GLFWWindowFocusCallback
+resize             │  queueFramebufferSizeEvent│  GLFWFramebufferSizeCallback
+```
+
+Architecture:
+```
+JavaScript DOM Events
+        │
+        ▼
+┌───────────────────┐
+│  InputBridge.js   │  (bootstrap.js - setupInputBridge)
+│  queue*Event()    │
+└─────────┬─────────┘
+          │ @Export methods
+          ▼
+┌───────────────────┐
+│  InputBridge.java │  (teavm/input/InputBridge.java)
+│  Event Queue      │
+└─────────┬─────────┘
+          │ pollEvents()
+          ▼
+┌───────────────────┐
+│  GLFW Callbacks   │  (teavm/callback/*.java)
+└───────────────────┘
 ```
 
 ### Pointer Lock

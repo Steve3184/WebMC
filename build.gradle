@@ -186,7 +186,7 @@ dependencies {
 
 teavm {
     all {
-        mainClass = 'top.steve3184.webmc.web.WebMain'
+        mainClass = 'net.minecraft.client.main.WebMain'
         outOfProcess = true
         processMemory = 8192
     }
@@ -198,6 +198,18 @@ teavm {
         obfuscated = false
         strict = false
         moduleType = org.teavm.gradle.api.JSModuleType.NONE
+    }
+}
+
+// Configure TeaVM to use custom source directories
+tasks.named('compileTeavmJava').configure {
+    // Add the webmc TeaVM source files
+    source = fileTree('src/main/java') {
+        include '**/*.java'
+    }
+    // Add lwjgl-stubs source files
+    source += fileTree('../addons/lwjgl-stubs/src/main/java') {
+        include '**/*.java'
     }
 }
 
@@ -254,10 +266,10 @@ task compileJdkStubsPlugin(type: JavaCompile) {
     targetCompatibility = '21'
 }
 
-def lwjglStubsRoot = file("$rootDir/../addons/lwjgl-stubs")
+def lwjglStubsSrcRoot = file("$rootDir/../addons/lwjgl-stubs/src/main/java")
 def lwjglStubsClasses = file("$buildDir/lwjgl-stubs-classes")
 task compileLwjglStubs(type: JavaCompile) {
-    source = fileTree("$lwjglStubsRoot/src") { include '**/*.java' }
+    source = fileTree(lwjglStubsSrcRoot) { include '**/*.java' }
     destinationDirectory = lwjglStubsClasses
     classpath = files()
     sourceCompatibility = '21'
@@ -311,8 +323,10 @@ tasks.named('generateJavaScript').configure {
     }
 }
 
-tasks.named('compileJava').configure {
+
+compileJava {
     dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, compileLwjglStubs
+    classpath += files(lwjglStubsClasses)
 }
 
 tasks.register('assembleWebRun') {
@@ -326,15 +340,17 @@ tasks.register('assembleWebRun') {
             into dest
             include '*.js'
         }
-        // Copy web resources (index.html, bootstrap.js, vfs.js, socket.js, game.vfs)
-        // Exclude game.js - the real one comes from TeaVM output
-        copy {
-            from "$projectDir/../addons/web"
-            into dest
-            include '*.html'
-            include '*.js'
-            include '*.vfs'
-            exclude 'game.js'
+        // Copy web resources (index.html, bootstrap.js, vfs.js, game.vfs) from project root addons/web
+        def webSrc = file("$rootDir/../addons/web")
+        if (webSrc.exists()) {
+            copy {
+                from webSrc
+                into dest
+                include '*.html'
+                include '*.js'
+                include '*.vfs'
+                exclude 'game.js'  // Use TeaVM's game.js
+            }
         }
     }
 }
