@@ -4,7 +4,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const PORT = process.argv[2] || 8080;
-const STATIC_DIR = path.join(__dirname, '..', 'work', 'build', 'web-run');
+const STATIC_DIR = path.join(__dirname, '..', 'build', 'web-run');
 
 const MIME_TYPES = {
   '.html': 'text/html',
