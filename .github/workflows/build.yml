@@ -18,6 +18,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create .gitmodules
+        run: |
+          cat << 'EOF' > .gitmodules
+          [submodule "work"]
+            path = work
+            active = true
+            url = https://github.com/Hexeption/MCP-Reborn.git
+            branch = 1.21
+          EOF
+
       - name: Checkout submodules
         run: |
           git submodule update --init --recursive
@@ -67,6 +77,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Create .gitmodules
+        run: |
+          cat << 'EOF' > .gitmodules
+          [submodule "work"]
+            path = work
+            active = true
+            url = https://github.com/Hexeption/MCP-Reborn.git
+            branch = 1.21
+          EOF
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
