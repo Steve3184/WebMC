@@ -1,0 +1,29 @@
+package java.io;
+
+public class ObjectInputStream extends InputStream implements ObjectInput {
+    private final InputStream in;
+    public ObjectInputStream(InputStream in) { this.in = in; }
+    protected ObjectInputStream() { this.in = null; }
+
+    @Override public int read() throws IOException { return in == null ? -1 : in.read(); }
+    @Override public int read(byte[] b, int off, int len) throws IOException { return in == null ? -1 : in.read(b, off, len); }
+    @Override public Object readObject() throws ClassNotFoundException { throw new ClassNotFoundException("ObjectInputStream not supported in browser"); }
+    public Object readUnshared() throws ClassNotFoundException { return readObject(); }
+
+    @Override public boolean readBoolean() throws IOException { return in.read() != 0; }
+    @Override public byte readByte() throws IOException { return (byte) in.read(); }
+    @Override public int readUnsignedByte() throws IOException { return in.read() & 0xff; }
+    @Override public char readChar() throws IOException { return (char) in.read(); }
+    @Override public short readShort() throws IOException { return (short) in.read(); }
+    @Override public int readUnsignedShort() throws IOException { return in.read() & 0xffff; }
+    @Override public int readInt() throws IOException { return in.read(); }
+    @Override public long readLong() throws IOException { return in.read(); }
+    @Override public float readFloat() throws IOException { return 0F; }
+    @Override public double readDouble() throws IOException { return 0D; }
+    @Override public void readFully(byte[] b) {}
+    @Override public void readFully(byte[] b, int off, int len) {}
+    @Override public int skipBytes(int n) { return 0; }
+    @Override @SuppressWarnings("deprecation") public String readLine() { return null; }
+    @Override public String readUTF() { return ""; }
+    @Override public void close() throws IOException { if (in != null) in.close(); }
+}

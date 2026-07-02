@@ -1,0 +1,83 @@
+package org.lwjgl.openal;
+
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+
+/** Stub of OpenAL AL10. All sound calls no-op until phase 5 (Web Audio). */
+public final class AL10 {
+    public static final int AL_NONE = 0;
+    public static final int AL_FALSE = 0;
+    public static final int AL_TRUE = 1;
+
+    public static final int AL_PLAYING = 0x1012;
+    public static final int AL_STOPPED = 0x1014;
+    public static final int AL_PAUSED  = 0x1013;
+    public static final int AL_INITIAL = 0x1011;
+
+    public static final int AL_SOURCE_STATE  = 0x1010;
+    public static final int AL_BUFFER        = 0x1009;
+    public static final int AL_GAIN          = 0x100A;
+    public static final int AL_PITCH         = 0x1003;
+    public static final int AL_POSITION      = 0x1004;
+    public static final int AL_VELOCITY      = 0x1006;
+    public static final int AL_DIRECTION     = 0x1005;
+    public static final int AL_LOOPING       = 0x1007;
+    public static final int AL_REFERENCE_DISTANCE = 0x1020;
+    public static final int AL_MAX_DISTANCE  = 0x1023;
+    public static final int AL_ROLLOFF_FACTOR = 0x1021;
+    public static final int AL_SOURCE_RELATIVE = 0x202;
+    public static final int AL_FORMAT_MONO16   = 0x1101;
+    public static final int AL_FORMAT_STEREO16 = 0x1103;
+
+    public static final int AL_NO_ERROR        = 0;
+    public static final int AL_INVALID_NAME    = 0xA001;
+    public static final int AL_INVALID_ENUM    = 0xA002;
+    public static final int AL_INVALID_VALUE   = 0xA003;
+    public static final int AL_INVALID_OPERATION = 0xA004;
+    public static final int AL_OUT_OF_MEMORY   = 0xA005;
+
+    public static int  alGetError() { return AL_NO_ERROR; }
+    public static int  alGenSources() { return 0; }
+    public static int  alGenBuffers() { return 0; }
+    public static void alGenSources(IntBuffer s) {}
+    public static void alGenSources(int[] s) {}
+    public static void alGenBuffers(IntBuffer s) {}
+    public static void alGenBuffers(int[] s) {}
+    public static void alDeleteSources(int s) {}
+    public static void alDeleteSources(IntBuffer s) {}
+    public static void alDeleteSources(int[] s) {}
+    public static void alDeleteBuffers(int s) {}
+    public static void alDeleteBuffers(IntBuffer s) {}
+    public static void alDeleteBuffers(int[] s) {}
+    public static void alSourcePlay(int s) {}
+    public static void alSourceStop(int s) {}
+    public static void alSourcePause(int s) {}
+    public static void alSourceRewind(int s) {}
+    public static void alSourcef(int s, int param, float v) {}
+    public static void alSourcei(int s, int param, int v) {}
+    public static void alSource3f(int s, int param, float a, float b, float c) {}
+    public static void alSourcefv(int s, int param, float[] v) {}
+    public static void alSourcefv(int s, int param, java.nio.FloatBuffer v) {}
+    public static int  alGetSourcei(int s, int param) { return 0; }
+    public static float alGetSourcef(int s, int param) { return 0f; }
+    public static void alListenerf(int param, float v) {}
+    public static void alListener3f(int param, float a, float b, float c) {}
+    public static void alListenerfv(int param, float[] v) {}
+    public static void alListenerfv(int param, java.nio.FloatBuffer v) {}
+    public static void alBufferData(int buf, int format, ByteBuffer data, int freq) {}
+    public static void alSourceQueueBuffers(int s, int[] bufs) {}
+    public static void alSourceQueueBuffers(int s, IntBuffer bufs) {}
+    public static void alSourceQueueBuffers(int s, int buf) {}
+    public static int  alSourceUnqueueBuffers(int s) { return 0; }
+    public static void alSourceUnqueueBuffers(int s, IntBuffer out) {}
+    public static void alSourceUnqueueBuffers(int s, int[] out) {}
+    public static String alGetString(int param) { return ""; }
+    public static boolean alIsExtensionPresent(CharSequence ext) { return false; }
+    public static void alEnable(int cap) {}
+    public static void alDisable(int cap) {}
+    public static void alDistanceModel(int model) {}
+    public static void alDopplerFactor(float v) {}
+    public static void alSpeedOfSound(float v) {}
+
+    private AL10() {}
+}

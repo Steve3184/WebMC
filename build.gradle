@@ -208,12 +208,12 @@ tasks.named('compileTeavmJava').configure {
         include '**/*.java'
     }
     // Add lwjgl-stubs source files
-    source += fileTree('../addons/lwjgl-stubs/src/main/java') {
+    source += fileTree('addons/lwjgl-stubs/src/main/java') {
         include '**/*.java'
     }
 }
 
-def jdkStubsRoot    = file("$rootDir/../addons/jdk-stubs")
+def jdkStubsRoot    = file("$rootDir/addons/jdk-stubs")
 def jdkStubsClasses = file("$buildDir/jdk-stubs-classes")
 def jdkPluginClasses = file("$buildDir/jdk-stubs-plugin-classes")
 def jdkPluginJar    = file("$buildDir/jdk-stubs-plugin.jar")
@@ -266,7 +266,7 @@ task compileJdkStubsPlugin(type: JavaCompile) {
     targetCompatibility = '21'
 }
 
-def lwjglStubsSrcRoot = file("$rootDir/../addons/lwjgl-stubs/src/main/java")
+def lwjglStubsSrcRoot = file("$rootDir/addons/lwjgl-stubs/src/main/java")
 def lwjglStubsClasses = file("$buildDir/lwjgl-stubs-classes")
 task compileLwjglStubs(type: JavaCompile) {
     source = fileTree(lwjglStubsSrcRoot) { include '**/*.java' }
@@ -341,7 +341,7 @@ tasks.register('assembleWebRun') {
             include '*.js'
         }
         // Copy web resources (index.html, bootstrap.js, vfs.js, game.vfs) from project root addons/web
-        def webSrc = file("$rootDir/../addons/web")
+        def webSrc = file("$rootDir/addons/web")
         if (webSrc.exists()) {
             copy {
                 from webSrc

@@ -1,0 +1,31 @@
+package java.lang.invoke;
+
+public final class MethodHandles {
+    private MethodHandles() {}
+    public static Lookup lookup() { return new Lookup(); }
+    public static Lookup publicLookup() { return new Lookup(); }
+    public static Lookup privateLookupIn(Class<?> targetClass, Lookup caller) { return new Lookup(); }
+
+    public static MethodHandle filterReturnValue(MethodHandle target, MethodHandle filter) { return target; }
+    public static MethodHandle constant(Class<?> type, Object value) { return null; }
+    public static MethodHandle dropArguments(MethodHandle target, int pos, Class<?>... valueTypes) { return target; }
+    public static MethodHandle dropArguments(MethodHandle target, int pos, java.util.List<Class<?>> valueTypes) { return target; }
+    public static MethodHandle insertArguments(MethodHandle target, int pos, Object... values) { return target; }
+    public static MethodHandle identity(Class<?> type) { return null; }
+
+    public static class Lookup {
+        Lookup() {}
+        public MethodHandle findStatic(Class<?> refc, String name, MethodType type) { return null; }
+        public MethodHandle findVirtual(Class<?> refc, String name, MethodType type) { return null; }
+        public MethodHandle findSpecial(Class<?> refc, String name, MethodType type, Class<?> specialCaller) { return null; }
+        public MethodHandle findConstructor(Class<?> refc, MethodType type) { return null; }
+        public MethodHandle findGetter(Class<?> refc, String name, Class<?> type) { return null; }
+        public MethodHandle findSetter(Class<?> refc, String name, Class<?> type) { return null; }
+        public MethodHandle unreflect(java.lang.reflect.Method m) { return null; }
+        public MethodHandle unreflectGetter(java.lang.reflect.Field f) { return null; }
+        public MethodHandle unreflectSetter(java.lang.reflect.Field f) { return null; }
+        public Class<?> lookupClass() { return Object.class; }
+        public int lookupModes() { return 0; }
+        public Class<?> findClass(String targetName) { return Object.class; }
+    }
+}

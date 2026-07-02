@@ -1,0 +1,11 @@
+package org.lwjgl.openal;
+
+public final class ALCapabilities {
+    public final boolean OpenAL10 = true;
+    public final boolean OpenAL11 = true;
+    public final boolean AL_EXT_source_distance_model = false;
+    public final boolean AL_EXT_LINEAR_DISTANCE       = false;
+    public final boolean AL_EXT_EXPONENT_DISTANCE     = false;
+    public final boolean AL_SOFT_direct_channels      = false;
+    public final boolean AL_SOFT_loop_points          = false;
+}

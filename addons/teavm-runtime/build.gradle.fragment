@@ -1,0 +1,132 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies { classpath 'org.teavm:teavm-gradle-plugin:0.13.1' }
+}
+
+apply plugin: 'org.teavm'
+
+teavm {
+    all {
+        mainClass = 'top.steve3184.webmc.web.WebMain'
+        optimization = org.teavm.gradle.api.OptimizationLevel.NONE
+        debugInformation = true
+        outOfProcess = true
+        processMemory = 8192
+        fastGlobalAnalysis = false
+    }
+    js {
+        targetFileName = 'game.js'
+        entryPointName = 'main'
+        moduleType = org.teavm.gradle.api.JSModuleType.NONE
+        sourceMap = false
+        obfuscated = false
+        strict = false
+        sourceFilePolicy = org.teavm.gradle.api.SourceFilePolicy.DO_NOTHING
+        addedToWebApp = false
+    }
+}
+
+def jdkStubsRoot = file("$rootDir/../addons/jdk-stubs")
+def jdkStubsClasses = file("$buildDir/jdk-stubs-classes")
+def jdkPluginClasses = file("$buildDir/jdk-stubs-plugin-classes")
+def jdkPluginJar = file("$buildDir/jdk-stubs-plugin.jar")
+
+tasks.register('compileLockStubs', JavaCompile) {
+    source = fileTree("$jdkStubsRoot/locks") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "java.base=$jdkStubsRoot/locks"]
+}
+
+tasks.register('compileSunMiscStubs', JavaCompile) {
+    source = fileTree("$jdkStubsRoot/sun-misc") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "jdk.unsupported=$jdkStubsRoot/sun-misc"]
+    mustRunAfter tasks.named('compileLockStubs')
+}
+
+tasks.register('compileJdkExtraStubs', JavaCompile) {
+    source = fileTree("$jdkStubsRoot/jdk-extra") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "java.base=$jdkStubsRoot/jdk-extra"]
+    mustRunAfter tasks.named('compileSunMiscStubs')
+}
+
+tasks.register('compileJdkExtraThirdpartyStubs', JavaCompile) {
+    source = fileTree("$jdkStubsRoot/jdk-extra-thirdparty") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    mustRunAfter tasks.named('compileJdkExtraStubs')
+}
+
+def teavmPluginClasspath = buildscript.configurations.classpath
+
+tasks.register('compileJdkStubsPlugin', JavaCompile) {
+    source = fileTree("$jdkStubsRoot/plugin-src") { include '**/*.java' }
+    destinationDirectory = jdkPluginClasses
+    classpath = teavmPluginClasspath
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+}
+
+tasks.register('generateStubIndex') {
+    dependsOn tasks.named('compileLockStubs'), tasks.named('compileSunMiscStubs'), tasks.named('compileJdkExtraStubs'), tasks.named('compileJdkExtraThirdpartyStubs')
+    def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
+    outputs.file(indexFile)
+    doLast {
+        indexFile.parentFile.mkdirs()
+        def skipExact = ['java/lang/Thread.class'] as Set
+        def lines = []
+        fileTree(jdkStubsClasses).matching { include '**/*.class' }.each { f ->
+            def rel = jdkStubsClasses.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, (char)'/')
+            if (!skipExact.contains(rel)) lines << rel
+        }
+        indexFile.text = lines.sort().join('\n') + '\n'
+        println "[generateStubIndex] wrote ${lines.size()} entries"
+    }
+}
+
+tasks.register('packageJdkStubsPlugin', Jar) {
+    dependsOn tasks.named('compileLockStubs'), tasks.named('compileSunMiscStubs'), tasks.named('compileJdkExtraStubs'), tasks.named('compileJdkExtraThirdpartyStubs'), tasks.named('compileJdkStubsPlugin'), tasks.named('generateStubIndex')
+    archiveFileName = 'jdk-stubs-plugin.jar'
+    destinationDirectory = file("$buildDir")
+    from(jdkPluginClasses)
+    from(file("$jdkStubsRoot/plugin-meta"))
+    from(file("$buildDir/jdk-stubs-meta"))
+    from(jdkStubsClasses) {
+        into 'shadow-classes'
+        exclude 'java/lang/Thread.class'
+    }
+}
+
+tasks.named('generateJavaScript') {
+    dependsOn tasks.named('packageJdkStubsPlugin')
+    daemonClasspath.from(jdkPluginJar)
+    doFirst {
+        def previous = System.getenv('JAVA_TOOL_OPTIONS') ?: ''
+        if (!previous.contains('-Xss')) {
+            org.gradle.internal.nativeintegration.ProcessEnvironment processEnvironment =
+                services.get(org.gradle.internal.nativeintegration.ProcessEnvironment)
+            processEnvironment.setEnvironmentVariable('JAVA_TOOL_OPTIONS', (previous + ' -Xss32m').trim())
+        }
+    }
+}
+
+tasks.register('assembleWebRun', Copy) {
+    dependsOn tasks.named('generateJavaScript')
+    from "$buildDir/generated/teavm/js"
+    into "$buildDir/web-run"
+}
