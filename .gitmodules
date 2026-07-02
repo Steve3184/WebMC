@@ -1,3 +1,5 @@
 [submodule "work"]
+	path = work
 	active = true
 	url = https://github.com/Hexeption/MCP-Reborn.git
+	branch = 1.21
