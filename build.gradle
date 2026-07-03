@@ -211,6 +211,10 @@ tasks.named('compileTeavmJava').configure {
     source += fileTree('addons/lwjgl-stubs/src/main/java') {
         include '**/*.java'
     }
+    // Add blaze3d-impl source files (contains com.mojang.logging)
+    source += fileTree('addons/blaze3d-impl/src/main/java') {
+        include '**/*.java'
+    }
 }
 
 def jdkStubsRoot    = file("$rootDir/addons/jdk-stubs")
@@ -327,6 +331,8 @@ tasks.named('generateJavaScript').configure {
 compileJava {
     dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, compileLwjglStubs
     classpath += files(lwjglStubsClasses)
+    // Add blaze3d-impl source files (contains com.mojang.logging)
+    source += fileTree('addons/blaze3d-impl/src/main/java') { include '**/*.java' }
 }
 
 tasks.register('assembleWebRun') {

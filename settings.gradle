@@ -2,3 +2,9 @@ rootProject.name = 'mcp-reborn'
 
 include ':mcp'
 project(":mcp").projectDir = file("projects/mcp")
+
+include ':addons:blaze3d-impl'
+include ':addons:lwjgl-stubs'
+include ':addons:jdk-stubs'
+include ':addons:teavm-runtime'
+include ':addons:web'
