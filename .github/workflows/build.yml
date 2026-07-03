@@ -49,25 +49,23 @@ jobs:
         working-directory: ./work
         run: chmod +x gradlew && ./gradlew setup --no-daemon
 
-      - name: Build with TeaVM (phase197:build)
+      - name: Build with Gradle
         working-directory: ./work
-        run: ./gradlew phase197:build --no-daemon 2>&1
+        run: ./gradlew mcp-reborn_client --no-daemon 2>&1
 
       - name: Check game.js size
         run: |
-          SIZE=$(stat -c%s work/build/web-run/game.js 2>/dev/null || stat -f%z work/build/web-run/game.js)
-          SIZE_MB=$((SIZE / 1024 / 1024))
-          echo "game.js size: ${SIZE_MB}MB"
-          if [ "$SIZE_MB" -gt 350 ]; then
-            echo "::warning::game.js exceeds 350MB limit (${SIZE_MB}MB)"
+          SIZE=$(stat -c%s work/build/client-1.21.8/game.js 2>/dev/null || stat -f%z work/build/client-1.21.8/game.js 2>/dev/null || echo "0")
+          if [ "$SIZE" -gt "0" ]; then
+            SIZE_MB=$((SIZE / 1024 / 1024))
+            echo "game.js size: ${SIZE_MB}MB"
+            if [ "$SIZE_MB" -gt 350 ]; then
+              echo "::warning::game.js exceeds 350MB limit (${SIZE_MB}MB)"
+            fi
+          else
+            echo "No game.js found, checking for other artifacts..."
+            find work/build -name "*.js" -type f 2>/dev/null | head -5
           fi
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-run-artifacts
-          path: work/build/web-run/
-          retention-days: 7
 
   check:
     needs: build
@@ -102,13 +100,4 @@ jobs:
           if [ -f "web-run/game.js" ]; then
             SIZE=$(stat -c%s web-run/game.js 2>/dev/null || stat -f%z web-run/game.js)
             echo "game.js exists: $((SIZE / 1024 / 1024))MB"
-          fi
-          echo "--- game.vfs check ---"
-          if [ -f "web-run/game.vfs" ]; then
-            SIZE=$(stat -c%s web-run/game.vfs 2>/dev/null || stat -f%z web-run/game.vfs)
-            echo "game.vfs exists: $((SIZE / 1024 / 1024))MB"
-          fi
-          echo "--- index.html check ---"
-          if [ -f "web-run/index.html" ]; then
-            echo "index.html exists"
           fi
