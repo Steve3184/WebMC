@@ -1,0 +1,18 @@
+package top.steve3184.webmc.web;
+
+/**
+ * Shadow marker for TeaVM compilation. This class is referenced by
+ * shadowed code to ensure the shadowing transformation is applied.
+ * The touch() method is intentionally empty.
+ */
+public final class WebMcShadowMarker {
+    /**
+     * Marker method called by shadowed code.
+     * Does nothing - exists only to trigger TeaVM's shadow processing.
+     */
+    public static void touch() {
+        // no-op - this method exists only to trigger shadow processing
+    }
+
+    private WebMcShadowMarker() {} // no instance
+}
