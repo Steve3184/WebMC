@@ -1,0 +1,15 @@
+# 代码所有者
+
+# 默认所有者
+*       @Steve3184
+
+# 核心模块
+/addons/lwjgl-stubs/    @Steve3184
+/addons/teavm-runtime/  @Steve3184
+/addons/web/            @Steve3184
+
+# 构建配置
+/scripts/               @Steve3184
+.github/                @Steve3184
+build.gradle            @Steve3184
+gradle.properties       @Steve3184

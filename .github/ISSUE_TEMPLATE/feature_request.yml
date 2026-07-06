@@ -1,0 +1,64 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ 功能请求
+
+        请详细描述你希望添加的功能。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 功能摘要
+      placeholder: 简要描述你想要的特性
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解决的问题
+      description: 这个功能将解决什么问题？
+      placeholder: 描述你遇到的痛点或场景
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的解决方案
+      description: 你希望这个功能如何工作？
+      placeholder: 描述你期望的实现方式
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: 你考虑过其他解决方案吗？
+      placeholder: 描述你考虑过的其他方法
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - Low (低 - 锦上添花)
+        - Medium (中 - 值得添加)
+        - High (高 - 重要功能)
+        - Critical (关键 - 阻塞性问题)
+
+  - type: checkboxes
+    id: context
+    attributes:
+      label: 相关上下文
+      options:
+        - label: 这是一个新功能请求
+        - label: 这是对现有功能的改进
+        - label: 这与某个已关闭的 Issue 相关 (请在下方链接)
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 额外信息
+      description: 任何其他上下文、截图或参考链接
