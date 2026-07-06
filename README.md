@@ -1,5 +1,10 @@
 # WebMC - Minecraft in Your Browser
 
+[![Build Status](https://github.com/Steve3184/WebMC/actions/workflows/build.yml/badge.svg)](https://github.com/Steve3184/WebMC/actions)
+[![Java Version](https://img.shields.io/badge/Java-21+-blue.svg)](https://adoptium.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.8-green.svg)](https://www.minecraft.net/)
+[![License](https://img.shields.io/badge/License-MCP--Reborn-orange.svg)](https://github.com/Hexeption/MCP-Reborn)
+
 将 Minecraft 1.21.8 编译为 WebAssembly，在浏览器中运行。
 
 ![WebMC](webmc-preview.png)
