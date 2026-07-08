@@ -31,14 +31,23 @@ jobs:
     - name: Setup
       working-directory: ./work
       env:
-        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx6g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g"
-      run: chmod +x gradlew && ./gradlew setup --no-configuration-cache --no-build-cache --no-daemon --refresh-dependencies
+        JAVA_OPTS: "-Xmx3g"
+        GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
+      run: |
+        chmod +x gradlew
+        # Optimize memory settings for CI with limited RAM (7GB total)
+        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx3g -XX:+UseSerialGC/' gradle.properties
+        sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
+        sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
+        cat gradle.properties
+        ./gradlew setup --no-daemon --no-build-cache
 
     - name: Build with Gradle
       working-directory: ./work
       env:
-        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx6g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g"
-      run: chmod +x gradlew && ./gradlew generateJavaScript --no-configuration-cache --no-build-cache --no-daemon --refresh-dependencies
+        JAVA_OPTS: "-Xmx3g"
+        GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
+      run: ./gradlew generateJavaScript --no-daemon --no-build-cache
 
     - name: Upload WebMC build artifacts
       if: success()
