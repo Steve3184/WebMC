@@ -40,7 +40,10 @@
     })();
 
     const params = new URLSearchParams(window.location.search);
-    const modeFromUrl = params.get('boot');
+    // SECURITY: Validate boot mode parameter against allowlist
+    const rawMode = params.get('boot');
+    const allowedModes = ['webSafeBoot', 'mcMain'];
+    const modeFromUrl = allowedModes.includes(rawMode) ? rawMode : null;
     const presetBootMode = typeof window.webmcBootMode === 'string' ? window.webmcBootMode : null;
     const resolvedBootMode =
         modeFromUrl === 'webSafeBoot' || modeFromUrl === 'mcMain'
@@ -554,6 +557,10 @@
     function inspectStateUrl(value) {
         try {
             const url = new URL(String(value), window.location.href);
+            // SECURITY: Validate URL origin to prevent XSS via state beacons
+            if (url.origin !== window.location.origin) {
+                return false;
+            }
             if (url.pathname !== '/__webmc_state') {
                 return false;
             }
@@ -564,6 +571,8 @@
             handleWebMcState(url.searchParams.get('source') || '', JSON.parse(raw));
             return true;
         } catch (e) {
+            // SECURITY: JSON.parse failed - possibly malformed or malicious input
+            console.warn('[bootstrap] inspectStateUrl: JSON.parse failed:', e);
             // Some runtime beacons are intentionally truncated for URL size. The
             // authoritative same-page state is still available without parsing.
             if (window.__webmcState) {
@@ -648,17 +657,29 @@
         // Initialize Java side
         window.initialize();
 
+        // Input state tracking for polling methods (glfwGetKey, glfwGetMouseButton)
+        var keyState = {};
+        var mouseButtonState = {};
+
         const canvas = $canvas;
 
         // Key events
         canvas.addEventListener('keydown', (e) => {
+            var key = e.keyCode || e.which;
+            // SECURITY: Validate keyCode range
+            if (key < 0 || key > 65535 || !Number.isFinite(key)) return;
+            keyState[key] = true;
             if (window.queueKeyEvent) {
-                window.queueKeyEvent(e.keyCode || e.which, 0, 1, getMods(e));
+                window.queueKeyEvent(key, 0, 1, getMods(e));
             }
         }, { passive: true });
         canvas.addEventListener('keyup', (e) => {
+            var key = e.keyCode || e.which;
+            // SECURITY: Validate keyCode range
+            if (key < 0 || key > 65535 || !Number.isFinite(key)) return;
+            keyState[key] = false;
             if (window.queueKeyEvent) {
-                window.queueKeyEvent(e.keyCode || e.which, 0, 0, getMods(e));
+                window.queueKeyEvent(key, 0, 0, getMods(e));
             }
         }, { passive: true });
         canvas.addEventListener('keypress', (e) => {
@@ -669,20 +690,35 @@
 
         // Mouse button events
         canvas.addEventListener('mousedown', (e) => {
+            var button = e.button;
+            // SECURITY: Validate mouse button range (0-7)
+            if (button < 0 || button > 7 || !Number.isFinite(button)) return;
+            button = mapMouseButton(button);
+            mouseButtonState[button] = true;
             if (window.queueMouseButtonEvent) {
-                window.queueMouseButtonEvent(mapMouseButton(e.button), 1, getMods(e));
+                window.queueMouseButtonEvent(button, 1, getMods(e));
             }
         });
         canvas.addEventListener('mouseup', (e) => {
+            var button = e.button;
+            // SECURITY: Validate mouse button range (0-7)
+            if (button < 0 || button > 7 || !Number.isFinite(button)) return;
+            button = mapMouseButton(button);
+            mouseButtonState[button] = false;
             if (window.queueMouseButtonEvent) {
-                window.queueMouseButtonEvent(mapMouseButton(e.button), 0, getMods(e));
+                window.queueMouseButtonEvent(button, 0, getMods(e));
             }
         });
 
         // Mouse move events
         canvas.addEventListener('mousemove', (e) => {
+            var x = e.clientX;
+            var y = e.clientY;
+            // SECURITY: Validate cursor position bounds
+            var maxCoord = 65536;
+            if (!Number.isFinite(x) || !Number.isFinite(y) || x < -maxCoord || x > maxCoord || y < -maxCoord || y > maxCoord) return;
             if (window.queueCursorPosEvent) {
-                window.queueCursorPosEvent(e.clientX, e.clientY);
+                window.queueCursorPosEvent(x, y);
             }
         }, { passive: true });
 
@@ -690,17 +726,31 @@
         canvas.addEventListener('wheel', (e) => {
             if (window.queueScrollEvent) {
                 e.preventDefault();
-                window.queueScrollEvent(-Math.sign(e.deltaX), -Math.sign(e.deltaY));
+                var x = -Math.sign(e.deltaX || 0);
+                var y = -Math.sign(e.deltaY || 0);
+                // SECURITY: Validate scroll values are finite
+                if (Number.isFinite(x) && Number.isFinite(y)) {
+                    window.queueScrollEvent(x, y);
+                }
             }
         }, { passive: false });
 
         // Focus events
         window.addEventListener('blur', () => {
+            // Clear all input states on blur
+            keyState = {};
+            mouseButtonState = {};
             if (window.queueFocusEvent) window.queueFocusEvent(false);
         });
         window.addEventListener('focus', () => {
             if (window.queueFocusEvent) window.queueFocusEvent(true);
         });
+
+        // Expose input state for Java polling methods (glfwGetKey, glfwGetMouseButton)
+        window.__webmcInputBridge = {
+            getKeyState: function(key) { return !!keyState[key]; },
+            getMouseButtonState: function(button) { return !!mouseButtonState[button]; }
+        };
 
         // Framebuffer resize
         function updateFramebufferSize() {
@@ -801,19 +851,135 @@
         }
     }
 
-    function loadGameScript() {
-        const script = document.createElement('script');
-        script.src = 'game.js?t=' + 1782803944862;
-        script.async = true;
+    async function loadGameScript() {
+        const useCompression = false; // TODO: enable after verifying DecompressionStream support
+        const scriptUrl = useCompression ? 'game.js.br' : 'game.js';
+        const cacheBuster = 1782803944862;
+
         setBootStatus('Loading game.js...', 20);
-        recordStartup('game-js:request', script.src);
-        script.onload = () => {
-            recordStartup('game-js:load', script.src);
-            setBootStatus('Starting game...', 25);
-            runTeaVmMain();
-        };
-        script.onerror = () => fatal('Failed to load game.js.');
-        document.head.appendChild(script);
+        recordStartup('game-js:request', scriptUrl);
+
+        try {
+            let scriptContent;
+
+            if (useCompression && typeof DecompressionStream !== 'undefined') {
+                // Try to load compressed .br file with streaming decompression
+                try {
+                    setBootStatus('Loading compressed game.js...', 20);
+                    const response = await fetch(`${scriptUrl}?t=${cacheBuster}`, {
+                        credentials: 'same-origin'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const totalSize = parseInt(response.headers.get('content-length') || '0', 10);
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    let receivedSize = 0;
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        receivedSize += value.length;
+                        if (totalSize > 0) {
+                            const progress = 20 + Math.floor((receivedSize / totalSize) * 15);
+                            setBootStatus(`Loading game.js... ${Math.floor((receivedSize / 1024 / 1024))}MB`, progress);
+                        }
+                    }
+
+                    const allChunks = new Uint8Array(receivedSize);
+                    let position = 0;
+                    for (const chunk of chunks) {
+                        allChunks.set(chunk, position);
+                        position += chunk.length;
+                    }
+
+                    // Decompress using Brotli DecompressionStream
+                    const ds = new DecompressionStream('br');
+                    const decompressedStream = allChunks.pipe(ds);
+                    const decompressedReader = decompressedStream.getReader();
+                    const decompressedChunks = [];
+                    let decompressedSize = 0;
+
+                    while (true) {
+                        const { done, value } = await decompressedReader.read();
+                        if (done) break;
+                        decompressedChunks.push(value);
+                        decompressedSize += value.length;
+                    }
+
+                    // Combine decompressed chunks
+                    const totalDecompressed = new Uint8Array(decompressedSize);
+                    position = 0;
+                    for (const chunk of decompressedChunks) {
+                        totalDecompressed.set(chunk, position);
+                        position += chunk.length;
+                    }
+
+                    scriptContent = new TextDecoder().decode(totalDecompressed);
+                    recordStartup('game-js:decompressed', `from ${receivedSize} to ${decompressedSize} bytes`);
+                } catch (decompressErr) {
+                    console.warn('[bootstrap] Brotli decompression failed, falling back to uncompressed:', decompressErr);
+                    // Fallback to uncompressed
+                    scriptContent = null;
+                }
+            } else {
+                // Load uncompressed file directly
+                scriptContent = null;
+            }
+
+            if (scriptContent) {
+                // Execute from memory (already decompressed)
+                setBootStatus('Executing game.js...', 35);
+                const blob = new Blob([scriptContent], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+
+                recordStartup('game-js:load', scriptUrl + ' (decompressed)');
+                setBootStatus('Starting game...', 25);
+
+                // Execute the script
+                const script = document.createElement('script');
+                script.src = blobUrl;
+                script.async = true;
+                script.onload = () => {
+                    URL.revokeObjectURL(blobUrl);
+                    runTeaVmMain();
+                };
+                script.onerror = () => {
+                    URL.revokeObjectURL(blobUrl);
+                    fatal('Failed to execute game.js.');
+                };
+                document.head.appendChild(script);
+            } else {
+                // Fallback: load uncompressed file the traditional way
+                const script = document.createElement('script');
+                script.src = `game.js?t=${cacheBuster}`;
+                script.async = true;
+                script.onload = () => {
+                    recordStartup('game-js:load', script.src);
+                    setBootStatus('Starting game...', 25);
+                    runTeaVmMain();
+                };
+                script.onerror = () => fatal('Failed to load game.js.');
+                document.head.appendChild(script);
+            }
+        } catch (err) {
+            console.error('[bootstrap] loadGameScript error:', err);
+            // Fallback to traditional load
+            const script = document.createElement('script');
+            script.src = `game.js?t=${cacheBuster}`;
+            script.async = true;
+            script.onload = () => {
+                recordStartup('game-js:load', script.src);
+                setBootStatus('Starting game...', 25);
+                runTeaVmMain();
+            };
+            script.onerror = () => fatal('Failed to load game.js.');
+            document.head.appendChild(script);
+        }
     }
 
     async function initializeAndLoadGame() {
