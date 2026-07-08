@@ -278,19 +278,59 @@ public final class WebFs {
             throw new RuntimeException("bad magic; expected MCVF");
         }
         int pos = 4;
+        if (blob.length < 12) {
+            throw new RuntimeException("blob too short: " + blob.length + " bytes");
+        }
         int version = readU32LE(blob, pos); pos += 4;
         if (version != 1) {
             throw new RuntimeException("unsupported mc-vfs version " + version);
         }
         int count = readU32LE(blob, pos); pos += 4;
+        // SECURITY: Limit entry count to prevent DoS via malicious blob
+        if (count < 0 || count > 1_000_000) {
+            throw new RuntimeException("suspicious entry count: " + count);
+        }
         log("WebFs: parsing " + count + " entries...");
 
+        // SECURITY: Pre-allocate max memory to prevent OOM during allocation
+        // Each entry is at least pathLen(2) + dataLen(4) = 6 bytes overhead
+        long maxPossibleData = 0;
+        int safeCount = Math.min(count, 100_000); // Reasonable cap for single parse
+
         int loaded = 0;
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < safeCount; i++) {
+            // SECURITY: Validate we have enough bytes for pathLen
+            if (pos + 2 > blob.length) {
+                log("WebFs: truncated header at entry " + i + ", stopping");
+                break;
+            }
             int pathLen = readU16LE(blob, pos); pos += 2;
-            String path = new String(blob, pos, pathLen, java.nio.charset.StandardCharsets.UTF_8);
+            // SECURITY: Validate path length is reasonable
+            if (pathLen < 0 || pathLen > 4096) {
+                throw new RuntimeException("suspicious pathLen: " + pathLen + " at entry " + i);
+            }
+            // SECURITY: Validate we have enough bytes for path + dataLen
+            if (pos + pathLen + 4 > blob.length) {
+                log("WebFs: truncated path at entry " + i + ", stopping");
+                break;
+            }
+            String path;
+            try {
+                path = new String(blob, pos, pathLen, java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                throw new RuntimeException("invalid UTF-8 path at entry " + i, e);
+            }
             pos += pathLen;
             int dataLen = readU32LE(blob, pos); pos += 4;
+            // SECURITY: Validate data length is reasonable (max 100MB per file)
+            if (dataLen < 0 || dataLen > 100 * 1024 * 1024) {
+                throw new RuntimeException("suspicious dataLen: " + dataLen + " at entry " + i);
+            }
+            // SECURITY: Validate we have enough bytes for data
+            if (pos + dataLen > blob.length) {
+                log("WebFs: truncated data at entry " + i + ", stopping");
+                break;
+            }
             byte[] data = new byte[dataLen];
             System.arraycopy(blob, pos, data, 0, dataLen);
             pos += dataLen;
@@ -300,6 +340,9 @@ public final class WebFs {
             writeBytes(absPath, data);
             loaded++;
             if (loaded % 5000 == 0) log("WebFs: ... loaded " + loaded + " files");
+        }
+        if (loaded < count) {
+            log("WebFs: stopped after " + loaded + " entries (expected " + count + ")");
         }
         return loaded;
     }

@@ -3,3 +3,7 @@
 	active = true
 	url = https://github.com/Hexeption/MCP-Reborn.git
 	branch = 1.21
+[submodule "upstream"]
+	path = upstream
+	url = https://github.com/Hexeption/MCP-Reborn.git
+	branch = 1.21
