@@ -25,7 +25,7 @@ jobs:
         path: |
           ~/.gradle/caches
           ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('work/gradle/wrapper/gradle-wrapper.properties') }}
+        key: ${{ runner.os }}-gradle-${{ hashFiles('work/**/gradle/wrapper/gradle-wrapper.properties') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
 
@@ -41,12 +41,10 @@ jobs:
     - name: Setup
       working-directory: ./work
       run: chmod +x gradlew && ./gradlew setup
-      continue-on-error: true
 
     - name: Build with Gradle
       working-directory: ./work
       run: chmod +x gradlew && ./gradlew generateJavaScript
-      continue-on-error: true
 
     - name: Upload WebMC build artifacts
       if: success()
