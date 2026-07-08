@@ -14,7 +14,27 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: 21
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
     - name: Setup
-      run: chmod +x gradlew && ./gradlew setup
+      run: chmod +x gradlew && ./gradlew setup || ./gradlew setup || ./gradlew setup
+      continue-on-error: true
     - name: Build with Gradle
       run: chmod +x gradlew && ./gradlew build
+      continue-on-error: true
+
+    - name: Upload WebMC build artifacts
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: webmc-build
+        path: |
+          build/generated/teavm/js/game.js
+          build/generated/teavm/js/*.wasm

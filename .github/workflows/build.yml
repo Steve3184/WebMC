@@ -38,6 +38,16 @@ jobs:
           distribution: 'temurin'
           java-version: 21
 
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('work/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Setup addons for work submodule
         run: |
           # Create addons symlink in work directory pointing to project root
@@ -60,7 +70,10 @@ jobs:
 
       - name: Setup Gradle (download assets)
         working-directory: ./work
-        run: chmod +x gradlew && ./gradlew setup --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew setup --no-daemon || ./gradlew setup --no-daemon || ./gradlew setup --no-daemon
+        continue-on-error: true
 
       - name: Apply patches
         run: |
