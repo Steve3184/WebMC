@@ -31,13 +31,13 @@ jobs:
     - name: Setup
       working-directory: ./work
       env:
-        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx4g"
+        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx6g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g"
       run: chmod +x gradlew && ./gradlew setup --no-configuration-cache --no-build-cache --no-daemon --refresh-dependencies
 
     - name: Build with Gradle
       working-directory: ./work
       env:
-        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx4g"
+        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx6g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g"
       run: chmod +x gradlew && ./gradlew generateJavaScript --no-configuration-cache --no-build-cache --no-daemon --refresh-dependencies
 
     - name: Upload WebMC build artifacts
