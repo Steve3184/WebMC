@@ -96,3 +96,16 @@ jobs:
           name: patches
           path: patches/
           retention-days: 1
+
+      - name: Upload WebMC build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webmc-build
+          path: |
+            work/build/generated/teavm/js/game.js
+            work/build/generated/teavm/js/*.wasm
+            index.html
+            bootstrap.js
+            addons/web/*.js
+            addons/teavm-runtime/src/main/resources/**/*
