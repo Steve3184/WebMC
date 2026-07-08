@@ -1,0 +1,23 @@
+--- a/java\lang\management\ThreadMXBean.java
++++ b/java\lang\management\ThreadMXBean.java
+@@ -0,0 +1,20 @@
++package java.lang.management;
++
++public interface ThreadMXBean {
++    int getThreadCount();
++    int getPeakThreadCount();
++    long getTotalStartedThreadCount();
++    int getDaemonThreadCount();
++    long[] getAllThreadIds();
++    ThreadInfo getThreadInfo(long id);
++    ThreadInfo[] getThreadInfo(long[] ids);
++    ThreadInfo getThreadInfo(long id, int maxDepth);
++    ThreadInfo[] getThreadInfo(long[] ids, int maxDepth);
++    ThreadInfo[] dumpAllThreads(boolean lockedMonitors, boolean lockedSynchronizers);
++    boolean isThreadCpuTimeSupported();
++    boolean isThreadCpuTimeEnabled();
++    long getThreadCpuTime(long id);
++    long getThreadUserTime(long id);
++    long[] findDeadlockedThreads();
++    void resetPeakThreadCount();
++}

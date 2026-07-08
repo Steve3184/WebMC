@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWJoystickCallbackI.java
++++ b/org\lwjgl\glfw\GLFWJoystickCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWJoystickCallbackI {
++    void invoke(int jid, int event);
++}

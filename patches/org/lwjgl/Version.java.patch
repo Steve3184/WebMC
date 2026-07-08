@@ -1,0 +1,14 @@
+--- a/org\lwjgl\Version.java
++++ b/org\lwjgl\Version.java
+@@ -0,0 +1,11 @@
++package org.lwjgl;
++
++/** Stub of {@code org.lwjgl.Version}. Only used to print LWJGL version in debug output. */
++public final class Version {
++    public static final int VERSION_MAJOR = 3;
++    public static final int VERSION_MINOR = 3;
++    public static final int VERSION_REVISION = 3;
++    public static final String BUILD_TYPE = "WebStub";
++    public static String getVersion() { return "3.3.3 WebStub"; }
++    private Version() {}
++}

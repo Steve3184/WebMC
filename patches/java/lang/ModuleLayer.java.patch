@@ -1,0 +1,13 @@
+--- a/java\lang\ModuleLayer.java
++++ b/java\lang\ModuleLayer.java
+@@ -0,0 +1,10 @@
++package java.lang;
++
++public final class ModuleLayer {
++    ModuleLayer() {}
++    public static ModuleLayer boot() { throw new UnsupportedOperationException(); }
++    public java.util.Set<Module> modules() { return java.util.Set.of(); }
++    public java.util.Optional<Module> findModule(String name) { return java.util.Optional.empty(); }
++    public ClassLoader findLoader(String name) { return null; }
++    public java.util.List<ModuleLayer> parents() { return java.util.List.of(); }
++}

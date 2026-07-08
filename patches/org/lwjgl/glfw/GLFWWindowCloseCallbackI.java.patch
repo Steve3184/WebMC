@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWWindowCloseCallbackI.java
++++ b/org\lwjgl\glfw\GLFWWindowCloseCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWWindowCloseCallbackI {
++    void invoke(long window);
++}

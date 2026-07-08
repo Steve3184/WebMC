@@ -1,0 +1,42 @@
+--- a/top\steve3184\webmc\teavm\glfw\WindowBackend.java
++++ b/top\steve3184\webmc\teavm\glfw\WindowBackend.java
+@@ -0,0 +1,39 @@
++package top.steve3184.webmc.teavm.glfw;
++
++/**
++ * Pure-Java interface that GLFW stubs delegate to. Concrete impl in
++ * teavm-runtime wires DOM events, performance.now, navigator.clipboard.
++ */
++public interface WindowBackend {
++    boolean init();
++    void terminate();
++    double time();
++    void setTime(double t);
++
++    long createWindow(int w, int h, String title);
++    void destroyWindow(long handle);
++    void makeContextCurrent(long handle);
++    boolean shouldClose(long handle);
++    void setShouldClose(long handle, boolean v);
++    void setTitle(long handle, String title);
++    void setSize(long handle, int w, int h);
++    void getFramebufferSize(long handle, int[] w, int[] h);
++    void getWindowSize(long handle, int[] w, int[] h);
++
++    void setInputMode(long handle, int mode, int value);
++    int  getInputMode(long handle, int mode);
++
++    boolean getKey(long handle, int key);
++    boolean getMouseButton(long handle, int button);
++    void    getCursorPos(long handle, double[] x, double[] y);
++
++    String getClipboard();
++    void   setClipboard(String s);
++
++    void setKeyCallback(long handle, org.lwjgl.glfw.GLFWKeyCallback cb);
++    void setCharCallback(long handle, org.lwjgl.glfw.GLFWCharCallback cb);
++    void setMouseButtonCallback(long handle, org.lwjgl.glfw.GLFWMouseButtonCallback cb);
++    void setCursorPosCallback(long handle, org.lwjgl.glfw.GLFWCursorPosCallback cb);
++    void setScrollCallback(long handle, org.lwjgl.glfw.GLFWScrollCallback cb);
++    void setFramebufferSizeCallback(long handle, org.lwjgl.glfw.GLFWFramebufferSizeCallback cb);
++}

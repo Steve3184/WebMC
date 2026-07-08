@@ -1,0 +1,26 @@
+--- a/java\lang\management\ManagementFactory.java
++++ b/java\lang\management\ManagementFactory.java
+@@ -0,0 +1,23 @@
++package java.lang.management;
++
++public class ManagementFactory {
++    private ManagementFactory() {}
++    public static RuntimeMXBean getRuntimeMXBean() { return new RuntimeMXBean() {
++        @Override public java.util.List<String> getInputArguments() { return java.util.Collections.emptyList(); }
++        @Override public String getName() { return "browser"; }
++        @Override public long getStartTime() { return 0L; }
++        @Override public long getUptime() { return 0L; }
++        @Override public long getPid() { return -1L; }
++    }; }
++    public static MemoryMXBean getMemoryMXBean() { return null; }
++    public static OperatingSystemMXBean getOperatingSystemMXBean() { return null; }
++    public static ThreadMXBean getThreadMXBean() { return null; }
++    public static java.util.List<MemoryPoolMXBean> getMemoryPoolMXBeans() { return java.util.Collections.emptyList(); }
++    public static java.util.List<GarbageCollectorMXBean> getGarbageCollectorMXBeans() { return java.util.Collections.emptyList(); }
++
++    public interface MemoryMXBean {}
++    public interface OperatingSystemMXBean {}
++    public interface ThreadMXBean {}
++    public interface MemoryPoolMXBean {}
++    public interface GarbageCollectorMXBean {}
++}

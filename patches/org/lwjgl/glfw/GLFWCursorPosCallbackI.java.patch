@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWCursorPosCallbackI.java
++++ b/org\lwjgl\glfw\GLFWCursorPosCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWCursorPosCallbackI {
++    void invoke(long window, double xpos, double ypos);
++}

@@ -1,0 +1,9 @@
+--- a/java\lang\UnsatisfiedLinkError.java
++++ b/java\lang\UnsatisfiedLinkError.java
+@@ -0,0 +1,6 @@
++package java.lang;
++
++public class UnsatisfiedLinkError extends LinkageError {
++    public UnsatisfiedLinkError() { super(); }
++    public UnsatisfiedLinkError(String s) { super(s); }
++}

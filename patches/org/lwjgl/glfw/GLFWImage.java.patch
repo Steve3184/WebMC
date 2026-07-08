@@ -1,0 +1,32 @@
+--- a/org\lwjgl\glfw\GLFWImage.java
++++ b/org\lwjgl\glfw\GLFWImage.java
+@@ -0,0 +1,29 @@
++package org.lwjgl.glfw;
++
++import java.nio.ByteBuffer;
++
++/** Stub of GLFWImage struct. MC uses this to set window icons; we ignore icons in browser. */
++public final class GLFWImage {
++    public int width;
++    public int height;
++    private GLFWImage() {}
++    public static GLFWImage create() { return new GLFWImage(); }
++    public static Buffer create(int count) { return new Buffer(count); }
++    public static Buffer malloc(int count, org.lwjgl.system.MemoryStack stack) { return new Buffer(count); }
++    public GLFWImage set(int w, int h, ByteBuffer pixels) { this.width = w; this.height = h; return this; }
++    public ByteBuffer pixels(int len) { return ByteBuffer.allocate(0); }
++
++    public static final class Buffer {
++        private final GLFWImage[] data;
++        Buffer(int count) { this.data = new GLFWImage[count]; for (int i = 0; i < count; i++) data[i] = new GLFWImage(); }
++        public int capacity()         { return data.length; }
++        public Buffer position(int p) { return this; }
++        public Buffer put(GLFWImage v){ return this; }
++        public Buffer flip()          { return this; }
++        public GLFWImage get(int i)   { return data[i]; }
++        // Fluent setters used by MC's Window.setIcon
++        public Buffer width(int w)    { return this; }
++        public Buffer height(int h)   { return this; }
++        public Buffer pixels(java.nio.ByteBuffer p) { return this; }
++    }
++}

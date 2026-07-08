@@ -221,24 +221,24 @@ public final class GLFW {
 
     // ---- Callback registration. Each has 2 overloads: abstract-class form and I-interface form. ----
     public static GLFWKeyCallback   glfwSetKeyCallback(long win, GLFWKeyCallback cb)         { WindowBackendHolder.current().setKeyCallback(win, cb); return null; }
-    public static GLFWKeyCallback   glfwSetKeyCallback(long win, GLFWKeyCallbackI cb)        { return null; }
+    public static GLFWKeyCallback   glfwSetKeyCallback(long win, GLFWKeyCallbackI cb)        { WindowBackendHolder.current().setKeyCallbackI(win, cb); return null; }
 
     public static GLFWCharCallback  glfwSetCharCallback(long win, GLFWCharCallback cb)       { WindowBackendHolder.current().setCharCallback(win, cb); return null; }
-    public static GLFWCharCallback  glfwSetCharCallback(long win, GLFWCharCallbackI cb)      { return null; }
+    public static GLFWCharCallback  glfwSetCharCallback(long win, GLFWCharCallbackI cb)      { WindowBackendHolder.current().setCharCallbackI(win, cb); return null; }
 
     public static Object glfwSetCharModsCallback(long win, GLFWCharModsCallbackI cb) { return null; }
 
     public static GLFWMouseButtonCallback glfwSetMouseButtonCallback(long win, GLFWMouseButtonCallback cb) { WindowBackendHolder.current().setMouseButtonCallback(win, cb); return null; }
-    public static GLFWMouseButtonCallback glfwSetMouseButtonCallback(long win, GLFWMouseButtonCallbackI cb) { return null; }
+    public static GLFWMouseButtonCallback glfwSetMouseButtonCallback(long win, GLFWMouseButtonCallbackI cb) { WindowBackendHolder.current().setMouseButtonCallbackI(win, cb); return null; }
 
     public static GLFWCursorPosCallback   glfwSetCursorPosCallback(long win, GLFWCursorPosCallback cb)     { WindowBackendHolder.current().setCursorPosCallback(win, cb); return null; }
-    public static GLFWCursorPosCallback   glfwSetCursorPosCallback(long win, GLFWCursorPosCallbackI cb)    { return null; }
+    public static GLFWCursorPosCallback   glfwSetCursorPosCallback(long win, GLFWCursorPosCallbackI cb)    { WindowBackendHolder.current().setCursorPosCallbackI(win, cb); return null; }
 
     public static GLFWScrollCallback      glfwSetScrollCallback(long win, GLFWScrollCallback cb)          { WindowBackendHolder.current().setScrollCallback(win, cb); return null; }
-    public static GLFWScrollCallback      glfwSetScrollCallback(long win, GLFWScrollCallbackI cb)         { return null; }
+    public static GLFWScrollCallback      glfwSetScrollCallback(long win, GLFWScrollCallbackI cb)         { WindowBackendHolder.current().setScrollCallbackI(win, cb); return null; }
 
     public static GLFWFramebufferSizeCallback glfwSetFramebufferSizeCallback(long win, GLFWFramebufferSizeCallback cb) { WindowBackendHolder.current().setFramebufferSizeCallback(win, cb); return null; }
-    public static GLFWFramebufferSizeCallback glfwSetFramebufferSizeCallback(long win, GLFWFramebufferSizeCallbackI cb) { return null; }
+    public static GLFWFramebufferSizeCallback glfwSetFramebufferSizeCallback(long win, GLFWFramebufferSizeCallbackI cb) { WindowBackendHolder.current().setFramebufferSizeCallbackI(win, cb); return null; }
 
     public static GLFWWindowFocusCallback glfwSetWindowFocusCallback(long win, GLFWWindowFocusCallback cb)   { return null; }
     public static GLFWWindowFocusCallback glfwSetWindowFocusCallback(long win, GLFWWindowFocusCallbackI cb)  { return null; }

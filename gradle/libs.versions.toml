@@ -1,0 +1,51 @@
+# Version Catalog for WebMC TeaVM Project
+# Centralized dependency versions for consistent builds
+
+[versions]
+# ForgeGradle plugin
+forgegradle = "6.+"
+
+# IdeaExt plugin
+idea-ext = "1.1.3"
+
+# Minecraft
+minecraft = "1.21.8"
+minecraft-upstream = "1.21.11"
+
+# MCP
+mcp = "20250717.105350"
+
+# Mappings
+mappings = "1.21.8"
+
+# SPI
+spi = "7.0.0"
+
+# TeaVM
+teavm = "0.13.1"
+
+# ForgeSpi
+forgespi = "7.0.0"
+
+[libraries]
+# Forge Gradle
+forge-gradle = { group = "net.minecraftforge.gradle", name = "ForgeGradle", version.ref = "forgegradle" }
+
+# Idea Ext
+idea-ext = { group = "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext", name = "gradle-idea-ext", version.ref = "idea-ext" }
+
+# Forge SPI
+forge-spi = { group = "net.minecraftforge", name = "forgespi", version.ref = "forgespi" }
+
+# TeaVM Core
+teavm-core = { group = "org.teavm", name = "teavm-core", version.ref = "teavm" }
+teavm-jso = { group = "org.teavm", name = "teavm-jso", version.ref = "teavm" }
+teavm-jso-apis = { group = "org.teavm", name = "teavm-jso-apis", version.ref = "teavm" }
+
+# TeaVM Gradle Plugin
+teavm-gradle-plugin = { group = "org.teavm", name = "teavm-gradle-plugin", version.ref = "teavm" }
+
+[plugins]
+forge-gradle = { id = "net.minecraftforge.gradle", version.ref = "forgegradle" }
+idea-ext = { id = "org.jetbrains.gradle.plugin.idea-ext", version.ref = "idea-ext" }
+teavm = { id = "org.teavm", version.ref = "teavm" }

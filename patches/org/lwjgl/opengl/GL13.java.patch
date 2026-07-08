@@ -1,0 +1,33 @@
+--- a/org\lwjgl\opengl\GL13.java
++++ b/org\lwjgl\opengl\GL13.java
+@@ -0,0 +1,30 @@
++package org.lwjgl.opengl;
++
++/** Stub of {@code org.lwjgl.opengl.GL13}. Texture units, multisample, compressed formats. */
++public final class GL13 {
++    public static final int GL_TEXTURE0  = 0x84C0;
++    public static final int GL_TEXTURE1  = 0x84C1;
++    public static final int GL_TEXTURE2  = 0x84C2;
++    public static final int GL_TEXTURE3  = 0x84C3;
++    public static final int GL_TEXTURE4  = 0x84C4;
++    public static final int GL_TEXTURE5  = 0x84C5;
++    public static final int GL_TEXTURE6  = 0x84C6;
++    public static final int GL_TEXTURE7  = 0x84C7;
++    public static final int GL_TEXTURE8  = 0x84C8;
++    public static final int GL_ACTIVE_TEXTURE = 0x84E0;
++    public static final int GL_MULTISAMPLE = 0x809D;
++    public static final int GL_SAMPLE_ALPHA_TO_COVERAGE = 0x809E;
++    public static final int GL_SAMPLE_COVERAGE = 0x80A0;
++    public static final int GL_TEXTURE_CUBE_MAP = 0x8513;
++    public static final int GL_TEXTURE_CUBE_MAP_POSITIVE_X = 0x8515;
++    public static final int GL_TEXTURE_CUBE_MAP_NEGATIVE_X = 0x8516;
++    public static final int GL_TEXTURE_CUBE_MAP_POSITIVE_Y = 0x8517;
++    public static final int GL_TEXTURE_CUBE_MAP_NEGATIVE_Y = 0x8518;
++    public static final int GL_TEXTURE_CUBE_MAP_POSITIVE_Z = 0x8519;
++    public static final int GL_TEXTURE_CUBE_MAP_NEGATIVE_Z = 0x851A;
++
++    public static void glActiveTexture(int unit) {
++        top.steve3184.webmc.teavm.gl.GLBackendHolder.current().activeTexture(unit);
++    }
++    private GL13() {}
++}

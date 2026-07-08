@@ -105,7 +105,7 @@ public final class WebGpuTexture extends GpuTexture {
         switch (fmt) {
             case RGBA8:   return 0x8058; // GL_RGBA8
             case RED8:    return 0x8229; // GL_R8
-            case RED8I:   return 0x8231; // GL_R8I
+            case RED8I:   return 0x8231; // GL_R8I  (was incorrectly 0x8D94 = GL_RED_INTEGER, which is a format, not internal format)
             case DEPTH32: return 0x8CAC; // GL_DEPTH_COMPONENT32F
             default: return 0x8058;
         }

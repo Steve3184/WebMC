@@ -1,0 +1,9 @@
+--- a/org\lwjgl\openal\ALC.java
++++ b/org\lwjgl\openal\ALC.java
+@@ -0,0 +1,6 @@
++package org.lwjgl.openal;
++
++public final class ALC {
++    public static ALCCapabilities createCapabilities(long device) { return new ALCCapabilities(); }
++    private ALC() {}
++}

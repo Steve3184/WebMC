@@ -1,0 +1,19 @@
+--- a/org\lwjgl\opengl\GL12.java
++++ b/org\lwjgl\opengl\GL12.java
+@@ -0,0 +1,16 @@
++package org.lwjgl.opengl;
++
++/** Stub of {@code GL12}: 3D textures + extras. Constants only. */
++public final class GL12 {
++    public static final int GL_TEXTURE_3D       = 0x806F;
++    public static final int GL_TEXTURE_WRAP_R   = 0x8072;
++    public static final int GL_BGR              = 0x80E0;
++    public static final int GL_BGRA             = 0x80E1;
++    public static final int GL_CLAMP_TO_EDGE    = 0x812F;
++    public static final int GL_TEXTURE_MIN_LOD  = 0x813A;
++    public static final int GL_TEXTURE_MAX_LOD  = 0x813B;
++    public static final int GL_TEXTURE_BASE_LEVEL = 0x813C;
++    public static final int GL_TEXTURE_MAX_LEVEL  = 0x813D;
++    public static final int GL_UNSIGNED_INT_8_8_8_8_REV = 0x8367;
++    private GL12() {}
++}

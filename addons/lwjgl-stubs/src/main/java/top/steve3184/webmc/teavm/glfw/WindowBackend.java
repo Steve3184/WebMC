@@ -36,4 +36,12 @@ public interface WindowBackend {
     void setCursorPosCallback(long handle, org.lwjgl.glfw.GLFWCursorPosCallback cb);
     void setScrollCallback(long handle, org.lwjgl.glfw.GLFWScrollCallback cb);
     void setFramebufferSizeCallback(long handle, org.lwjgl.glfw.GLFWFramebufferSizeCallback cb);
+
+    // I-interface forms used by MC's lambda/method-ref call sites
+    void setKeyCallbackI(long handle, org.lwjgl.glfw.GLFWKeyCallbackI cb);
+    void setCharCallbackI(long handle, org.lwjgl.glfw.GLFWCharCallbackI cb);
+    void setMouseButtonCallbackI(long handle, org.lwjgl.glfw.GLFWMouseButtonCallbackI cb);
+    void setCursorPosCallbackI(long handle, org.lwjgl.glfw.GLFWCursorPosCallbackI cb);
+    void setScrollCallbackI(long handle, org.lwjgl.glfw.GLFWScrollCallbackI cb);
+    void setFramebufferSizeCallbackI(long handle, org.lwjgl.glfw.GLFWFramebufferSizeCallbackI cb);
 }

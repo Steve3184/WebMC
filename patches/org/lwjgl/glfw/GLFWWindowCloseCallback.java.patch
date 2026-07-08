@@ -1,0 +1,9 @@
+--- a/org\lwjgl\glfw\GLFWWindowCloseCallback.java
++++ b/org\lwjgl\glfw\GLFWWindowCloseCallback.java
+@@ -0,0 +1,6 @@
++package org.lwjgl.glfw;
++public abstract class GLFWWindowCloseCallback implements GLFWWindowCloseCallbackI {
++    public static GLFWWindowCloseCallback create(GLFWWindowCloseCallbackI l) { return new GLFWWindowCloseCallback() { @Override public void invoke(long w) { l.invoke(w); } }; }
++    public void free() {}
++    public void close() {}
++}

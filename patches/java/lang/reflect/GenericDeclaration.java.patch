@@ -1,0 +1,8 @@
+--- a/java\lang\reflect\GenericDeclaration.java
++++ b/java\lang\reflect\GenericDeclaration.java
+@@ -0,0 +1,5 @@
++package java.lang.reflect;
++
++public interface GenericDeclaration extends AnnotatedElement {
++    TypeVariable<?>[] getTypeParameters();
++}

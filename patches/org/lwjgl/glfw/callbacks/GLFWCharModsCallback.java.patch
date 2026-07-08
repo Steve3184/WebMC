@@ -1,0 +1,8 @@
+--- a/org\lwjgl\glfw\callbacks\GLFWCharModsCallback.java
++++ b/org\lwjgl\glfw\callbacks\GLFWCharModsCallback.java
+@@ -0,0 +1,5 @@
++package org.lwjgl.glfw.callbacks;
++
++public abstract class GLFWCharModsCallback {
++    public abstract void invoke(long window, int codepoint, int mods);
++}

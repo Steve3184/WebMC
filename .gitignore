@@ -76,7 +76,6 @@ addons/web/game.vfs.xz
 # Work build artifacts
 dist/
 work/build/upstream/
-upstream/
 
 # Scripts
 *.cjs

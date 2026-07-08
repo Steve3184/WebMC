@@ -1,0 +1,8 @@
+--- a/org\lwjgl\glfw\callbacks\GLFWKeyCallback.java
++++ b/org\lwjgl\glfw\callbacks\GLFWKeyCallback.java
+@@ -0,0 +1,5 @@
++package org.lwjgl.glfw.callbacks;
++
++public abstract class GLFWKeyCallback {
++    public abstract void invoke(long window, int key, int scancode, int action, int mods);
++}

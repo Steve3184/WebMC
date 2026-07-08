@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWWindowIconifyCallbackI.java
++++ b/org\lwjgl\glfw\GLFWWindowIconifyCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWWindowIconifyCallbackI {
++    void invoke(long window, boolean iconified);
++}

@@ -1,0 +1,9 @@
+--- a/org\lwjgl\glfw\GLFWDropCallbackI.java
++++ b/org\lwjgl\glfw\GLFWDropCallbackI.java
+@@ -0,0 +1,6 @@
++package org.lwjgl.glfw;
++
++@FunctionalInterface
++public interface GLFWDropCallbackI {
++    void invoke(long window, int count, long names);
++}

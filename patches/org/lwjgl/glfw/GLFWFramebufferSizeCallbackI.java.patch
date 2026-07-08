@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWFramebufferSizeCallbackI.java
++++ b/org\lwjgl\glfw\GLFWFramebufferSizeCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWFramebufferSizeCallbackI {
++    void invoke(long window, int width, int height);
++}

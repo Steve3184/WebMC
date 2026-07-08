@@ -1,0 +1,23 @@
+--- a/org\lwjgl\opengl\ARBTimerQuery.java
++++ b/org\lwjgl\opengl\ARBTimerQuery.java
+@@ -0,0 +1,20 @@
++package org.lwjgl.opengl;
++
++/** Stub of ARBTimerQuery extension. WebGL2 has EXT_disjoint_timer_query but rarely used. */
++public final class ARBTimerQuery {
++    public static final int GL_TIME_ELAPSED = 0x88BF;
++    public static final int GL_TIMESTAMP    = 0x8E28;
++    public static final int GL_QUERY_RESULT = 0x8866;
++    public static final int GL_QUERY_RESULT_AVAILABLE = 0x8867;
++
++    public static int  glGenQueries()                    { return 0; }
++    public static void glDeleteQueries(int id)           { }
++    public static void glBeginQuery(int target, int id)  { }
++    public static void glEndQuery(int target)            { }
++    public static int  glGetQueryObjecti(int id, int p)  { return 0; }
++    public static long glGetQueryObjecti64(int id, int p) { return 0L; }
++    public static long glGetQueryObjectui64(int id, int p) { return 0L; }
++    public static void glQueryCounter(int id, int target){ }
++
++    private ARBTimerQuery() {}
++}

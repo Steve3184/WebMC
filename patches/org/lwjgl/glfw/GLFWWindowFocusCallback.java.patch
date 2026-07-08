@@ -1,0 +1,9 @@
+--- a/org\lwjgl\glfw\GLFWWindowFocusCallback.java
++++ b/org\lwjgl\glfw\GLFWWindowFocusCallback.java
+@@ -0,0 +1,6 @@
++package org.lwjgl.glfw;
++public abstract class GLFWWindowFocusCallback implements GLFWWindowFocusCallbackI {
++    public static GLFWWindowFocusCallback create(GLFWWindowFocusCallbackI l) { return new GLFWWindowFocusCallback() { @Override public void invoke(long w, boolean f) { l.invoke(w, f); } }; }
++    public void free() {}
++    public void close() {}
++}

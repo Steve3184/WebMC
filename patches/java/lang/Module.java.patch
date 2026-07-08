@@ -1,0 +1,14 @@
+--- a/java\lang\Module.java
++++ b/java\lang\Module.java
+@@ -0,0 +1,11 @@
++package java.lang;
++
++public final class Module {
++    Module() {}
++    public boolean isNamed() { return false; }
++    public String getName() { return null; }
++    public ClassLoader getClassLoader() { return null; }
++    public boolean isExported(String pn) { return true; }
++    public boolean isExported(String pn, Module other) { return true; }
++    public boolean canRead(Module other) { return true; }
++}

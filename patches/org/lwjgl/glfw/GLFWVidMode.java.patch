@@ -1,0 +1,48 @@
+--- a/org\lwjgl\glfw\GLFWVidMode.java
++++ b/org\lwjgl\glfw\GLFWVidMode.java
+@@ -0,0 +1,45 @@
++package org.lwjgl.glfw;
++
++/**
++ * Stub of GLFWVidMode. We expose a single fake "fullscreen" matching the canvas.
++ * Buffer is GLFWVidMode.Buffer used by glfwGetVideoModes.
++ */
++public final class GLFWVidMode {
++    private final int width, height, redBits, greenBits, blueBits, refreshRate;
++    public GLFWVidMode(int w, int h, int r, int g, int b, int hz) {
++        this.width = w; this.height = h; this.redBits = r; this.greenBits = g; this.blueBits = b; this.refreshRate = hz;
++    }
++    public int width()       { return width; }
++    public int height()      { return height; }
++    public int redBits()     { return redBits; }
++    public int greenBits()   { return greenBits; }
++    public int blueBits()    { return blueBits; }
++    public int refreshRate() { return refreshRate; }
++
++    public static GLFWVidMode fakeFullscreen() { return new GLFWVidMode(1920, 1080, 8, 8, 8, 60); }
++
++    public static final class Buffer {
++        private final GLFWVidMode[] data;
++        private int pos = 0;
++        public Buffer(int count) {
++            data = new GLFWVidMode[count];
++            for (int i = 0; i < count; i++) data[i] = fakeFullscreen();
++        }
++        public Buffer(GLFWVidMode[] arr) { this.data = arr; }
++        public int capacity()      { return data.length; }
++        public int remaining()     { return data.length - pos; }
++        public int limit()         { return data.length; }
++        public int position()      { return pos; }
++        public Buffer position(int p) { this.pos = p; return this; }
++        public boolean hasRemaining() { return pos < data.length; }
++        public GLFWVidMode get(int i) { return data[i]; }
++        public GLFWVidMode get()   { return data[Math.min(pos, data.length - 1)]; }
++        // Per-mode getters at current position (LWJGL 3 style: Buffer is itself a struct view)
++        public int width()         { return get().width(); }
++        public int height()        { return get().height(); }
++        public int redBits()       { return get().redBits(); }
++        public int greenBits()     { return get().greenBits(); }
++        public int blueBits()      { return get().blueBits(); }
++        public int refreshRate()   { return get().refreshRate(); }
++    }
++}
