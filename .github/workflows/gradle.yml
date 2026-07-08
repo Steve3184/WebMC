@@ -9,25 +9,43 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
+        path: work
+
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: 21
+
     - name: Cache Gradle packages
       uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
           ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+        key: ${{ runner.os }}-gradle-${{ hashFiles('work/gradle/wrapper/gradle-wrapper.properties') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
+
+    - name: Setup addons symlinks
+      run: |
+        mkdir -p work/addons
+        ln -sf "$(pwd)/../addons/teavm-runtime" work/addons/ || true
+        ln -sf "$(pwd)/../addons/lwjgl-stubs" work/addons/ || true
+        ln -sf "$(pwd)/../addons/blaze3d-impl" work/addons/ || true
+        ln -sf "$(pwd)/../addons/jdk-stubs" work/addons/ || true
+        ln -sf "$(pwd)/../addons/web" work/addons/ || true
+
     - name: Setup
-      run: chmod +x gradlew && ./gradlew setup || ./gradlew setup || ./gradlew setup
+      working-directory: ./work
+      run: chmod +x gradlew && ./gradlew setup
       continue-on-error: true
+
     - name: Build with Gradle
-      run: chmod +x gradlew && ./gradlew build
+      working-directory: ./work
+      run: chmod +x gradlew && ./gradlew generateJavaScript
       continue-on-error: true
 
     - name: Upload WebMC build artifacts
@@ -36,5 +54,5 @@ jobs:
       with:
         name: webmc-build
         path: |
-          build/generated/teavm/js/game.js
-          build/generated/teavm/js/*.wasm
+          work/build/generated/teavm/js/game.js
+          work/build/generated/teavm/js/*.wasm
