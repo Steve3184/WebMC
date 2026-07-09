@@ -27,3 +27,11 @@ settingsEvaluated { settings ->
         }
     }
 }
+
+// CI: Set compileJava memory
+allprojects {
+    tasks.withType(JavaCompile).configureEach {
+        options.fork = true
+        options.forkOptions.jvmArgs << '-Xmx10g' << '-Xss64m'
+    }
+}
