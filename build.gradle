@@ -191,6 +191,10 @@ tasks.named('compileTeavmJava').configure {
     source = fileTree('src/main/java') {
         include '**/*.java'
     }
+    // Add teavm-runtime source files (contains WebMain)
+    source += fileTree('addons/teavm-runtime/src/main/java') {
+        include '**/*.java'
+    }
     // Add lwjgl-stubs source files
     source += fileTree('addons/lwjgl-stubs/src/main/java') {
         include '**/*.java'
