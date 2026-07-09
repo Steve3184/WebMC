@@ -17,9 +17,6 @@ allprojects {
 }
 
 settingsEvaluated { settings ->
-    // Disable configuration cache
-    settings.org.gradle.configuration-cache.set(false)
-
     settings.pluginManagement {
         repositories {
             maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
