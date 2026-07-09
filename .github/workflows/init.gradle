@@ -1,15 +1,15 @@
 allprojects {
     repositories {
+        // Minecraft 和 Mojang 官方仓库
+        maven { url 'https://libraries.minecraft.net' }
+        maven { url 'https://maven.neoforged.net/releases' }
+        maven { url 'https://maven.minecraftforge.net' }
+        // 阿里云镜像（国内加速）
         maven { url 'https://maven.aliyun.com/repository/public' }
         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
-        maven { url 'https://maven.aliyun.com/repository/spring' }
         maven { url 'https://maven.aliyun.com/repository/google' }
         maven { url 'https://maven.aliyun.com/repository/central' }
-        maven { url 'https://maven.aliyun.com/repository/gradle-enterprise' }
-        maven { url 'https://maven.minecraftforge.net' }
-        maven { url 'https://libraries.minecraft.net' }
-        maven { url 'https://maven.mojang.com' }
-        maven { url 'https://repo.aoeu.top/maven' }
+        // 标准仓库
         mavenCentral()
         gradlePluginPortal()
     }
@@ -18,11 +18,10 @@ allprojects {
 settingsEvaluated { settings ->
     settings.pluginManagement {
         repositories {
+            maven { url 'https://maven.neoforged.net/releases' }
             maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
             maven { url 'https://maven.aliyun.com/repository/public' }
             maven { url 'https://maven.aliyun.com/repository/central' }
-            maven { url 'https://maven.mojang.com' }
-            maven { url 'https://repo.aoeu.top/maven' }
             mavenCentral()
             gradlePluginPortal()
         }
