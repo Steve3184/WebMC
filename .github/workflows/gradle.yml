@@ -38,7 +38,7 @@ jobs:
         cat gradle.properties
         # Use Aliyun mirror for faster downloads with retry
         for i in 1 2 3; do
-          ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --no-incremental && break
+          ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache && break
           echo "Retry $i failed, waiting 30s..."
           sleep 30
         done
@@ -49,7 +49,7 @@ jobs:
         JAVA_OPTS: "-Xmx10g"
         GRADLE_OPTS: "-Xmx10g -XX:+UseSerialGC -XX:+AlwaysPreTouch"
       run: |
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache --no-incremental
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache
 
     - name: Upload WebMC build artifacts
       if: success()
