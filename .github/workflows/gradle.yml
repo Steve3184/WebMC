@@ -25,28 +25,24 @@ jobs:
 
     - name: Setup
       env:
-        JAVA_OPTS: "-Xmx5g"
-        GRADLE_OPTS: "-Xmx5g -XX:+UseSerialGC -Dorg.gradle.configuration-cache=false"
+        JAVA_OPTS: "-Xmx8g"
+        GRADLE_OPTS: "-Xmx8g -XX:+UseSerialGC -Dorg.gradle.configuration-cache=false"
       run: |
         chmod +x gradlew
-        # Optimize memory settings for CI - increase to 5GB
-        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx5g -XX:+UseSerialGC/' gradle.properties
+        # Optimize memory settings for CI
+        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx8g -XX:+UseSerialGC/' gradle.properties
         sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
         sed -i 's/org.gradle.configuration-cache=true/org.gradle.configuration-cache=false/' gradle.properties
         cat gradle.properties
         # Use Aliyun mirror for faster downloads
-        ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
-        ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
         ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
 
     - name: Build with Gradle
       env:
-        JAVA_OPTS: "-Xmx5g"
-        GRADLE_OPTS: "-Xmx5g -XX:+UseSerialGC -Dorg.gradle.configuration-cache=false"
+        JAVA_OPTS: "-Xmx8g"
+        GRADLE_OPTS: "-Xmx8g -XX:+UseSerialGC -Dorg.gradle.configuration-cache=false"
       run: |
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache || \
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache || \
         ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache
 
     - name: Upload WebMC build artifacts
