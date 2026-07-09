@@ -30,7 +30,7 @@ jobs:
         ln -sf "$(pwd)/../addons/web" work/addons/ || true
 
     - name: Copy init script to work
-      run: cp .github/workflows/init.gradle work/
+      run: cp "$GITHUB_WORKSPACE/WebMC/.github/workflows/init.gradle" work/
 
     - name: Setup
       working-directory: ./work
