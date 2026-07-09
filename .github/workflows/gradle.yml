@@ -18,6 +18,7 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: 21
+        cache: 'gradle'
 
     - name: Setup addons symlinks
       run: |
@@ -40,14 +41,20 @@ jobs:
         sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
         cat gradle.properties
-        ./gradlew setup --no-daemon --no-build-cache
+        # Retry on transient network failures
+        ./gradlew setup --no-daemon || \
+        ./gradlew setup --no-daemon || \
+        ./gradlew setup --no-daemon
 
     - name: Build with Gradle
       working-directory: ./work
       env:
         JAVA_OPTS: "-Xmx3g"
         GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
-      run: ./gradlew generateJavaScript --no-daemon --no-build-cache
+      run: |
+        ./gradlew generateJavaScript --no-daemon || \
+        ./gradlew generateJavaScript --no-daemon || \
+        ./gradlew generateJavaScript --no-daemon
 
     - name: Upload WebMC build artifacts
       if: success()
