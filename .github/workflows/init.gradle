@@ -8,6 +8,8 @@ allprojects {
         maven { url 'https://maven.aliyun.com/repository/gradle-enterprise' }
         maven { url 'https://maven.minecraftforge.net' }
         maven { url 'https://libraries.minecraft.net' }
+        maven { url 'https://maven.mojang.com' }
+        maven { url 'https://repo.aoeu.top/maven' }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -19,6 +21,8 @@ settingsEvaluated { settings ->
             maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
             maven { url 'https://maven.aliyun.com/repository/public' }
             maven { url 'https://maven.aliyun.com/repository/central' }
+            maven { url 'https://maven.mojang.com' }
+            maven { url 'https://repo.aoeu.top/maven' }
             mavenCentral()
             gradlePluginPortal()
         }

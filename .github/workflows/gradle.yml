@@ -35,8 +35,12 @@ jobs:
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
         sed -i 's/org.gradle.configuration-cache=true/org.gradle.configuration-cache=false/' gradle.properties
         cat gradle.properties
-        # Use Aliyun mirror for faster downloads
-        ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
+        # Use Aliyun mirror for faster downloads with retry
+        for i in 1 2 3; do
+          ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache && break
+          echo "Retry $i failed, waiting 30s..."
+          sleep 30
+        done
 
     - name: Build with Gradle
       env:
