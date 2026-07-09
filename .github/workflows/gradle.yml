@@ -26,12 +26,12 @@ jobs:
     - name: Setup
       env:
         JAVA_TOOL_OPTIONS: "-Xss4m"
-        JAVA_OPTS: "-Xmx10g"
-        GRADLE_OPTS: "-Xmx10g -XX:+UseSerialGC -XX:+AlwaysPreTouch"
+        JAVA_OPTS: "-Xmx12g -XX:+UseG1GC"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseG1GC -XX:MaxGCPauseMillis=500"
       run: |
         chmod +x gradlew
         # Optimize memory settings for CI - disable parallel and incremental
-        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx10g -XX:+UseSerialGC -XX:+AlwaysPreTouch/' gradle.properties
+        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx12g -XX:+UseG1GC/' gradle.properties
         sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
         sed -i 's/org.gradle.configuration-cache=true/org.gradle.configuration-cache=false/' gradle.properties
@@ -46,8 +46,8 @@ jobs:
     - name: Build with Gradle
       env:
         JAVA_TOOL_OPTIONS: "-Xss4m"
-        JAVA_OPTS: "-Xmx10g"
-        GRADLE_OPTS: "-Xmx10g -XX:+UseSerialGC -XX:+AlwaysPreTouch"
+        JAVA_OPTS: "-Xmx12g -XX:+UseG1GC"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseG1GC -XX:MaxGCPauseMillis=500"
       run: |
         ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache
 
