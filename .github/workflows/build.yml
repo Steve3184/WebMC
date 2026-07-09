@@ -33,9 +33,9 @@ jobs:
 
       - name: Setup Gradle
         run: |
-          chmod +x work/gradlew
+          chmod +x gradlew
           # Set CI-optimized memory settings
-          cat > work/gradle.properties << 'EOF'
+          cat > gradle.properties << 'EOF'
 # CI-optimized settings
 org.gradle.jvmargs=-Xmx14g -Xss64m -XX:+UseG1GC
 org.gradle.daemon=false
@@ -43,16 +43,13 @@ org.gradle.parallel=false
 org.gradle.workers.max=1
 org.gradle.configureondemand=false
 EOF
-          # Add compileJava memory args
-          mkdir -p work/gradle
-          echo "org.gradle.java.home=$JAVA_HOME" >> work/gradle/gradle.properties
           # Download Minecraft assets and setup work/
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
+          ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
 
-      - name: Build WebRun
+      - name: Build with Gradle (TeaVM)
         run: |
           export GRADLE_OPTS="-Xmx14g -Xss64m -XX:+UseG1GC -Dorg.gradle.jvmargs=-Xmx14g"
-          ./work/gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache \
+          ./gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache \
             -Dorg.gradle.jvmargs="-Xmx14g" \
             -Dorg.gradle.workers.max=1 \
             -Dkotlin.daemon.jvmargs="-Xmx14g" 2>&1
