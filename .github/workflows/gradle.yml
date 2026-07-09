@@ -41,10 +41,10 @@ jobs:
         sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
         cat gradle.properties
-        # Retry on transient network failures
-        ./gradlew setup --no-daemon || \
-        ./gradlew setup --no-daemon || \
-        ./gradlew setup --no-daemon
+        # Use Aliyun mirror for faster downloads
+        ./gradlew setup --no-daemon --init-script ../.github/workflows/init.gradle || \
+        ./gradlew setup --no-daemon --init-script ../.github/workflows/init.gradle || \
+        ./gradlew setup --no-daemon --init-script ../.github/workflows/init.gradle
 
     - name: Build with Gradle
       working-directory: ./work
@@ -52,9 +52,9 @@ jobs:
         JAVA_OPTS: "-Xmx3g"
         GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
       run: |
-        ./gradlew generateJavaScript --no-daemon || \
-        ./gradlew generateJavaScript --no-daemon || \
-        ./gradlew generateJavaScript --no-daemon
+        ./gradlew generateJavaScript --no-daemon --init-script ../.github/workflows/init.gradle || \
+        ./gradlew generateJavaScript --no-daemon --init-script ../.github/workflows/init.gradle || \
+        ./gradlew generateJavaScript --no-daemon --init-script ../.github/workflows/init.gradle
 
     - name: Upload WebMC build artifacts
       if: success()
