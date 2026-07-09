@@ -2,9 +2,9 @@ name: Java CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'security/*']
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'security/*']
   workflow_dispatch:
 
 jobs:
@@ -48,18 +48,7 @@ jobs:
           sleep 30
         done
 
-    - name: Quick validation (Gradle config)
-      if: github.event_name == 'pull_request'
-      env:
-        JAVA_TOOL_OPTIONS: "-Xss4m"
-        JAVA_OPTS: "-Xmx4g -XX:+UseZGC"
-        GRADLE_OPTS: "-Xmx4g -XX:+UseZGC"
-      run: |
-        # Quick validation - just setup to verify Gradle config is correct
-        ./gradlew tasks --no-daemon --init-script init.gradle --no-configuration-cache 2>&1 | head -50
-
     - name: Build WebRun (full build)
-      if: github.event_name != 'pull_request'
       env:
         JAVA_TOOL_OPTIONS: "-Xss4m"
         JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
