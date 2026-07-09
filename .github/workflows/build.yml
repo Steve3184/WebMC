@@ -8,7 +8,7 @@ on:
 
 env:
   JAVA_TOOL_OPTIONS: -Xss64m
-  GRADLE_OPTS: -Xmx12g -XX:+UseG1GC
+  GRADLE_OPTS: -Xmx14g -XX:+UseG1GC
 
 jobs:
   build:
@@ -33,10 +33,15 @@ jobs:
       - name: Setup Gradle
         run: |
           chmod +x work/gradlew
-          # Set CI-optimized memory settings directly in gradle.properties
-          sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx12g -Xss64m -XX:+UseG1GC/' work/gradle.properties
-          sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=2/' work/gradle.properties
-          sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' work/gradle.properties
+          # Set CI-optimized memory settings
+          cat > work/gradle.properties << 'EOF'
+# CI-optimized settings
+org.gradle.jvmargs=-Xmx14g -Xss64m -XX:+UseG1GC
+org.gradle.daemon=false
+org.gradle.parallel=false
+org.gradle.workers.max=1
+org.gradle.configureondemand=false
+EOF
           # Download Minecraft assets and setup work/
           ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
           ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
