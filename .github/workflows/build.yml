@@ -31,14 +31,23 @@ jobs:
         run: cp .github/workflows/init.gradle .
 
       - name: Setup Gradle
+        env:
+          JAVA_TOOL_OPTIONS: -Xss64m
+          GRADLE_OPTS: -Xmx4g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g
         run: |
           chmod +x work/gradlew
+          # Limit memory and workers for CI
+          echo "org.gradle.jvmargs=-Xmx4g -Xss64m -XX:+UseG1GC" >> work/gradle.properties
+          echo "org.gradle.workers.max=1" >> work/gradle.properties
           # Download Minecraft assets and setup work/
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
+          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1 || \
+          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1 || \
+          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1
         continue-on-error: true
 
       - name: Build WebRun
+        env:
+          JAVA_TOOL_OPTIONS: -Xss64m
+          GRADLE_OPTS: -Xmx4g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g
         run: |
-          ./work/gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache 2>&1
+          ./work/gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1 2>&1
