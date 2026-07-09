@@ -1,4 +1,7 @@
 allprojects {
+    // Disable configuration cache - incompatible with ForgeGradle
+    project.buildDir = project.layout.buildDirectory.value(file("${project.projectDir.absolutePath}/build").get().asFile)
+
     repositories {
         maven { url 'https://maven.aliyun.com/repository/public' }
         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
@@ -7,12 +10,16 @@ allprojects {
         maven { url 'https://maven.aliyun.com/repository/central' }
         maven { url 'https://maven.aliyun.com/repository/gradle-enterprise' }
         maven { url 'https://maven.minecraftforge.net' }
+        maven { url 'https://libraries.minecraft.net' }
         mavenCentral()
         gradlePluginPortal()
     }
 }
 
 settingsEvaluated { settings ->
+    // Disable configuration cache
+    settings.org.gradle.configuration-cache.set(false)
+
     settings.pluginManagement {
         repositories {
             maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }

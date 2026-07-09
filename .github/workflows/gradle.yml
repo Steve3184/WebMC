@@ -26,27 +26,28 @@ jobs:
     - name: Setup
       env:
         JAVA_OPTS: "-Xmx3g"
-        GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
+        GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC -Dorg.gradle.configuration-cache=false"
       run: |
         chmod +x gradlew
         # Optimize memory settings for CI with limited RAM (7GB total)
         sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx3g -XX:+UseSerialGC/' gradle.properties
         sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
+        sed -i 's/org.gradle.configuration-cache=true/org.gradle.configuration-cache=false/' gradle.properties
         cat gradle.properties
         # Use Aliyun mirror for faster downloads
-        ./gradlew setup --no-daemon --init-script init.gradle || \
-        ./gradlew setup --no-daemon --init-script init.gradle || \
-        ./gradlew setup --no-daemon --init-script init.gradle
+        ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
+        ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
+        ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
 
     - name: Build with Gradle
       env:
         JAVA_OPTS: "-Xmx3g"
-        GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
+        GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC -Dorg.gradle.configuration-cache=false"
       run: |
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle || \
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle || \
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache || \
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache || \
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache
 
     - name: Upload WebMC build artifacts
       if: success()
