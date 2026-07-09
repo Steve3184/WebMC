@@ -1,3 +1,6 @@
+// === Build Configuration with centralized repositories ===
+// Repositories are managed centrally in settings.gradle via dependencyResolutionManagement
+
 buildscript {
     repositories {
         mavenLocal()
@@ -7,7 +10,8 @@ buildscript {
     }
     dependencies {
         classpath 'net.minecraftforge.gradle:ForgeGradle:6+'
-        classpath "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext:gradle-idea-ext:1.1.3"
+        classpath 'gradle.plugin.org.jetbrains.gradle.plugin.idea-ext:gradle-idea-ext:1.1.3'
+        classpath 'org.teavm:teavm-gradle-plugin:0.13.1'
     }
 }
 
@@ -17,13 +21,26 @@ import org.jetbrains.gradle.ext.*
 
 apply plugin: 'eclipse'
 apply plugin: 'net.minecraftforge.gradle.patcher'
-apply plugin: "org.jetbrains.gradle.plugin.idea-ext"
+apply plugin: 'org.jetbrains.gradle.plugin.idea-ext'
 
 println(' Java: ' + System.getProperty('java.version') +
         ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ')' +
         ' Arch: ' + System.getProperty('os.arch'))
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+// Enable parallel compilation and incremental builds
+tasks.withType(JavaCompile).configureEach {
+    options.fork = true
+    options.incremental = true
+}
+
+// Disable fork for JDK stubs compilation tasks to avoid worker issues on Windows
+tasks.withType(JavaCompile).matching {
+    it.name.contains('Stubs') || it.name.contains('Lock') || it.name.contains('SunMisc')
+}.configureEach {
+    options.fork = false
+}
 
 configurations {
     shade
@@ -41,17 +58,14 @@ ext {
     spi_version = '7.0.0'
 }
 
-repositories {
-    mavenCentral()
-}
-
+// Dependencies - repositories are now centralized in settings.gradle
 dependencies {
     implementation 'net.minecraftforge:forgespi:' + spi_version
-//    Use the shade to add the lib to the jar
-//    or use compile if you want to load the lib from the version.json
-//    from a maven repo
-//    shade 'package-here'
-//    compile 'package-here'
+    // Use the shade to add the lib to the jar
+    // or use compile if you want to load the lib from the version.json
+    // from a maven repo
+    // shade 'package-here'
+    // compile 'package-here'
 }
 
 project(':mcp') {
@@ -144,41 +158,11 @@ idea.project.settings {
     }
 }
 
-// === injected by scripts/apply-patches.sh: kick real LWJGL off the classpath ===
-afterEvaluate {
-    ['compileClasspath', 'runtimeClasspath', 'testCompileClasspath', 'testRuntimeClasspath'].each { n ->
-        def c = configurations.findByName(n)
-        if (c != null) {
-            c.exclude group: 'org.lwjgl'
-            c.exclude group: 'com.mojang', module: 'logging'
-            c.exclude group: 'org.apache.logging.log4j'
-        }
-    }
-}
-repositories { mavenCentral() }
-dependencies {
-    implementation 'org.teavm:teavm-jso:0.13.1'
-    compileOnly 'org.teavm:teavm-core:0.13.1'
-}
-
 // === TeaVM web compilation (from addons/teavm-runtime/build.gradle.fragment) ===
-
-buildscript {
-    repositories {
-        mavenCentral()
-        gradlePluginPortal()
-    }
-    dependencies {
-        classpath 'org.teavm:teavm-gradle-plugin:0.13.1'
-    }
-}
 
 apply plugin: 'org.teavm'
 
-repositories {
-    mavenCentral()
-}
-
+// TeaVM dependencies
 dependencies {
     implementation 'org.teavm:teavm-jso:0.13.1'
     implementation 'org.teavm:teavm-jso-apis:0.13.1'
@@ -186,7 +170,7 @@ dependencies {
 
 teavm {
     all {
-        mainClass = 'net.minecraft.client.main.WebMain'
+        mainClass = 'top.steve3184.webmc.web.WebMain'
         outOfProcess = true
         processMemory = 8192
     }
@@ -333,6 +317,25 @@ compileJava {
     classpath += files(lwjglStubsClasses)
     // Add blaze3d-impl source files (contains com.mojang.logging)
     source += fileTree('addons/blaze3d-impl/src/main/java') { include '**/*.java' }
+}
+
+// === Centralized dependency exclusions and caching ===
+// Exclude conflicting libraries from all configurations
+afterEvaluate {
+    configurations.configureEach { cfg ->
+        // Skip LWJGL and logging libraries (WebMC uses browser-provided equivalents)
+        // Skip 'shade' configuration as it cannot be modified after resolution
+        if (cfg.name != 'shade' && cfg.name != 'compileClasspath') {
+            exclude group: 'org.lwjgl'
+            exclude group: 'com.mojang', module: 'logging'
+            exclude group: 'org.apache.logging.log4j'
+        }
+    }
+}
+
+// Enable build cache for faster incremental builds
+tasks.withType(JavaCompile).configureEach {
+    options.headerOutputDirectory.set(file("$buildDir/generated/headers"))
 }
 
 tasks.register('assembleWebRun') {
