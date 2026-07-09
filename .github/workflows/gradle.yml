@@ -1,6 +1,11 @@
 name: Java CI
 
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -10,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0
+        fetch-depth: 1
         submodules: recursive
 
     - name: Set up JDK 21
@@ -26,17 +31,16 @@ jobs:
     - name: Setup
       env:
         JAVA_TOOL_OPTIONS: "-Xss4m"
-        JAVA_OPTS: "-Xmx10g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
-        GRADLE_OPTS: "-Xmx10g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
       run: |
         chmod +x gradlew
-        # Optimize memory settings for CI - ZGC needs more heap for concurrent operation
-        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx10g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000/' gradle.properties
+        # Optimize memory settings for CI
+        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000/' gradle.properties
         sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
         sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
         sed -i 's/org.gradle.configuration-cache=true/org.gradle.configuration-cache=false/' gradle.properties
-        sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=2/' gradle.properties
-        cat gradle.properties
+        sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=1/' gradle.properties
         # Use Aliyun mirror for faster downloads with retry
         for i in 1 2 3; do
           ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache && break
@@ -44,13 +48,24 @@ jobs:
           sleep 30
         done
 
-    - name: Build with Gradle
+    - name: Quick validation (addons only)
+      if: github.event_name == 'pull_request'
       env:
         JAVA_TOOL_OPTIONS: "-Xss4m"
-        JAVA_OPTS: "-Xmx10g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
-        GRADLE_OPTS: "-Xmx10g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
       run: |
-        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache -Dorg.gradle.workers.max=2
+        # Only compile addons modules for PR validation - they don't need full MC
+        ./gradlew :addons:teavm-runtime:compileJava :addons:lwjgl-stubs:compileJava --no-daemon --init-script init.gradle --no-configuration-cache
+
+    - name: Build WebRun (full build)
+      if: github.event_name != 'pull_request'
+      env:
+        JAVA_TOOL_OPTIONS: "-Xss4m"
+        JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+      run: |
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache -Dorg.gradle.workers.max=1
 
     - name: Upload WebMC build artifacts
       if: success()
