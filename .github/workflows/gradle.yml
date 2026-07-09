@@ -56,7 +56,7 @@ jobs:
         GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
       run: |
         # Compile client only for PR validation - much lighter than full build
-        ./gradlew compileClient --no-daemon --init-script init.gradle --no-configuration-cache -x processResources --no-build-cache
+        ./gradlew prepareMcp-reborn_clientCompile --no-daemon --init-script init.gradle --no-configuration-cache -x processResources --no-build-cache
 
     - name: Build WebRun (full build)
       if: github.event_name != 'pull_request'
