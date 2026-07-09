@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 env:
-  JAVA_TOOL_OPTIONS: -Xss32m
-  GRADLE_OPTS: -Xmx8g -XX:+UseG1GC
+  JAVA_TOOL_OPTIONS: -Xss64m
+  GRADLE_OPTS: -Xmx12g -XX:+UseG1GC
 
 jobs:
   build:
@@ -31,23 +31,18 @@ jobs:
         run: cp .github/workflows/init.gradle .
 
       - name: Setup Gradle
-        env:
-          JAVA_TOOL_OPTIONS: -Xss64m
-          GRADLE_OPTS: -Xmx4g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g
         run: |
           chmod +x work/gradlew
-          # Limit memory and workers for CI
-          echo "org.gradle.jvmargs=-Xmx4g -Xss64m -XX:+UseG1GC" >> work/gradle.properties
-          echo "org.gradle.workers.max=1" >> work/gradle.properties
+          # Set CI-optimized memory settings directly in gradle.properties
+          sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx12g -Xss64m -XX:+UseG1GC/' work/gradle.properties
+          sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=2/' work/gradle.properties
+          sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' work/gradle.properties
           # Download Minecraft assets and setup work/
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1 || \
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1 || \
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1
+          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
+          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
+          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
         continue-on-error: true
 
       - name: Build WebRun
-        env:
-          JAVA_TOOL_OPTIONS: -Xss64m
-          GRADLE_OPTS: -Xmx4g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g
         run: |
-          ./work/gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache --max-workers=1 2>&1
+          ./work/gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache 2>&1
