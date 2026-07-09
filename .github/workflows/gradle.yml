@@ -1,6 +1,11 @@
 name: Java CI
 
-on: [push]
+on:
+  push:
+    branches: [main, develop, 'security/*']
+  pull_request:
+    branches: [main, develop, 'security/*']
+  workflow_dispatch:
 
 jobs:
   build:
@@ -8,13 +13,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up JDK 21
-      uses: actions/setup-java@v2
+    - uses: actions/checkout@v4
       with:
-        distribution: 'adopt'
+        fetch-depth: 1
+        submodules: recursive
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
         java-version: 21
+        cache: 'gradle'
+
+    - name: Copy init script
+      run: cp .github/workflows/init.gradle .
+
     - name: Setup
-      run: chmod +x gradlew && ./gradlew setup
-    - name: Build with Gradle
-      run: chmod +x gradlew && ./gradlew build
+      env:
+        JAVA_TOOL_OPTIONS: "-Xss4m"
+        JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+      run: |
+        chmod +x gradlew
+        # Optimize memory settings for CI
+        sed -i 's/org.gradle.jvmargs=-Xmx6G/org.gradle.jvmargs=-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000/' gradle.properties
+        sed -i 's/org.gradle.parallel=true/org.gradle.parallel=false/' gradle.properties
+        sed -i 's/org.gradle.configureondemand=true/org.gradle.configureondemand=false/' gradle.properties
+        sed -i 's/org.gradle.configuration-cache=true/org.gradle.configuration-cache=false/' gradle.properties
+        sed -i 's/org.gradle.workers.max=4/org.gradle.workers.max=1/' gradle.properties
+        # Use Aliyun mirror for faster downloads with retry
+        for i in 1 2 3; do
+          ./gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache && break
+          echo "Retry $i failed, waiting 30s..."
+          sleep 30
+        done
+
+    - name: Build WebRun (full build)
+      env:
+        JAVA_TOOL_OPTIONS: "-Xss4m"
+        JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+        GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
+      run: |
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle --no-configuration-cache -Dorg.gradle.workers.max=1
+
+    - name: Upload WebMC build artifacts
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: webmc-build
+        path: |
+          build/web-run/game.js
+          build/web-run/game.vfs
+          build/web-run/*.br
