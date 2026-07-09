@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 env:
   JAVA_TOOL_OPTIONS: -Xss64m
@@ -46,10 +47,7 @@ EOF
           mkdir -p work/gradle
           echo "org.gradle.java.home=$JAVA_HOME" >> work/gradle/gradle.properties
           # Download Minecraft assets and setup work/
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
-          ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache || \
           ./work/gradlew setup --no-daemon --init-script init.gradle --no-configuration-cache
-        continue-on-error: true
 
       - name: Build WebRun
         run: |
