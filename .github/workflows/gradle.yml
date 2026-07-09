@@ -48,15 +48,15 @@ jobs:
           sleep 30
         done
 
-    - name: Quick validation (addons only)
+    - name: Quick validation (compile client)
       if: github.event_name == 'pull_request'
       env:
         JAVA_TOOL_OPTIONS: "-Xss4m"
         JAVA_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
         GRADLE_OPTS: "-Xmx12g -XX:+UseZGC -XX:+ZGenerational -XX:MaxGCPauseMillis=1000"
       run: |
-        # Only compile addons modules for PR validation - they don't need full MC
-        ./gradlew :addons:teavm-runtime:compileJava :addons:lwjgl-stubs:compileJava --no-daemon --init-script init.gradle --no-configuration-cache
+        # Compile client only for PR validation - much lighter than full build
+        ./gradlew compileClient --no-daemon --init-script init.gradle --no-configuration-cache -x processResources --no-build-cache
 
     - name: Build WebRun (full build)
       if: github.event_name != 'pull_request'
