@@ -11,10 +11,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - name: Clone work submodule
-      run: |
-        git submodule update --init --recursive
+        submodules: true
 
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -23,20 +20,10 @@ jobs:
         java-version: 21
         cache: 'gradle'
 
-    - name: Setup addons symlinks
-      run: |
-        mkdir -p work/addons
-        ln -sf "$(pwd)/addons/teavm-runtime" work/addons/ || true
-        ln -sf "$(pwd)/addons/lwjgl-stubs" work/addons/ || true
-        ln -sf "$(pwd)/addons/blaze3d-impl" work/addons/ || true
-        ln -sf "$(pwd)/addons/jdk-stubs" work/addons/ || true
-        ln -sf "$(pwd)/addons/web" work/addons/ || true
-
-    - name: Copy init script to work
-      run: cp .github/workflows/init.gradle work/
+    - name: Copy init script
+      run: cp .github/workflows/init.gradle .
 
     - name: Setup
-      working-directory: ./work
       env:
         JAVA_OPTS: "-Xmx3g"
         GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
@@ -53,14 +40,13 @@ jobs:
         ./gradlew setup --no-daemon --init-script init.gradle
 
     - name: Build with Gradle
-      working-directory: ./work
       env:
         JAVA_OPTS: "-Xmx3g"
         GRADLE_OPTS: "-Xmx3g -XX:+UseSerialGC"
       run: |
-        ./gradlew generateJavaScript --no-daemon --init-script init.gradle || \
-        ./gradlew generateJavaScript --no-daemon --init-script init.gradle || \
-        ./gradlew generateJavaScript --no-daemon --init-script init.gradle
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle || \
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle || \
+        ./gradlew buildWebRun --no-daemon --init-script init.gradle
 
     - name: Upload WebMC build artifacts
       if: success()
@@ -68,5 +54,6 @@ jobs:
       with:
         name: webmc-build
         path: |
-          work/build/generated/teavm/js/game.js
-          work/build/generated/teavm/js/*.wasm
+          build/web-run/game.js
+          build/web-run/game.vfs
+          build/web-run/*.br
