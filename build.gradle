@@ -173,7 +173,7 @@ teavm {
     js {
         targetFileName = 'game.js'
         sourceMap = false
-        optimizationLevel = org.teavm.gradle.api.OptimizationLevel.NONE
+        optimization = org.teavm.gradle.api.OptimizationLevel.NONE
         fastGlobalAnalysis = true
         obfuscated = false
         strict = false
