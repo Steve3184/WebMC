@@ -1,0 +1,34 @@
+--- a/org\lwjgl\openal\ALC10.java
++++ b/org\lwjgl\openal\ALC10.java
+@@ -0,0 +1,31 @@
++package org.lwjgl.openal;
++
++import java.nio.IntBuffer;
++
++public final class ALC10 {
++    public static final int ALC_DEVICE_SPECIFIER = 0x1005;
++    public static final int ALC_DEFAULT_DEVICE_SPECIFIER = 0x1004;
++    public static final int ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER = 0x311;
++    public static final int ALC_FREQUENCY = 0x1007;
++    public static final int ALC_MONO_SOURCES = 0x1010;
++    public static final int ALC_STEREO_SOURCES = 0x1011;
++    public static final int ALC_NO_ERROR = 0;
++    public static final int ALC_INVALID_DEVICE = 0xA001;
++    public static final int ALC_INVALID_CONTEXT = 0xA002;
++
++    public static long alcOpenDevice(CharSequence name) { return 0L; }
++    public static long alcOpenDevice(java.nio.ByteBuffer name) { return 0L; }
++    public static boolean alcCloseDevice(long device) { return true; }
++    public static long alcCreateContext(long device, IntBuffer attrlist) { return 0L; }
++    public static long alcCreateContext(long device, int[] attrlist) { return 0L; }
++    public static boolean alcMakeContextCurrent(long ctx) { return true; }
++    public static void alcDestroyContext(long ctx) {}
++    public static boolean alcIsExtensionPresent(long device, CharSequence ext) { return false; }
++    public static int alcGetError(long device) { return ALC_NO_ERROR; }
++    public static String alcGetString(long device, int param) { return ""; }
++    public static int alcGetInteger(long device, int param) { return 0; }
++    public static void alcGetIntegerv(long device, int param, IntBuffer out) {}
++    public static void alcGetIntegerv(long device, int param, int[] out) {}
++
++    private ALC10() {}
++}

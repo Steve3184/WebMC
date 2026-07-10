@@ -1,0 +1,14 @@
+--- a/org\lwjgl\util\freetype\FT_GlyphSlot.java
++++ b/org\lwjgl\util\freetype\FT_GlyphSlot.java
+@@ -0,0 +1,11 @@
++package org.lwjgl.util.freetype;
++
++/** Stub FT_GlyphSlot struct. */
++public final class FT_GlyphSlot {
++    public FT_Bitmap bitmap()    { return new FT_Bitmap(); }
++    public int  bitmap_left()    { return 0; }
++    public int  bitmap_top()     { return 0; }
++    public long advance_x()      { return 0L; }
++    public long advance_y()      { return 0L; }
++    public FT_Vector advance()   { return new FT_Vector(); }
++}

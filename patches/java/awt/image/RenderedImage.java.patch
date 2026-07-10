@@ -1,0 +1,9 @@
+--- a/java\awt\image\RenderedImage.java
++++ b/java\awt\image\RenderedImage.java
+@@ -0,0 +1,6 @@
++package java.awt.image;
++
++public interface RenderedImage {
++    int getWidth();
++    int getHeight();
++}

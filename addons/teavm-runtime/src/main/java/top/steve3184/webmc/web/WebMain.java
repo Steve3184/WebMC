@@ -77,6 +77,13 @@ public final class WebMain {
         "} catch (e) { return 'webSafeBoot'; }")
     private static native String bootMode();
 
+    @JSBody(script =
+        "// Export clipboard callback for CanvasWindowBackend" +
+        "window.__webmcOnClipboardCopy = function(text) {" +
+        "  top.steve3184.webmc.teavm.runtime.CanvasWindowBackend.onBrowserCopy(text || '');" +
+        "};")
+    private static native void setupClipboardCallback();
+
     public static void main(String[] args) {
         // mc-web: silence SLF4J's own init warnings ("No SLF4J providers...",
         // "Defaulting to NOP", "See ...") and route anything it still emits to
@@ -162,6 +169,9 @@ public final class WebMain {
             top.steve3184.webmc.teavm.glfw.WindowBackendHolder.install(
                 new top.steve3184.webmc.teavm.runtime.CanvasWindowBackend());
             log("CanvasWindowBackend installed");
+
+            // Setup clipboard callback for browser copy events
+            setupClipboardCallback();
         } catch (Throwable t) {
             log("WindowBackend install failed: " + t);
         }

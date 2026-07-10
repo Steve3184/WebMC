@@ -1,0 +1,10 @@
+--- a/java\lang\reflect\ParameterizedType.java
++++ b/java\lang\reflect\ParameterizedType.java
+@@ -0,0 +1,7 @@
++package java.lang.reflect;
++
++public interface ParameterizedType extends Type {
++    Type[] getActualTypeArguments();
++    Type getRawType();
++    Type getOwnerType();
++}

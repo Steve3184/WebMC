@@ -1,0 +1,16 @@
+--- a/org\lwjgl\openal\ALC11.java
++++ b/org\lwjgl\openal\ALC11.java
+@@ -0,0 +1,13 @@
++package org.lwjgl.openal;
++
++public final class ALC11 {
++    public static final int ALC_ALL_DEVICES_SPECIFIER = 0x1013;
++    public static final int ALC_MONO_SOURCES = 0x1010;
++    public static final int ALC_STEREO_SOURCES = 0x1011;
++    public static final int ALC_CONNECTED = 0x313;
++
++    public static int alcGetInteger(long device, int param) { return 0; }
++    public static void alcGetIntegerv(long device, int param, java.nio.IntBuffer out) {}
++    public static String alcGetString(long device, int param) { return ""; }
++    private ALC11() {}
++}

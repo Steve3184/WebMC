@@ -5,9 +5,7 @@ plugins {
 group = 'top.steve3184.webmc'
 version = '1.0.0'
 
-repositories {
-    mavenCentral()
-}
+// Dependencies managed centrally in root settings.gradle via dependencyResolutionManagement
 
 dependencies {
     implementation 'org.teavm:teavm-jso:0.13.1'
@@ -15,6 +13,8 @@ dependencies {
     implementation project(':mcp')
 }
 
+// NOTE: JDK stub compilation is handled centrally in the root build.gradle.
+// blaze3d-impl only needs --patch-module flags to compile against those stubs.
 compileJava {
     sourceCompatibility = '21'
     targetCompatibility = '21'

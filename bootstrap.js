@@ -51,12 +51,20 @@
             : presetBootMode === 'webSafeBoot' || presetBootMode === 'mcMain'
                 ? presetBootMode
                 : 'mcMain';
-    const explicitAutoStartWorld =
+    // SECURITY: Validate world name length to prevent DoS
+    const MAX_WORLD_NAME_LENGTH = 64;
+    function sanitizeWorldName(name) {
+        if (!name || typeof name !== 'string') return '';
+        return name.trim().substring(0, MAX_WORLD_NAME_LENGTH).replace(/[<>\"\'&]/g, '');
+    }
+    const explicitAutoStartWorld = sanitizeWorldName(
         params.get('autoStartExperimentalWorld') ||
-        params.get('webmcAutoStartExperimentalWorld');
-    const worldNameFromUrl =
+        params.get('webmcAutoStartExperimentalWorld')
+    );
+    const worldNameFromUrl = sanitizeWorldName(
         params.get('world') ||
-        params.get('worldName');
+        params.get('worldName')
+    );
     const autoStartParam = params.get('autostart');
     const autoStartExplicitlyDisabled = autoStartParam != null && /^(0|false|off|no)$/i.test(autoStartParam);
     const autoStartExplicitlyEnabled = autoStartParam != null && !autoStartExplicitlyDisabled;
@@ -189,6 +197,7 @@
     const $hint     = document.getElementById('hint');
     const $error    = document.getElementById('error');
     const $canvas   = document.getElementById('canvas');
+    const $adaptiveInfo = document.getElementById('adaptive-info');
     let bootHidden = false;
     let latestBootStatus = '';
     let latestProgress = 0;
@@ -200,6 +209,7 @@
     let pendingWorldStartNeedsSettle = false;
     let worldStartReleaseScheduled = false;
     const WORLD_START_RELEASE_SETTLE_MS = 500;
+    let adaptiveInfoVisible = false;
 
     function ensureWebAudioState() {
         const state = window.__webmcState || (window.__webmcState = {});
@@ -457,6 +467,11 @@
             at: Date.now()
         };
 
+        // Update adaptive render distance display if present
+        if (state && state.adaptiveRenderDistance) {
+            updateAdaptiveInfo(state);
+        }
+
         if (!state || window.webmcBootMode !== 'mcMain') {
             return;
         }
@@ -646,6 +661,80 @@
         fatal('Canvas not supported.');
         return;
     }
+
+    // ── Adaptive Render Distance Overlay ─────────────────────────────────────
+    function ensureAdaptiveInfo() {
+        if (document.getElementById('adaptive-info')) {
+            return document.getElementById('adaptive-info');
+        }
+        var style = document.createElement('style');
+        style.textContent = [
+            '#adaptive-info{position:fixed;top:8px;right:8px;padding:6px 10px;background:rgba(0,0,0,.7);color:#aaa;font:12px monospace;',
+            'border-radius:4px;pointer-events:none;z-index:9999;display:none;line-height:1.5;min-width:120px;}',
+            '#adaptive-info.show{display:block;}',
+            '#adaptive-info .label{color:#777;font-size:10px;}',
+            '#adaptive-info .value{color:#6c6;}',
+            '#adaptive-info .warning{color:#f66;}',
+            '#adaptive-info .good{color:#6f6;}'
+        ].join('');
+        document.head.appendChild(style);
+
+        var info = document.createElement('div');
+        info.id = 'adaptive-info';
+        info.innerHTML = [
+            '<div class="label">Adaptive Render Distance</div>',
+            '<div>Distance: <span class="value" id="ard-distance">--</span></div>',
+            '<div>FPS: <span class="value" id="ard-fps">--</span></div>',
+            '<div>Status: <span class="value" id="ard-status">--</span></div>'
+        ].join('');
+        document.body.appendChild(info);
+        return info;
+    }
+
+    function updateAdaptiveInfo(state) {
+        if (!state || !state.adaptiveRenderDistance) {
+            return;
+        }
+        var info = ensureAdaptiveInfo();
+        var distEl = document.getElementById('ard-distance');
+        var fpsEl = document.getElementById('ard-fps');
+        var statusEl = document.getElementById('ard-status');
+        if (distEl) distEl.textContent = state.adaptiveRenderDistance + ' chunks';
+        if (fpsEl) {
+            fpsEl.textContent = Math.round(state.adaptiveFps || 0) + ' FPS';
+            var fps = state.adaptiveFps || 0;
+            fpsEl.className = 'value ' + (fps < 30 ? 'warning' : fps > 55 ? 'good' : '');
+        }
+        if (statusEl) {
+            if (!state.adaptiveEnabled) {
+                statusEl.textContent = 'Disabled';
+            } else if (state.adaptiveLowSeconds > 0) {
+                statusEl.textContent = 'Low FPS: ' + state.adaptiveLowSeconds + 's';
+                statusEl.className = 'value warning';
+            } else if (state.adaptiveHighSeconds > 0) {
+                statusEl.textContent = 'High FPS: ' + state.adaptiveHighSeconds + 's';
+                statusEl.className = 'value good';
+            } else {
+                statusEl.textContent = 'Stable';
+                statusEl.className = 'value';
+            }
+        }
+        if (!info.classList.contains('show')) {
+            info.classList.add('show');
+            adaptiveInfoVisible = true;
+        }
+    }
+
+    // Hook into JavaScript callback for adaptive distance changes
+    window.__webmcOnAdaptiveDistanceChange = function(dist, fps, enabled) {
+        updateAdaptiveInfo({
+            adaptiveRenderDistance: dist,
+            adaptiveFps: fps,
+            adaptiveEnabled: enabled,
+            adaptiveLowSeconds: 0,
+            adaptiveHighSeconds: 0
+        });
+    };
 
     // ── Input Bridge: DOM Events → TeaVM InputBridge ────────────────────────
     function setupInputBridge() {

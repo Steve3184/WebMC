@@ -1,0 +1,9 @@
+--- a/java\lang\reflect\WildcardType.java
++++ b/java\lang\reflect\WildcardType.java
+@@ -0,0 +1,6 @@
++package java.lang.reflect;
++
++public interface WildcardType extends Type {
++    Type[] getUpperBounds();
++    Type[] getLowerBounds();
++}

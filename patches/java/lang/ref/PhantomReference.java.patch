@@ -1,0 +1,9 @@
+--- a/java\lang\ref\PhantomReference.java
++++ b/java\lang\ref\PhantomReference.java
+@@ -0,0 +1,6 @@
++package java.lang.ref;
++
++public final class PhantomReference<T> extends Reference<T> {
++    public PhantomReference(T referent, ReferenceQueue<? super T> q) { super(referent, q); }
++    @Override public T get() { return null; }
++}

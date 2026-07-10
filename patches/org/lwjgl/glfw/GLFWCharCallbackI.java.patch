@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWCharCallbackI.java
++++ b/org\lwjgl\glfw\GLFWCharCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWCharCallbackI {
++    void invoke(long window, int codepoint);
++}

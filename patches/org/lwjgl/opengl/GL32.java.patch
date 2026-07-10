@@ -1,0 +1,36 @@
+--- a/org\lwjgl\opengl\GL32.java
++++ b/org\lwjgl\opengl\GL32.java
+@@ -0,0 +1,33 @@
++package org.lwjgl.opengl;
++
++import top.steve3184.webmc.teavm.gl.GLBackendHolder;
++
++/** Stub of {@code org.lwjgl.opengl.GL32}. Sync objects, geometry shader (unused), MSAA textures. */
++public final class GL32 {
++    public static final int GL_SYNC_GPU_COMMANDS_COMPLETE = 0x9117;
++    public static final int GL_TIMEOUT_IGNORED = -1;
++    public static final int GL_ALREADY_SIGNALED      = 0x911A;
++    public static final int GL_TIMEOUT_EXPIRED       = 0x911B;
++    public static final int GL_CONDITION_SATISFIED   = 0x911C;
++    public static final int GL_WAIT_FAILED           = 0x911D;
++    public static final int GL_SYNC_FLUSH_COMMANDS_BIT = 0x00000001;
++
++    public static long glFenceSync(int condition, int flags) { return GLBackendHolder.current().fenceSync(condition, flags); }
++    public static int  glClientWaitSync(long sync, int flags, long timeout) { return GLBackendHolder.current().clientWaitSync(sync, flags, timeout); }
++    public static void glDeleteSync(long sync)               { GLBackendHolder.current().deleteSync(sync); }
++
++    public static void glBindBufferRange(int target, int index, int buffer, int offset, int size) {
++        GLBackendHolder.current().bindBufferRange(target, index, buffer, offset, size);
++    }
++    public static void glBindBufferRange(int target, int index, int buffer, long offset, long size) {
++        GLBackendHolder.current().bindBufferRange(target, index, buffer, offset, size);
++    }
++    public static void glDrawElementsBaseVertex(int mode, int count, int type, long offset, int baseVertex) {
++        GLBackendHolder.current().drawElements(mode, count, type, offset);
++    }
++    public static void glDrawElementsInstancedBaseVertex(int mode, int count, int type, long offset, int primCount, int baseVertex) {
++        GLBackendHolder.current().drawElementsInstanced(mode, count, type, offset, primCount);
++    }
++
++    private GL32() {}
++}

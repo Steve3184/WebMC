@@ -1,0 +1,9 @@
+--- a/org\lwjgl\stb\STBIWriteCallbackI.java
++++ b/org\lwjgl\stb\STBIWriteCallbackI.java
+@@ -0,0 +1,6 @@
++package org.lwjgl.stb;
++
++@FunctionalInterface
++public interface STBIWriteCallbackI {
++    void invoke(long context, long data, int size);
++}

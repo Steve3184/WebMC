@@ -9,7 +9,7 @@
         :root { color-scheme: dark; }
         html, body { margin: 0; padding: 0; height: 100%; background: #111; font-family: monospace; color: #ddd; overflow: hidden; }
         #stage   { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-        #canvas  { background: #000; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+        #game-canvas { background: #000; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
         #boot    { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; pointer-events: none; }
         #boot.hidden, .hidden { display: none !important; }
         #status  { font-size: 1.2rem; max-width: 80vw; text-align: center; }
@@ -23,7 +23,7 @@
 </head>
 <body>
     <div id="stage">
-        <canvas id="canvas" width="1280" height="720" tabindex="0"></canvas>
+        <canvas id="game-canvas" width="1280" height="720" tabindex="0"></canvas>
     </div>
     <div id="boot">
         <div id="status">Loading game.js…</div>

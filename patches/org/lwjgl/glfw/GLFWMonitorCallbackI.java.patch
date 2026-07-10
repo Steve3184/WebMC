@@ -1,0 +1,7 @@
+--- a/org\lwjgl\glfw\GLFWMonitorCallbackI.java
++++ b/org\lwjgl\glfw\GLFWMonitorCallbackI.java
+@@ -0,0 +1,4 @@
++package org.lwjgl.glfw;
++@FunctionalInterface public interface GLFWMonitorCallbackI {
++    void invoke(long monitor, int event);
++}
