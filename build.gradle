@@ -220,6 +220,8 @@ tasks.named('compileTeavmJava').configure {
     // Add the webmc TeaVM source files
     source = fileTree('src/main/java') {
         include '**/*.java'
+        // Exclude realmsclient - it uses Java SE classes (Kerberos, Certificate) not available in browser
+        exclude 'com/mojang/realmsclient/**/*.java'
     }
     // Add teavm-runtime source files (contains WebMain)
     source += fileTree('addons/teavm-runtime/src/main/java') {
