@@ -34,7 +34,7 @@ public class JdkStubsPlugin implements TeaVMPlugin {
                 ClassLoader cl = JdkStubsPlugin.class.getClassLoader();
                 java.util.List<String> entries = readIndex(cl);
                 System.err.println("[jdk-stubs-plugin] started() — submitting " + entries.size() + " stubs");
-                int ok = 0, fail = 0;
+                int ok = 0, fail = 0, skipped = 0;
                 for (String entry : entries) {
                     String resourcePath = "shadow-classes/" + entry;
                     try (InputStream in = cl.getResourceAsStream(resourcePath)) {
@@ -44,14 +44,23 @@ public class JdkStubsPlugin implements TeaVMPlugin {
                             continue;
                         }
                         byte[] bytes = in.readAllBytes();
-                        agent.submitClassFile(bytes);
-                        ok++;
+                        try {
+                            agent.submitClassFile(bytes);
+                            ok++;
+                        } catch (IllegalArgumentException e) {
+                            // Class already exists in TeaVM classlib - skip silently
+                            if (e.getMessage() != null && e.getMessage().contains("already defined")) {
+                                skipped++;
+                                continue;
+                            }
+                            throw e;
+                        }
                     } catch (Exception e) {
                         System.err.println("[jdk-stubs-plugin] failed to inject " + resourcePath + ": " + e);
                         fail++;
                     }
                 }
-                System.err.println("[jdk-stubs-plugin] done — " + ok + " ok, " + fail + " failed");
+                System.err.println("[jdk-stubs-plugin] done — " + ok + " ok, " + skipped + " skipped, " + fail + " failed");
             }
         });
     }

@@ -217,11 +217,25 @@ sourceSets {
 
 // Configure TeaVM to use custom source directories
 tasks.named('compileTeavmJava').configure {
-    // Add the webmc TeaVM source files
+    // Add the webmc TeaVM source files (MUST come first - these override work's files)
     source = fileTree('src/main/java') {
         include '**/*.java'
         // Exclude realmsclient - it uses Java SE classes (Kerberos, Certificate) not available in browser
         exclude 'com/mojang/realmsclient/**/*.java'
+    }
+    // Add work submodule source files (MCP-Reborn)
+    // Exclude everything that src/main/java already has to avoid duplicate class errors
+    source += fileTree('work/src/main/java') {
+        include '**/*.java'
+        // Exclude realmsclient - it uses Java SE classes (Kerberos, Certificate) not available in browser
+        exclude 'com/mojang/realmsclient/**/*.java'
+        // Exclude com/mojang packages that are overridden by src/main/java
+        exclude 'com/mojang/blaze3d/**'
+        exclude 'com/mojang/math/**'
+        // Exclude net package that is overridden by src/main/java
+        exclude 'net/**'
+        // Exclude mcp package that is overridden by src/main/java
+        exclude 'mcp/**'
     }
     // Add teavm-runtime source files (contains WebMain)
     source += fileTree('addons/teavm-runtime/src/main/java') {
@@ -302,26 +316,40 @@ task compileLwjglStubs(type: JavaCompile) {
     targetCompatibility = '21'
 }
 
+// Clean and rebuild jdk stubs indices - must depend on ALL compile tasks
+task cleanJdkStubs {
+    doLast {
+        delete jdkStubsClasses
+        delete file("$buildDir/jdk-stubs-meta")
+    }
+}
+
 task generateStubIndex {
-    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
+    dependsOn cleanJdkStubs, compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
+    inputs.dir jdkStubsClasses
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
-    outputs.file(indexFile)
+    outputs.file indexFile
     doLast {
         indexFile.parentFile.mkdirs()
         def skipExact = ["java/lang/Thread.class"] as Set
         def lines = []
-        fileTree(jdkStubsClasses).matching { include '**/*.class' }.each { f ->
-            def rel = jdkStubsClasses.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, (char) '/')
-            if (skipExact.contains(rel)) return
-            lines << rel
+        // Collect ALL class files from jdk-stubs-classes
+        def root = file(jdkStubsClasses)
+        root.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+            if (f.name.endsWith('.class')) {
+                def rel = root.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, (char) '/')
+                if (!skipExact.contains(rel)) {
+                    lines << rel
+                }
+            }
         }
         indexFile.text = lines.sort().join("\n") + "\n"
-        println "[generateStubIndex] wrote ${lines.size()} entries"
+        println "[generateStubIndex] wrote ${lines.size()} entries from ${jdkStubsClasses}"
     }
 }
 
 task packageJdkStubsPlugin(type: Jar) {
-    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
+    dependsOn cleanJdkStubs, compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
     archiveFileName = 'jdk-stubs-plugin.jar'
     destinationDirectory = file("$buildDir")
     from(jdkPluginClasses)
