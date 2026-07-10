@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main, security/input-validation-fixes]
+    branches: [main, 'security/*']
   pull_request:
-    branches: [main, security/input-validation-fixes]
+    branches: [main, 'security/*']
   workflow_dispatch:
 
 env:
@@ -53,3 +53,24 @@ EOF
             -Dorg.gradle.jvmargs="-Xmx14g" \
             -Dorg.gradle.workers.max=1 \
             -Dkotlin.daemon.jvmargs="-Xmx14g" 2>&1
+
+      - name: Check build output
+        run: |
+          if [ -f "build/web-run/game.js" ]; then
+            SIZE=$(stat -c%s build/web-run/game.js 2>/dev/null || stat -f%z build/web-run/game.js)
+            echo "game.js size: $((SIZE / 1024 / 1024))MB"
+          else
+            echo "No game.js found in build/web-run/"
+            find build -name "*.js" -type f 2>/dev/null | head -5 || echo "No JS files found"
+          fi
+
+      - name: Upload WebMC build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webmc-build
+          path: |
+            build/web-run/game.js
+            build/web-run/game.vfs
+            build/web-run/*.br
+          retention-days: 7
