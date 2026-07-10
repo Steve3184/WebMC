@@ -1,8 +1,15 @@
 package top.steve3184.webmc.teavm.glfw;
 
+import org.lwjgl.glfw.GLFWCharCallback;
+import org.lwjgl.glfw.GLFWCursorPosCallback;
+import org.lwjgl.glfw.GLFWFramebufferSizeCallback;
+import org.lwjgl.glfw.GLFWKeyCallback;
+import org.lwjgl.glfw.GLFWMouseButtonCallback;
+import org.lwjgl.glfw.GLFWScrollCallback;
+
 /**
- * Pure-Java interface that GLFW stubs delegate to. Concrete impl in
- * teavm-runtime wires DOM events, performance.now, navigator.clipboard.
+ * Backend interface for GLFW window operations.
+ * Implemented by teavm-runtime module.
  */
 public interface WindowBackend {
     boolean init();
@@ -11,37 +18,36 @@ public interface WindowBackend {
     void setTime(double t);
 
     long createWindow(int w, int h, String title);
-    void destroyWindow(long handle);
-    void makeContextCurrent(long handle);
-    boolean shouldClose(long handle);
-    void setShouldClose(long handle, boolean v);
-    void setTitle(long handle, String title);
-    void setSize(long handle, int w, int h);
-    void getFramebufferSize(long handle, int[] w, int[] h);
-    void getWindowSize(long handle, int[] w, int[] h);
-
-    void setInputMode(long handle, int mode, int value);
-    int  getInputMode(long handle, int mode);
-
-    boolean getKey(long handle, int key);
-    boolean getMouseButton(long handle, int button);
-    void    getCursorPos(long handle, double[] x, double[] y);
-
+    void destroyWindow(long win);
+    void makeContextCurrent(long win);
+    boolean shouldClose(long win);
+    void setShouldClose(long win, boolean v);
+    void setTitle(long win, String title);
+    void setSize(long win, int w, int h);
+    void getFramebufferSize(long win, int[] w, int[] h);
+    void getWindowSize(long win, int[] w, int[] h);
+    void setInputMode(long win, int mode, int value);
+    int getInputMode(long win, int mode);
+    boolean getKey(long win, int key);
+    boolean getMouseButton(long win, int button);
+    void getCursorPos(long win, double[] x, double[] y);
+    void setCursorPos(long win, double x, double y);
     String getClipboard();
-    void   setClipboard(String s);
+    void setClipboard(String value);
 
-    void setKeyCallback(long handle, org.lwjgl.glfw.GLFWKeyCallback cb);
-    void setCharCallback(long handle, org.lwjgl.glfw.GLFWCharCallback cb);
-    void setMouseButtonCallback(long handle, org.lwjgl.glfw.GLFWMouseButtonCallback cb);
-    void setCursorPosCallback(long handle, org.lwjgl.glfw.GLFWCursorPosCallback cb);
-    void setScrollCallback(long handle, org.lwjgl.glfw.GLFWScrollCallback cb);
-    void setFramebufferSizeCallback(long handle, org.lwjgl.glfw.GLFWFramebufferSizeCallback cb);
+    // Callback setters (classic form)
+    void setKeyCallback(long handle, GLFWKeyCallback callback);
+    void setCharCallback(long handle, GLFWCharCallback callback);
+    void setMouseButtonCallback(long handle, GLFWMouseButtonCallback callback);
+    void setCursorPosCallback(long handle, GLFWCursorPosCallback callback);
+    void setScrollCallback(long handle, GLFWScrollCallback callback);
+    void setFramebufferSizeCallback(long handle, GLFWFramebufferSizeCallback callback);
 
-    // I-interface forms used by MC's lambda/method-ref call sites
-    void setKeyCallbackI(long handle, org.lwjgl.glfw.GLFWKeyCallbackI cb);
-    void setCharCallbackI(long handle, org.lwjgl.glfw.GLFWCharCallbackI cb);
-    void setMouseButtonCallbackI(long handle, org.lwjgl.glfw.GLFWMouseButtonCallbackI cb);
-    void setCursorPosCallbackI(long handle, org.lwjgl.glfw.GLFWCursorPosCallbackI cb);
-    void setScrollCallbackI(long handle, org.lwjgl.glfw.GLFWScrollCallbackI cb);
-    void setFramebufferSizeCallbackI(long handle, org.lwjgl.glfw.GLFWFramebufferSizeCallbackI cb);
+    // Callback setters (I-interface form, used by MC)
+    void setKeyCallbackI(long handle, org.lwjgl.glfw.GLFWKeyCallbackI callback);
+    void setCharCallbackI(long handle, org.lwjgl.glfw.GLFWCharCallbackI callback);
+    void setMouseButtonCallbackI(long handle, org.lwjgl.glfw.GLFWMouseButtonCallbackI callback);
+    void setCursorPosCallbackI(long handle, org.lwjgl.glfw.GLFWCursorPosCallbackI callback);
+    void setScrollCallbackI(long handle, org.lwjgl.glfw.GLFWScrollCallbackI callback);
+    void setFramebufferSizeCallbackI(long handle, org.lwjgl.glfw.GLFWFramebufferSizeCallbackI callback);
 }

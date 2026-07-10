@@ -249,8 +249,8 @@ public final class AsyncChunkLoader {
             return null;
         }
         return new ChunkPos(
-            ChunkPos.getX(predictedX),
-            ChunkPos.getZ(predictedZ)
+            ChunkPos.getX((long) predictedX),
+            ChunkPos.getZ((long) predictedZ)
         );
     }
 
@@ -389,7 +389,7 @@ public final class AsyncChunkLoader {
      */
     private long estimateChunkSize(CompoundTag tag) {
         // Rough estimate: 1KB for empty chunks, up to 1MB for full chunks
-        return Math.min(1024 * 1024, Math.max(1024, tag.sizeInNbt()));
+        return Math.min(1024 * 1024, Math.max(1024, tag.sizeInBytes()));
     }
 
     /**

@@ -1,14 +1,18 @@
 package top.steve3184.webmc.teavm.io;
 
 public final class ImageDecodeBackendHolder {
-    private static ImageDecodeBackend INSTANCE;
+    private static ImageDecodeBackend backend;
+
     private ImageDecodeBackendHolder() {}
-    public static void install(ImageDecodeBackend b) {
-        if (INSTANCE != null) throw new IllegalStateException("ImageDecodeBackend already installed");
-        INSTANCE = b;
+
+    public static void install(ImageDecodeBackend backend) {
+        ImageDecodeBackendHolder.backend = backend;
     }
+
     public static ImageDecodeBackend current() {
-        if (INSTANCE == null) throw new IllegalStateException("ImageDecodeBackend not installed");
-        return INSTANCE;
+        if (backend == null) {
+            throw new IllegalStateException("ImageDecodeBackend not installed");
+        }
+        return backend;
     }
 }

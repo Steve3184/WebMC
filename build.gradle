@@ -29,17 +29,11 @@ println(' Java: ' + System.getProperty('java.version') +
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-// Enable parallel compilation and incremental builds
+// Disable fork for all compilation tasks to avoid worker issues on Windows
+// The worker ClassNotFoundException is a known issue with ForgeGradle + Windows
 tasks.withType(JavaCompile).configureEach {
-    options.fork = true
-    options.incremental = true
-}
-
-// Disable fork for JDK stubs compilation tasks to avoid worker issues on Windows
-tasks.withType(JavaCompile).matching {
-    it.name.contains('Stubs') || it.name.contains('Lock') || it.name.contains('SunMisc')
-}.configureEach {
     options.fork = false
+    options.incremental = true
 }
 
 configurations {

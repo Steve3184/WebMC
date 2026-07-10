@@ -1,14 +1,23 @@
 package top.steve3184.webmc.teavm.glfw;
 
 public final class WindowBackendHolder {
-    private static WindowBackend INSTANCE;
-    private WindowBackendHolder() {}
-    public static void install(WindowBackend backend) {
-        if (INSTANCE != null) throw new IllegalStateException("WindowBackend already installed");
-        INSTANCE = backend;
+    private static WindowBackend backend;
+
+    private WindowBackendHolder() {
     }
+
+    public static void install(WindowBackend backend) {
+        WindowBackendHolder.backend = backend;
+    }
+
+    public static WindowBackend get() {
+        return backend;
+    }
+
     public static WindowBackend current() {
-        if (INSTANCE == null) throw new IllegalStateException("WindowBackend not installed.");
-        return INSTANCE;
+        if (backend == null) {
+            throw new IllegalStateException("WindowBackend not installed");
+        }
+        return backend;
     }
 }

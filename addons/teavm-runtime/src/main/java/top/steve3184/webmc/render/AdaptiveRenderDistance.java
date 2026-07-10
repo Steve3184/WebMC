@@ -4,9 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
+import org.teavm.jso.dom.events.Event;
 import org.teavm.jso.dom.events.EventListener;
-import org.teavm.jso.dom.html.HTMLDocument;
-import org.teavm.jso.dom.html.Window;
 
 /**
  * Adaptive render distance controller that adjusts chunk rendering distance
@@ -72,6 +71,9 @@ public final class AdaptiveRenderDistance {
     /** RAF callback handle for cleanup */
     private JSObject rafCallback;
 
+    /** Frame callback stored as field to allow self-reference */
+    private EventListener<Event> frameCallback;
+
     /** Singleton instance */
     private static AdaptiveRenderDistance INSTANCE;
 
@@ -98,6 +100,16 @@ public final class AdaptiveRenderDistance {
         startMonitor();
 
         log("AdaptiveRenderDistance initialized with renderDistance=" + currentRenderDistance);
+    }
+
+    /**
+     * Called each frame by MC's game loop.
+     * When using internal RAF monitoring, this is a no-op (monitor runs independently).
+     * Kept for API compatibility with callers that expect this method.
+     */
+    public void onFrame() {
+        // Internal RAF monitor handles FPS tracking independently.
+        // This method exists for API compatibility only.
     }
 
     /**
@@ -135,8 +147,8 @@ public final class AdaptiveRenderDistance {
         final int[] frameCount = { 0 };
         final int[] secondAccumulator = { 0 };
 
-        // Create RAF callback
-        EventListener<JSObject> onFrame = (timestamp) -> {
+        // Create RAF callback and store as field for self-reference
+        frameCallback = (EventListener<Event>) (timestamp) -> {
             if (!enabled || !monitorRunning) {
                 return;
             }
@@ -159,11 +171,11 @@ public final class AdaptiveRenderDistance {
             }
 
             // Schedule next frame
-            requestAnimationFrame(onFrame);
+            requestAnimationFrame(frameCallback);
         };
 
         // Start the loop
-        rafCallback = requestAnimationFrame(onFrame);
+        rafCallback = requestAnimationFrame(frameCallback);
         log("FPS monitor started");
     }
 
@@ -346,7 +358,7 @@ public final class AdaptiveRenderDistance {
     private static native long getTimeMillis();
 
     @JSBody(params = {"callback"}, script = "return requestAnimationFrame(callback);")
-    private static native JSObject requestAnimationFrame(EventListener<JSObject> callback);
+    private static native JSObject requestAnimationFrame(EventListener<Event> callback);
 
     @JSBody(params = {"dist", "fps", "enabled", "lowSeconds", "highSeconds"}, script =
         "try {" +

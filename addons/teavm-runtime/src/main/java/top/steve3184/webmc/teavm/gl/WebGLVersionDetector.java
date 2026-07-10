@@ -1,21 +1,13 @@
 package top.steve3184.webmc.teavm.gl;
 
+import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
-import org.teavm.jso.browser.Window;
-import org.teavm.jso.browser.WindowAnimationFrameCallback;
 import org.teavm.jso.dom.html.HTMLCanvasElement;
 import org.teavm.jso.webgl.WebGL2RenderingContext;
-import org.teavm.jso.webgl.WebGLContextAttributes;
 import org.teavm.jso.webgl.WebGLRenderingContext;
 
 /**
  * WebGL version detection and context acquisition.
- *
- * Supports:
- * - WebGL 2.0 (primary, full features)
- * - WebGL 1.0 (fallback, limited functionality)
- *
- * Detection is performed at startup and the result is cached.
  */
 public final class WebGLVersionDetector {
 
@@ -30,17 +22,12 @@ public final class WebGLVersionDetector {
 
     private WebGLVersionDetector() {}
 
-    /**
-     * Detects the best available WebGL version.
-     * First tries WebGL 2.0, then falls back to WebGL 1.0.
-     * Result is cached after first call.
-     */
     public static WebGLVersion detect() {
         if (cachedVersion != null) {
             return cachedVersion;
         }
 
-        HTMLCanvasElement canvas = (HTMLCanvasElement) Window.current().getDocument().getElementById("game-canvas");
+        HTMLCanvasElement canvas = getCanvasElement();
         if (canvas == null) {
             cachedVersion = WebGLVersion.NONE;
             cachedVersionString = "No canvas";
@@ -48,18 +35,18 @@ public final class WebGLVersionDetector {
         }
 
         // Try WebGL 2.0 first
-        WebGL2RenderingContext gl2 = tryGetWebGL2(canvas);
+        JSObject gl2 = tryGetWebGL2(canvas);
         if (gl2 != null) {
             cachedVersion = WebGLVersion.WEBGL2;
-            cachedVersionString = getVersionString(gl2);
+            cachedVersionString = getWebGLVersionString(gl2);
             return cachedVersion;
         }
 
         // Fall back to WebGL 1.0
-        WebGLRenderingContext gl1 = tryGetWebGL1(canvas);
+        JSObject gl1 = tryGetWebGL1(canvas);
         if (gl1 != null) {
             cachedVersion = WebGLVersion.WEBGL1;
-            cachedVersionString = getWebGL1VersionString(gl1);
+            cachedVersionString = getWebGLVersionString(gl1);
             return cachedVersion;
         }
 
@@ -68,9 +55,6 @@ public final class WebGLVersionDetector {
         return cachedVersion;
     }
 
-    /**
-     * Returns the cached version string (WebGL version + renderer info).
-     */
     public static String getVersionString() {
         if (cachedVersionString == null) {
             detect();
@@ -78,75 +62,56 @@ public final class WebGLVersionDetector {
         return cachedVersionString;
     }
 
-    /**
-     * Checks if WebGL 2.0 is available.
-     */
     public static boolean isWebGL2Available() {
         return detect() == WebGLVersion.WEBGL2;
     }
 
-    /**
-     * Checks if WebGL 1.0 is available (may have limited functionality).
-     */
     public static boolean isWebGL1Available() {
-        WebGLVersion v = detect();
-        return v == WebGLVersion.WEBGL1;
+        return detect() == WebGLVersion.WEBGL1;
     }
 
-    /**
-     * Checks if any WebGL is available.
-     */
     public static boolean isAnyWebGLAvailable() {
         return detect() != WebGLVersion.NONE;
     }
 
-    /**
-     * Checks if the detected WebGL version supports the required features.
-     * WebGL 1.0 has limited support - many MC features require WebGL 2.0.
-     */
     public static boolean supportsRequiredFeatures() {
         return detect() == WebGLVersion.WEBGL2;
     }
 
-    private static WebGL2RenderingContext tryGetWebGL2(HTMLCanvasElement canvas) {
-        try {
-            WebGLContextAttributes attrs = WebGLContextAttributes.create();
-            attrs.setAlpha(false);
-            attrs.setAntialias(false);
-            attrs.setDepth(true);
-            attrs.setStencil(false);
-            attrs.setPreserveDrawingBuffer(false);
-            attrs.setPowerPreference("default");
+    @JSBody(script =
+        "var c = document.getElementById('game-canvas');" +
+        "if (c && c.tagName === 'CANVAS') return c;" +
+        "return null;")
+    private static native HTMLCanvasElement getCanvasElement();
 
-            WebGL2RenderingContext ctx = canvas.getContext("webgl2", attrs);
-            return ctx;
-        } catch (Throwable t) {
-            return null;
-        }
+    @JSBody(params = {"canvas", "type"}, script =
+        "var options = {" +
+        "  alpha: false," +
+        "  antialias: false," +
+        "  depth: true," +
+        "  stencil: false," +
+        "  powerPreference: 'default'" +
+        "};" +
+        "try {" +
+        "  return canvas.getContext(type, options);" +
+        "} catch(e) {" +
+        "  return null;" +
+        "}")
+    private static native JSObject getWebGLContext(HTMLCanvasElement canvas, String type);
+
+    private static JSObject tryGetWebGL2(HTMLCanvasElement canvas) {
+        return getWebGLContext(canvas, "webgl2");
     }
 
-    private static WebGLRenderingContext tryGetWebGL1(HTMLCanvasElement canvas) {
-        try {
-            WebGLContextAttributes attrs = WebGLContextAttributes.create();
-            attrs.setAlpha(false);
-            attrs.setAntialias(false);
-            attrs.setDepth(true);
-            attrs.setStencil(false);
-            attrs.setPreserveDrawingBuffer(false);
-            attrs.setPowerPreference("default");
-
-            WebGLRenderingContext ctx = canvas.getContext("webgl", attrs);
-            return ctx;
-        } catch (Throwable t) {
-            return null;
-        }
+    private static JSObject tryGetWebGL1(HTMLCanvasElement canvas) {
+        return getWebGLContext(canvas, "webgl");
     }
 
-    private static native String getVersionString(WebGL2RenderingContext gl) /*-{
-        return gl.getParameter(gl.VERSION) + " / " + gl.getParameter(gl.VENDOR) + " / " + gl.getParameter(gl.RENDERER);
-    }-*/;
-
-    private static native String getWebGL1VersionString(WebGLRenderingContext gl) /*-{
-        return gl.getParameter(gl.VERSION) + " / " + gl.getParameter(gl.VENDOR) + " / " + gl.getParameter(gl.RENDERER);
-    }-*/;
+    @JSBody(params = "ctx", script =
+        "try {" +
+        "  return ctx.getParameter(ctx.VERSION) + ' / ' + ctx.getParameter(ctx.VENDOR) + ' / ' + ctx.getParameter(ctx.RENDERER);" +
+        "} catch(e) {" +
+        "  return 'Unknown';" +
+        "}")
+    private static native String getWebGLVersionString(JSObject ctx);
 }

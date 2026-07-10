@@ -4,11 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
-import org.teavm.jso.browser.KeyboardEvent;
-import org.teavm.jso.browser.MouseEvent;
-import org.teavm.jso.browser.WheelEvent;
-import org.teavm.jso.browser.Window;
+import org.teavm.jso.dom.events.Event;
 import org.teavm.jso.dom.events.EventListener;
+import org.teavm.jso.dom.events.EventTarget;
 import org.teavm.jso.dom.html.HTMLCanvasElement;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWCharCallback;
@@ -33,6 +31,9 @@ public final class CanvasWindowBackend implements WindowBackend {
     private final boolean[] mouseButtons = new boolean[8];
     // Key state tracking - supports up to 512 key codes (matches GLFW range)
     private final boolean[] keyStates = new boolean[512];
+
+    // Focus state
+    private boolean hasFocus = false;
 
     private static final class Callbacks {
         GLFWKeyCallback key;
@@ -59,16 +60,16 @@ public final class CanvasWindowBackend implements WindowBackend {
     @Override
     public void terminate() {
         if (canvas != null && domListenersRegistered) {
-            canvas.removeEventListener("keydown", keyDownListener);
-            canvas.removeEventListener("keyup", keyUpListener);
-            canvas.removeEventListener("keypress", keyPressListener);
-            canvas.removeEventListener("mousedown", mouseDownListener);
-            canvas.removeEventListener("mouseup", mouseUpListener);
-            canvas.removeEventListener("mousemove", mouseMoveListener);
-            canvas.removeEventListener("wheel", wheelListener);
-            Window.getCurrent().removeEventListener("blur", blurListener);
-            Window.getCurrent().removeEventListener("focus", focusListener);
-            Window.getCurrent().removeEventListener("resize", resizeListener);
+            removeEventListener(canvas, "keydown", keyDownListener);
+            removeEventListener(canvas, "keyup", keyUpListener);
+            removeEventListener(canvas, "keypress", keyPressListener);
+            removeEventListener(canvas, "mousedown", mouseDownListener);
+            removeEventListener(canvas, "mouseup", mouseUpListener);
+            removeEventListener(canvas, "mousemove", mouseMoveListener);
+            removeEventListener(canvas, "wheel", wheelListener);
+            removeWindowEventListener("blur", blurListener);
+            removeWindowEventListener("focus", focusListener);
+            removeWindowEventListener("resize", resizeListener);
             domListenersRegistered = false;
         }
         windows.clear();
@@ -108,29 +109,30 @@ public final class CanvasWindowBackend implements WindowBackend {
 
         // Enable tab focus so canvas can receive keyboard events
         setCanvasTabIndex(canvas, 0);
-        setCanvasFocusable(canvas, true);
 
         // Make canvas focusable for keyboard input
-        canvas.addEventListener("keydown", keyDownListener);
-        canvas.addEventListener("keyup", keyUpListener);
-        canvas.addEventListener("keypress", keyPressListener);
+        addEventListener(canvas, "keydown", keyDownListener);
+        addEventListener(canvas, "keyup", keyUpListener);
+        addEventListener(canvas, "keypress", keyPressListener);
 
         // Mouse events
-        canvas.addEventListener("mousedown", mouseDownListener);
-        canvas.addEventListener("mouseup", mouseUpListener);
-        canvas.addEventListener("mousemove", mouseMoveListener);
-        canvas.addEventListener("wheel", wheelListener);
+        addEventListener(canvas, "mousedown", mouseDownListener);
+        addEventListener(canvas, "mouseup", mouseUpListener);
+        addEventListener(canvas, "mousemove", mouseMoveListener);
+        addEventListener(canvas, "wheel", wheelListener);
 
         // Window events
-        Window.getCurrent().addEventListener("blur", blurListener);
-        Window.getCurrent().addEventListener("focus", focusListener);
-        Window.getCurrent().addEventListener("resize", resizeListener);
+        addWindowEventListener("blur", blurListener);
+        addWindowEventListener("focus", focusListener);
+        addWindowEventListener("resize", resizeListener);
 
         // Register clipboard copy listener
         registerClipboardListener();
 
         log("CanvasWindowBackend: DOM listeners registered");
     }
+
+    // ---- Native DOM access ----
 
     @JSBody(script =
         "document.addEventListener('copy', function(e) {" +
@@ -144,8 +146,6 @@ public final class CanvasWindowBackend implements WindowBackend {
         "}, false);")
     private static native void registerClipboardListener();
 
-    // ---- Native DOM access ----
-
     @JSBody(script =
         "var c = document.getElementById('game-canvas');" +
         "if (c && c.tagName === 'CANVAS') return c;" +
@@ -155,19 +155,51 @@ public final class CanvasWindowBackend implements WindowBackend {
     @JSBody(params = {"canvas", "index"}, script = "canvas.tabIndex = index;")
     private static native void setCanvasTabIndex(HTMLCanvasElement canvas, int index);
 
-    @JSBody(params = {"canvas", "focusable"}, script = "canvas.focusable = focusable;")
-    private static native void setCanvasFocusable(HTMLCanvasElement canvas, boolean focusable);
+    @JSBody(params = {"target", "type", "listener"}, script =
+        "target.addEventListener(type, listener);")
+    private static native void addEventListener(EventTarget target, String type, EventListener<?> listener);
+
+    @JSBody(params = {"target", "type", "listener"}, script =
+        "target.removeEventListener(type, listener);")
+    private static native void removeEventListener(EventTarget target, String type, EventListener<?> listener);
+
+    @JSBody(params = {"type", "listener"}, script =
+        "window.addEventListener(type, listener);")
+    private static native void addWindowEventListener(String type, EventListener<?> listener);
+
+    @JSBody(params = {"type", "listener"}, script =
+        "window.removeEventListener(type, listener);")
+    private static native void removeWindowEventListener(String type, EventListener<?> listener);
 
     @JSBody(params = "msg", script = "console.log('[CanvasWindowBackend] ' + msg);")
     private static native void log(String msg);
 
+    // ---- Native event property accessors ----
+
+    @JSBody(params = {"event", "prop"}, script = "return event[prop];")
+    private static native int getEventIntProp(JSObject event, String prop);
+
+    @JSBody(params = {"event", "prop"}, script = "return event[prop];")
+    private static native double getEventDoubleProp(JSObject event, String prop);
+
+    @JSBody(params = {"event", "prop"}, script = "return event[prop] || false;")
+    private static native boolean getEventBoolProp(JSObject event, String prop);
+
+    @JSBody(params = {"canvas", "prop"}, script = "return canvas[prop];")
+    private static native int getCanvasIntProp(HTMLCanvasElement canvas, String prop);
+
+    @JSBody(params = "canvas", script = "canvas.focus();")
+    private static native void focusCanvas(HTMLCanvasElement canvas);
+
     // ---- Event Listeners ----
 
-    private final EventListener<KeyboardEvent> keyDownListener = new EventListener<KeyboardEvent>() {
+    private final EventListener<Event> keyDownListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(KeyboardEvent event) {
-            int key = domKeyCodeToGlfw(event.getKeyCode());
-            int scancode = domKeyCodeToGlfwScancode(event.getKeyCode());
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            int keyCode = getEventIntProp(event, "keyCode");
+            int key = domKeyCodeToGlfw(keyCode);
+            int scancode = domKeyCodeToGlfwScancode(keyCode);
             int action = GLFW.GLFW_PRESS;
             int mods = getGlfwMods(event);
 
@@ -176,7 +208,7 @@ public final class CanvasWindowBackend implements WindowBackend {
                 keyStates[key] = true;
             }
 
-            invokeKeyCallbacks(event.getWindow() != null ? getWindowHandle() : getFocusedWindowHandle(), key, scancode, action, mods);
+            invokeKeyCallbacks(getFocusedWindowHandle(), key, scancode, action, mods);
 
             // For printable characters, also invoke char callback
             if (key >= 32 && key <= 126) {
@@ -185,16 +217,18 @@ public final class CanvasWindowBackend implements WindowBackend {
 
             // Prevent default for game keys to avoid browser shortcuts
             if (isGameKey(key)) {
-                event.preventDefault();
+                preventDefault(event);
             }
         }
     };
 
-    private final EventListener<KeyboardEvent> keyUpListener = new EventListener<KeyboardEvent>() {
+    private final EventListener<Event> keyUpListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(KeyboardEvent event) {
-            int key = domKeyCodeToGlfw(event.getKeyCode());
-            int scancode = domKeyCodeToGlfwScancode(event.getKeyCode());
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            int keyCode = getEventIntProp(event, "keyCode");
+            int key = domKeyCodeToGlfw(keyCode);
+            int scancode = domKeyCodeToGlfwScancode(keyCode);
             int action = GLFW.GLFW_RELEASE;
             int mods = getGlfwMods(event);
 
@@ -203,43 +237,50 @@ public final class CanvasWindowBackend implements WindowBackend {
                 keyStates[key] = false;
             }
 
-            invokeKeyCallbacks(event.getWindow() != null ? getWindowHandle() : getFocusedWindowHandle(), key, scancode, action, mods);
+            invokeKeyCallbacks(getFocusedWindowHandle(), key, scancode, action, mods);
         }
     };
 
-    private final EventListener<KeyboardEvent> keyPressListener = new EventListener<KeyboardEvent>() {
+    private final EventListener<Event> keyPressListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(KeyboardEvent event) {
-            int codepoint = event.getCharCode();
-            if (codepoint > 0) {
-                invokeCharCallbacks(getFocusedWindowHandle(), codepoint);
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            int charCode = getEventIntProp(event, "charCode");
+            if (charCode > 0) {
+                invokeCharCallbacks(getFocusedWindowHandle(), charCode);
             }
         }
     };
 
-    private final EventListener<MouseEvent> mouseDownListener = new EventListener<MouseEvent>() {
+    private final EventListener<Event> mouseDownListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(MouseEvent event) {
-            int button = domButtonToGlfw(event.getButton());
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            int button = domButtonToGlfw(getEventIntProp(event, "button"));
             if (button >= 0 && button < mouseButtons.length) {
                 mouseButtons[button] = true;
             }
             int action = GLFW.GLFW_PRESS;
             int mods = getGlfwMods(event);
 
+            // Update cursor position
+            cursorX = getEventDoubleProp(event, "clientX");
+            cursorY = getEventDoubleProp(event, "clientY");
+
             invokeMouseButtonCallbacks(getWindowHandle(), button, action, mods);
 
             // Focus canvas on click
             if (canvas != null) {
-                canvas.focus();
+                focusCanvas(canvas);
             }
         }
     };
 
-    private final EventListener<MouseEvent> mouseUpListener = new EventListener<MouseEvent>() {
+    private final EventListener<Event> mouseUpListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(MouseEvent event) {
-            int button = domButtonToGlfw(event.getButton());
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            int button = domButtonToGlfw(getEventIntProp(event, "button"));
             if (button >= 0 && button < mouseButtons.length) {
                 mouseButtons[button] = false;
             }
@@ -250,65 +291,71 @@ public final class CanvasWindowBackend implements WindowBackend {
         }
     };
 
-    private final EventListener<MouseEvent> mouseMoveListener = new EventListener<MouseEvent>() {
+    private final EventListener<Event> mouseMoveListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(MouseEvent event) {
-            cursorX = event.getClientX();
-            cursorY = event.getClientY();
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            cursorX = getEventDoubleProp(event, "clientX");
+            cursorY = getEventDoubleProp(event, "clientY");
 
             invokeCursorPosCallbacks(getWindowHandle(), cursorX, cursorY);
         }
     };
 
-    private final EventListener<WheelEvent> wheelListener = new EventListener<WheelEvent>() {
+    private final EventListener<Event> wheelListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(WheelEvent event) {
-            double xOffset = event.getDeltaX();
-            double yOffset = event.getDeltaY();
+        public void handleEvent(Event evt) {
+            JSObject event = (JSObject) evt;
+            double xOffset = getEventDoubleProp(event, "deltaX");
+            double yOffset = getEventDoubleProp(event, "deltaY");
 
             // Normalize: browser scroll values vary, GLFW expects 1.0 per line
             invokeScrollCallbacks(getWindowHandle(), xOffset, yOffset);
+            preventDefault(event);
         }
     };
 
-    private final EventListener<JSObject> blurListener = new EventListener<JSObject>() {
+    private final EventListener<Event> blurListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(JSObject event) {
+        public void handleEvent(Event evt) {
             // Window lost focus - clear all key and mouse states
+            hasFocus = false;
             clearAllKeyStates();
             clearAllMouseButtonStates();
             invokeWindowFocusCallbacks(getWindowHandle(), false);
         }
     };
 
-    private final EventListener<JSObject> focusListener = new EventListener<JSObject>() {
+    private final EventListener<Event> focusListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(JSObject event) {
+        public void handleEvent(Event evt) {
             // Window gained focus
+            hasFocus = true;
             invokeWindowFocusCallbacks(getWindowHandle(), true);
         }
     };
 
-    private final EventListener<JSObject> resizeListener = new EventListener<JSObject>() {
+    private final EventListener<Event> resizeListener = new EventListener<Event>() {
         @Override
-        public void handleEvent(JSObject event) {
+        public void handleEvent(Event evt) {
             if (canvas != null) {
-                int width = canvas.getClientWidth();
-                int height = canvas.getClientHeight();
+                int width = getCanvasIntProp(canvas, "clientWidth");
+                int height = getCanvasIntProp(canvas, "clientHeight");
                 invokeFramebufferSizeCallbacks(getWindowHandle(), width, height);
             }
         }
     };
 
+    @JSBody(params = "event", script = "event.preventDefault();")
+    private static native void preventDefault(JSObject event);
+
     // ---- Helper methods ----
 
     private static long getWindowHandle() {
-        // Return the first (and typically only) window handle
         return 1L;
     }
 
     private static long getFocusedWindowHandle() {
-        // Return the first window as the focused one (single window app)
         return 1L;
     }
 
@@ -385,8 +432,7 @@ public final class CanvasWindowBackend implements WindowBackend {
     }
 
     private void invokeWindowFocusCallbacks(long handle, boolean focused) {
-        // Window focus callbacks are not stored in Callbacks - they're handled by the I interface
-        // For now, we just log this event
+        // Window focus callbacks - handled via I interface
     }
 
     /**
@@ -410,7 +456,6 @@ public final class CanvasWindowBackend implements WindowBackend {
     // ---- Key code mapping ----
 
     private static int domKeyCodeToGlfw(int keyCode) {
-        // Map DOM keyCode to GLFW key codes
         switch (keyCode) {
             case 8: return GLFW.GLFW_KEY_BACKSPACE;
             case 9: return GLFW.GLFW_KEY_TAB;
@@ -494,46 +539,31 @@ public final class CanvasWindowBackend implements WindowBackend {
     }
 
     private static int domKeyCodeToGlfwScancode(int keyCode) {
-        // Simplified: use keyCode as scancode for now
-        // Real scancodes would require platform-specific mapping
         return keyCode;
     }
 
     private static int domButtonToGlfw(int button) {
-        // Map DOM button to GLFW buttons
-        // DOM: 0=left, 1=middle, 2=right
-        // GLFW: 0=left, 1=right, 2=middle+4=button4, etc.
         switch (button) {
             case 0: return 0;  // Left button
             case 1: return 2;  // Middle button
             case 2: return 1;  // Right button
-            default: return button; // Button 3+ maps directly
+            default: return button;
         }
     }
 
-    private static int getGlfwMods(KeyboardEvent event) {
+    private static int getGlfwMods(JSObject event) {
         int mods = 0;
-        if (event.isShiftKey()) mods |= GLFW.GLFW_MOD_SHIFT;
-        if (event.isCtrlKey()) mods |= GLFW.GLFW_MOD_CONTROL;
-        if (event.isAltKey()) mods |= GLFW.GLFW_MOD_ALT;
-        if (event.isMetaKey()) mods |= GLFW.GLFW_MOD_SUPER;
-        return mods;
-    }
-
-    private static int getGlfwMods(MouseEvent event) {
-        int mods = 0;
-        if (event.isShiftKey()) mods |= GLFW.GLFW_MOD_SHIFT;
-        if (event.isCtrlKey()) mods |= GLFW.GLFW_MOD_CONTROL;
-        if (event.isAltKey()) mods |= GLFW.GLFW_MOD_ALT;
-        if (event.isMetaKey()) mods |= GLFW.GLFW_MOD_SUPER;
+        if (getEventBoolProp(event, "shiftKey")) mods |= GLFW.GLFW_MOD_SHIFT;
+        if (getEventBoolProp(event, "ctrlKey")) mods |= GLFW.GLFW_MOD_CONTROL;
+        if (getEventBoolProp(event, "altKey")) mods |= GLFW.GLFW_MOD_ALT;
+        if (getEventBoolProp(event, "metaKey")) mods |= GLFW.GLFW_MOD_SUPER;
         return mods;
     }
 
     private static boolean isGameKey(int key) {
-        // Prevent default for game-relevant keys (not browser shortcuts)
-        return key != GLFW.GLFW_KEY_F5 && // Allow refresh
-               key != GLFW.GLFW_KEY_F12 && // Allow dev tools
-               key != GLFW.GLFW_KEY_TAB; // Allow tab switching
+        return key != GLFW.GLFW_KEY_F5 &&
+               key != GLFW.GLFW_KEY_F12 &&
+               key != GLFW.GLFW_KEY_TAB;
     }
 
     // ---- WindowBackend interface implementation ----
@@ -568,21 +598,16 @@ public final class CanvasWindowBackend implements WindowBackend {
     @Override
     public void getFramebufferSize(long handle, int[] width, int[] height) {
         if (canvas != null) {
-            // Use device pixel ratio for proper sizing
             int dpr = getDevicePixelRatio();
             if (width != null && width.length > 0) {
-                width[0] = canvas.getClientWidth() * dpr;
+                width[0] = getCanvasIntProp(canvas, "clientWidth") * dpr;
             }
             if (height != null && height.length > 0) {
-                height[0] = canvas.getClientHeight() * dpr;
+                height[0] = getCanvasIntProp(canvas, "clientHeight") * dpr;
             }
         } else {
-            if (width != null && width.length > 0) {
-                width[0] = 1280;
-            }
-            if (height != null && height.length > 0) {
-                height[0] = 720;
-            }
+            if (width != null && width.length > 0) width[0] = 1280;
+            if (height != null && height.length > 0) height[0] = 720;
         }
     }
 
@@ -593,10 +618,10 @@ public final class CanvasWindowBackend implements WindowBackend {
     public void getWindowSize(long handle, int[] width, int[] height) {
         if (canvas != null) {
             if (width != null && width.length > 0) {
-                width[0] = canvas.getClientWidth();
+                width[0] = getCanvasIntProp(canvas, "clientWidth");
             }
             if (height != null && height.length > 0) {
-                height[0] = canvas.getClientHeight();
+                height[0] = getCanvasIntProp(canvas, "clientHeight");
             }
         } else {
             getFramebufferSize(handle, width, height);
@@ -608,12 +633,10 @@ public final class CanvasWindowBackend implements WindowBackend {
         if (mode == GLFW.GLFW_CURSOR && canvas != null) {
             switch (value) {
                 case GLFW.GLFW_CURSOR_DISABLED:
-                    // Request pointer lock for FPS games
                     requestPointerLock(canvas);
                     break;
                 case GLFW.GLFW_CURSOR_HIDDEN:
                 case GLFW.GLFW_CURSOR_NORMAL:
-                    // Exit pointer lock
                     exitPointerLock();
                     break;
             }
@@ -642,7 +665,6 @@ public final class CanvasWindowBackend implements WindowBackend {
 
     @Override
     public boolean getKey(long handle, int key) {
-        // Return tracked key state for polling methods
         if (key >= 0 && key < keyStates.length) {
             return keyStates[key];
         }
@@ -659,20 +681,18 @@ public final class CanvasWindowBackend implements WindowBackend {
 
     @Override
     public void getCursorPos(long handle, double[] x, double[] y) {
-        if (x != null && x.length > 0) {
-            x[0] = cursorX;
-        }
-        if (y != null && y.length > 0) {
-            y[0] = cursorY;
-        }
+        if (x != null && x.length > 0) x[0] = cursorX;
+        if (y != null && y.length > 0) y[0] = cursorY;
+    }
+
+    @Override
+    public void setCursorPos(long handle, double x, double y) {
+        cursorX = x;
+        cursorY = y;
     }
 
     private static String cachedClipboard = "";
 
-    /**
-     * Updates the cached clipboard value from JavaScript.
-     * Called from bootstrap.js when user copies text in the browser.
-     */
     public static void onBrowserCopy(String text) {
         cachedClipboard = text != null ? text : "";
     }

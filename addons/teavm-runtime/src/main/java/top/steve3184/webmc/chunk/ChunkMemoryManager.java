@@ -254,8 +254,8 @@ public final class ChunkMemoryManager {
      * Update player position for distance calculations.
      */
     public void updatePlayerPosition(double x, double z) {
-        this.playerChunkX = ChunkPos.getX(x);
-        this.playerChunkZ = ChunkPos.getZ(z);
+        this.playerChunkX = ChunkPos.getX((long) x);
+        this.playerChunkZ = ChunkPos.getZ((long) z);
     }
 
     /**

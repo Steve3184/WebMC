@@ -134,8 +134,8 @@ public final class ChunkPrefetcher {
         }
 
         // Update current chunk position
-        int newChunkX = ChunkPos.getX(playerX);
-        int newChunkZ = ChunkPos.getZ(playerZ);
+        int newChunkX = ChunkPos.getX((long) playerX);
+        int newChunkZ = ChunkPos.getZ((long) playerZ);
 
         if (newChunkX != currentChunkX || newChunkZ != currentChunkZ) {
             currentChunkX = newChunkX;
