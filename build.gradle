@@ -173,11 +173,38 @@ teavm {
     js {
         targetFileName = 'game.js'
         sourceMap = false
-        optimization = org.teavm.gradle.api.OptimizationLevel.NONE
+        optimizationLevel = org.teavm.gradle.api.OptimizationLevel.NONE
         fastGlobalAnalysis = true
         obfuscated = false
         strict = false
         moduleType = org.teavm.gradle.api.JSModuleType.NONE
+    }
+}
+
+// === Force TeaVM mainClass AFTER teavm block ===
+// TeaVM's reachability analysis infers mainClass from Minecraft's Main.main() call chain.
+// We must override this explicitly AFTER the teavm {} block evaluates.
+afterEvaluate {
+    // Directly access and modify the TeaVM extension
+    def teavm = project.extensions.findByName('teavm')
+    if (teavm != null) {
+        // Set mainClass on the 'all' target configuration
+        teavm.all.mainClass = 'top.steve3184.webmc.web.WebMain'
+        logger.lifecycle "TeaVM mainClass set to: top.steve3184.webmc.web.WebMain"
+
+        // Also try to configure generateJavaScript task directly
+        tasks.named('generateJavaScript') {
+            doFirst {
+                // Force the main class again in case it got reset
+                def ext = project.extensions.findByName('teavm')
+                if (ext != null) {
+                    ext.all.mainClass = 'top.steve3184.webmc.web.WebMain'
+                }
+                logger.lifecycle "generateJavaScript doFirst: mainClass = ${ext?.all?.mainClass}"
+            }
+        }
+    } else {
+        logger.warn "TeaVM extension not found - mainClass may not be set correctly"
     }
 }
 
