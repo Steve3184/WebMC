@@ -326,7 +326,6 @@ task cleanJdkStubs {
 
 task generateStubIndex {
     dependsOn cleanJdkStubs, compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
-    inputs.dir jdkStubsClasses
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
     outputs.file indexFile
     doLast {
