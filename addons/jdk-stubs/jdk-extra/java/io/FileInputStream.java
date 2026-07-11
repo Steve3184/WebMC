@@ -61,9 +61,12 @@ public class FileInputStream extends InputStream {
         return null;
     }
 
+    @SuppressWarnings("removal")
     protected void finalize() throws IOException {
         if (!closed) {
-            close();
+            try {
+                close();
+            } catch (IOException ignored) {}
         }
     }
 }

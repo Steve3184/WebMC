@@ -58,9 +58,12 @@ public class FileOutputStream extends OutputStream {
         return null;
     }
 
+    @SuppressWarnings("removal")
     protected void finalize() throws IOException {
         if (!closed) {
-            close();
+            try {
+                close();
+            } catch (IOException ignored) {}
         }
     }
 }
