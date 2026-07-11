@@ -1,26 +1,59 @@
 package org.apache.logging.log4j;
+
 public class MarkerManager {
     private MarkerManager() {}
-    public static Marker getMarker(String name) { return new MarkerImpl(name); }
 
-    public interface Marker {
-        String getName();
-        boolean add(Marker marker);
-        boolean remove(Marker marker);
-        boolean hasReferences();
-        java.util.Iterator<Marker> iterator();
-        boolean has(Marker marker);
+    public static Marker getMarker(String name) {
+        return new Marker(name);
     }
 
-    private static class MarkerImpl implements Marker {
+    public static class Marker {
         private final String name;
-        private final java.util.List<Marker> references = new java.util.ArrayList<>();
-        MarkerImpl(String name) { this.name = name; }
-        public String getName() { return name; }
-        public boolean add(Marker marker) { return references.add(marker); }
-        public boolean remove(Marker marker) { return references.remove(marker); }
-        public boolean hasReferences() { return !references.isEmpty(); }
-        public java.util.Iterator<Marker> iterator() { return references.iterator(); }
-        public boolean has(Marker marker) { return references.contains(marker); }
+        private Marker parent;
+        private java.util.Set<Marker> references;
+
+        public Marker(String name) {
+            this.name = name;
+            this.references = new java.util.HashSet<>();
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void addParent(Marker parent) {
+            this.parent = parent;
+        }
+
+        public Marker getParent() {
+            return parent;
+        }
+
+        public java.util.List<Marker> getParents() {
+            java.util.List<Marker> parents = new java.util.ArrayList<>();
+            if (parent != null) {
+                parents.add(parent);
+            }
+            return parents;
+        }
+
+        public boolean hasParents() {
+            return parent != null;
+        }
+
+        public boolean remove(Marker marker) {
+            return false;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof Marker)) return false;
+            return name.equals(((Marker) obj).name);
+        }
+
+        @Override
+        public int hashCode() {
+            return name.hashCode();
+        }
     }
 }

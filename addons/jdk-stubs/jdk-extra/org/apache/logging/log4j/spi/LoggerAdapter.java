@@ -1,8 +1,47 @@
 package org.apache.logging.log4j.spi;
-import org.apache.logging.log4j.Logger;
-public class LoggerAdapter<T> {
-    protected final T logger;
-    public LoggerAdapter() { this.logger = null; }
-    public LoggerAdapter(T logger) { this.logger = logger; }
-    public T getLogger() { return logger; }
+
+public class LoggerAdapter<L> {
+    protected L logger;
+
+    public LoggerAdapter() {}
+
+    public LoggerAdapter(L logger) {
+        this.logger = logger;
+    }
+
+    public L getLogger() {
+        return logger;
+    }
+
+    public void log(String message) {
+    }
+
+    public void log(String message, Throwable t) {
+    }
+
+    public void log(int level, String message) {
+    }
+
+    public void log(int level, String message, Throwable t) {
+    }
+
+    public boolean isDebugEnabled() {
+        return false;
+    }
+
+    public boolean isErrorEnabled() {
+        return false;
+    }
+
+    public boolean isInfoEnabled() {
+        return false;
+    }
+
+    public boolean isTraceEnabled() {
+        return false;
+    }
+
+    public boolean isWarnEnabled() {
+        return false;
+    }
 }

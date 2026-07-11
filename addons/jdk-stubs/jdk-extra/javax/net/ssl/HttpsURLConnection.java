@@ -9,10 +9,10 @@ public abstract class HttpsURLConnection extends java.net.HttpURLConnection {
     public static HostnameVerifier getDefaultHostnameVerifier() { return null; }
     public void setHostnameVerifier(HostnameVerifier v) {}
     public HostnameVerifier getHostnameVerifier() { return null; }
-    public static void setDefaultSSLSocketFactory(SSLContext.SSLSocketFactory f) {}
-    public static SSLContext.SSLSocketFactory getDefaultSSLSocketFactory() { return null; }
-    public void setSSLSocketFactory(SSLContext.SSLSocketFactory f) {}
-    public SSLContext.SSLSocketFactory getSSLSocketFactory() { return null; }
+    public static void setDefaultSSLSocketFactory(SSLSocketFactory f) {}
+    public static SSLSocketFactory getDefaultSSLSocketFactory() { return null; }
+    public void setSSLSocketFactory(SSLSocketFactory f) {}
+    public SSLSocketFactory getSSLSocketFactory() { return null; }
     public interface HostnameVerifier { boolean verify(String hostname, SSLSession session); }
     public interface SSLSession {}
 }

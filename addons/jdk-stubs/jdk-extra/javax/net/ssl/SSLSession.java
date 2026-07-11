@@ -1,8 +1,11 @@
 package javax.net.ssl;
+
 import java.security.Principal;
+import java.security.cert.Certificate;
+
 public interface SSLSession {
     byte[] getId();
-    SSLSessionContext getSessionContext();
+    SessionContext getSessionContext();
     long getCreationTime();
     long getLastAccessedTime();
     void invalidate();
@@ -11,8 +14,14 @@ public interface SSLSession {
     Object getValue(String name);
     void removeValue(String name);
     String[] getValueNames();
+    Certificate[] getPeerCertificates();
+    Certificate[] getLocalCertificates();
     Principal getPeerPrincipal();
-    java.security.cert.Certificate[] getPeerCertificates();
-    String getProtocol();
+    Principal getLocalPrincipal();
     String getCipherSuite();
+    String getProtocol();
+    String getPeerHost();
+    int getPeerPort();
+    int getPacketBufferSize();
+    int getApplicationBufferSize();
 }

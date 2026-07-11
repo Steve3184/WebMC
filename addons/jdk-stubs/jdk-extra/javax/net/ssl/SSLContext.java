@@ -1,5 +1,9 @@
 package javax.net.ssl;
 
+import java.net.Socket;
+import java.io.IOException;
+import java.net.InetAddress;
+
 public class SSLContext {
     private SSLContext() {}
     public static SSLContext getInstance(String protocol) { return new SSLContext(); }
@@ -14,8 +18,8 @@ public class SSLContext {
     public final SSLSessionContext getClientSessionContext() { return null; }
     public final String getProtocol() { return "TLS"; }
     public final java.security.Provider getProvider() { return null; }
+    public final SSLServerSocketFactory getServerSocketFactory() { return null; }
 
-    public interface SSLSocketFactory {}
     public interface SSLEngine {}
     public interface SSLSessionContext {}
 }

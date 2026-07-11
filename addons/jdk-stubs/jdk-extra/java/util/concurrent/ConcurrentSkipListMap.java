@@ -1,20 +1,13 @@
 package java.util.concurrent;
 
-import java.util.AbstractMap;
-import java.util.Comparator;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 
 /** Single-threaded JS implementation of ConcurrentSkipListMap backed by TreeMap. */
 public class ConcurrentSkipListMap<K, V> extends AbstractMap<K, V> implements ConcurrentNavigableMap<K, V> {
     private final TreeMap<K, V> backing;
     public ConcurrentSkipListMap() { this.backing = new TreeMap<>(); }
     public ConcurrentSkipListMap(Comparator<? super K> comparator) { this.backing = new TreeMap<>(comparator); }
-    public ConcurrentSkipListMap(java.util.Map<? extends K, ? extends V> m) { this.backing = new TreeMap<>(m); }
-    public ConcurrentSkipListMap(SortedMap<K, ? extends V> m) { this.backing = new TreeMap<>(m); }
+    public ConcurrentSkipListMap(Map<? extends K, ? extends V> m) { this.backing = new TreeMap<>(m); }
 
     @Override public V get(Object key) { return backing.get(key); }
     @Override public V put(K key, V value) { return backing.put(key, value); }
@@ -24,10 +17,26 @@ public class ConcurrentSkipListMap<K, V> extends AbstractMap<K, V> implements Co
     @Override public Set<Entry<K, V>> entrySet() { return backing.entrySet(); }
     @Override public void clear() { backing.clear(); }
 
-    @Override public V putIfAbsent(K key, V value) { return backing.putIfAbsent(key, value); }
-    @Override public boolean remove(Object key, Object value) { return backing.remove(key, value); }
-    @Override public boolean replace(K key, V oldValue, V newValue) { return backing.replace(key, oldValue, newValue); }
-    @Override public V replace(K key, V value) { return backing.replace(key, value); }
+    @Override public V putIfAbsent(K key, V value) {
+        V existing = backing.get(key);
+        if (existing == null) backing.put(key, value);
+        return existing;
+    }
+    @Override public boolean remove(Object key, Object value) {
+        if (backing.get(key).equals(value)) {
+            backing.remove(key);
+            return true;
+        }
+        return false;
+    }
+    @Override public boolean replace(K key, V oldValue, V newValue) {
+        if (backing.get(key).equals(oldValue)) {
+            backing.put(key, newValue);
+            return true;
+        }
+        return false;
+    }
+    @Override public V replace(K key, V value) { return backing.put(key, value); }
 
     @Override public Comparator<? super K> comparator() { return backing.comparator(); }
     @Override public K firstKey() { return backing.firstKey(); }
@@ -58,7 +67,8 @@ public class ConcurrentSkipListMap<K, V> extends AbstractMap<K, V> implements Co
     @Override public ConcurrentNavigableMap<K, V> headMap(K toKey) { return headMap(toKey, false); }
     @Override public ConcurrentNavigableMap<K, V> tailMap(K fromKey) { return tailMap(fromKey, true); }
     @Override public ConcurrentNavigableMap<K, V> descendingMap() {
-        return new ConcurrentSkipListMap<>(backing.descendingMap());
+        NavigableMap<K, V> desc = backing.descendingMap();
+        return new ConcurrentSkipListMap<>(desc);
     }
     @Override public NavigableSet<K> navigableKeySet() { return backing.navigableKeySet(); }
     @Override public NavigableSet<K> keySet() { return backing.navigableKeySet(); }

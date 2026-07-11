@@ -316,6 +316,8 @@ task compileLwjglStubs(type: JavaCompile) {
     targetCompatibility = '21'
 }
 
+// Capture values at configuration time to avoid configuration cache issues
+def jdkStubsClassesVal = jdkStubsClasses
 task generateStubIndex {
     dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
@@ -324,8 +326,9 @@ task generateStubIndex {
         indexFile.parentFile.mkdirs()
         def skipExact = ["java/lang/Thread.class"] as Set
         def lines = []
-        // Collect ALL class files from jdk-stubs-classes
-        def root = file(jdkStubsClasses)
+        // Collect ALL class files from jdk-stubs-classes using string path
+        def rootPath = "$jdkStubsClassesVal"
+        def root = new File(rootPath)
         if (root.exists()) {
             root.eachFileRecurse(groovy.io.FileType.FILES) { f ->
                 if (f.name.endsWith('.class')) {
@@ -337,7 +340,7 @@ task generateStubIndex {
             }
         }
         indexFile.text = lines.sort().join("\n") + "\n"
-        println "[generateStubIndex] wrote ${lines.size()} entries from ${jdkStubsClasses}"
+        println "[generateStubIndex] wrote ${lines.size()} entries from ${rootPath}"
     }
 }
 
@@ -348,7 +351,8 @@ task packageJdkStubsPlugin(type: Jar) {
     from(jdkPluginClasses)
     from(file("$jdkStubsRoot/plugin-meta"))
     from(file("$buildDir/jdk-stubs-meta"))
-    from(jdkStubsClasses) {
+    def stubsClassesVal = jdkStubsClasses
+    from(stubsClassesVal) {
         into 'shadow-classes'
         exclude 'java/lang/Thread.class'
     }
