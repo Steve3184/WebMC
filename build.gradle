@@ -325,9 +325,14 @@ task cleanJdkStubs {
 }
 
 task generateStubIndex {
-    dependsOn cleanJdkStubs, compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
     outputs.file indexFile
+    doFirst {
+        // Clean up stale files before generating
+        delete jdkStubsClasses
+        delete file("$buildDir/jdk-stubs-meta")
+    }
     doLast {
         indexFile.parentFile.mkdirs()
         def skipExact = ["java/lang/Thread.class"] as Set
@@ -348,7 +353,7 @@ task generateStubIndex {
 }
 
 task packageJdkStubsPlugin(type: Jar) {
-    dependsOn cleanJdkStubs, compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
     archiveFileName = 'jdk-stubs-plugin.jar'
     destinationDirectory = file("$buildDir")
     from(jdkPluginClasses)
