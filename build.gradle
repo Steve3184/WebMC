@@ -316,34 +316,23 @@ task compileLwjglStubs(type: JavaCompile) {
     targetCompatibility = '21'
 }
 
-// Clean and rebuild jdk stubs indices - must depend on ALL compile tasks
-task cleanJdkStubs {
-    doLast {
-        delete jdkStubsClasses
-        delete file("$buildDir/jdk-stubs-meta")
-    }
-}
-
 task generateStubIndex {
     dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
     outputs.file indexFile
-    doFirst {
-        // Clean up stale files before generating
-        delete jdkStubsClasses
-        delete file("$buildDir/jdk-stubs-meta")
-    }
     doLast {
         indexFile.parentFile.mkdirs()
         def skipExact = ["java/lang/Thread.class"] as Set
         def lines = []
         // Collect ALL class files from jdk-stubs-classes
         def root = file(jdkStubsClasses)
-        root.eachFileRecurse(groovy.io.FileType.FILES) { f ->
-            if (f.name.endsWith('.class')) {
-                def rel = root.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, (char) '/')
-                if (!skipExact.contains(rel)) {
-                    lines << rel
+        if (root.exists()) {
+            root.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                if (f.name.endsWith('.class')) {
+                    def rel = root.toPath().relativize(f.toPath()).toString().replace(File.separatorChar, (char) '/')
+                    if (!skipExact.contains(rel)) {
+                        lines << rel
+                    }
                 }
             }
         }
