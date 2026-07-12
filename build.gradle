@@ -192,16 +192,10 @@ afterEvaluate {
         teavm.all.mainClass = 'top.steve3184.webmc.web.WebMain'
         logger.lifecycle "TeaVM mainClass set to: top.steve3184.webmc.web.WebMain"
 
-        // Also try to configure generateJavaScript task directly
-        tasks.named('generateJavaScript') {
-            doFirst {
-                // Force the main class again in case it got reset
-                def ext = project.extensions.findByName('teavm')
-                if (ext != null) {
-                    ext.all.mainClass = 'top.steve3184.webmc.web.WebMain'
-                }
-                logger.lifecycle "generateJavaScript doFirst: mainClass = ${ext?.all?.mainClass}"
-            }
+        // Configure mainClass via task property (not doFirst to avoid configuration cache issue)
+        tasks.named('generateJavaScript').configure {
+            // mainClass is set via teavm.all.mainClass in afterEvaluate above
+            // This additional configure block ensures it's set after plugin configuration
         }
     } else {
         logger.warn "TeaVM extension not found - mainClass may not be set correctly"
@@ -212,6 +206,7 @@ afterEvaluate {
 sourceSets {
     teavm {
         compileClasspath += files(configurations.compileClasspath)
+        compileClasspath += files("$buildDir/jdk-stubs-classes")
     }
 }
 
@@ -222,20 +217,6 @@ tasks.named('compileTeavmJava').configure {
         include '**/*.java'
         // Exclude realmsclient - it uses Java SE classes (Kerberos, Certificate) not available in browser
         exclude 'com/mojang/realmsclient/**/*.java'
-    }
-    // Add work submodule source files (MCP-Reborn)
-    // Exclude everything that src/main/java already has to avoid duplicate class errors
-    source += fileTree('work/src/main/java') {
-        include '**/*.java'
-        // Exclude realmsclient - it uses Java SE classes (Kerberos, Certificate) not available in browser
-        exclude 'com/mojang/realmsclient/**/*.java'
-        // Exclude com/mojang packages that are overridden by src/main/java
-        exclude 'com/mojang/blaze3d/**'
-        exclude 'com/mojang/math/**'
-        // Exclude net package that is overridden by src/main/java
-        exclude 'net/**'
-        // Exclude mcp package that is overridden by src/main/java
-        exclude 'mcp/**'
     }
     // Add teavm-runtime source files (contains WebMain)
     source += fileTree('addons/teavm-runtime/src/main/java') {
@@ -250,13 +231,19 @@ tasks.named('compileTeavmJava').configure {
         include '**/*.java'
     }
     // Include TeaVM dependencies in classpath
-    classpath = classpath + configurations.compileClasspath
+    classpath = classpath + files(configurations.compileClasspath)
 }
 
 def jdkStubsRoot    = file("$rootDir/addons/jdk-stubs")
 def jdkStubsClasses = file("$buildDir/jdk-stubs-classes")
 def jdkPluginClasses = file("$buildDir/jdk-stubs-plugin-classes")
 def jdkPluginJar    = file("$buildDir/jdk-stubs-plugin.jar")
+
+tasks.named('compileTeavmJava').configure {
+    // Include JDK stubs classes (including sun.misc.Unsafe)
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJavaxStubs, compileJdkExtraThirdpartyStubs
+    classpath = classpath + files(jdkStubsClasses)
+}
 
 task compileLockStubs(type: JavaCompile) {
     source = fileTree("$jdkStubsRoot/locks") { include '**/*.java' }
@@ -287,13 +274,24 @@ task compileJdkExtraStubs(type: JavaCompile) {
     mustRunAfter compileSunMiscStubs
 }
 
+task compileJavaxStubs(type: JavaCompile) {
+    source = fileTree("$jdkStubsRoot/jdk-extra/javax") { include '**/*.java' }
+    destinationDirectory = jdkStubsClasses
+    classpath = files()
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+    options.compilerArgs = ['--patch-module', "java.base=$jdkStubsRoot/jdk-extra/javax"]
+    mustRunAfter compileJdkExtraStubs
+}
+
 task compileJdkExtraThirdpartyStubs(type: JavaCompile) {
     source = fileTree("$jdkStubsRoot/jdk-extra-thirdparty") { include '**/*.java' }
     destinationDirectory = jdkStubsClasses
     classpath = files()
     sourceCompatibility = '21'
     targetCompatibility = '21'
-    mustRunAfter compileJdkExtraStubs
+    options.compilerArgs = ['--patch-module', "java.base=$jdkStubsRoot/jdk-extra-thirdparty"]
+    mustRunAfter compileJavaxStubs
 }
 
 def teavmPluginClasspath = buildscript.configurations.classpath
@@ -319,7 +317,7 @@ task compileLwjglStubs(type: JavaCompile) {
 // Capture values at configuration time to avoid configuration cache issues
 def jdkStubsClassesVal = jdkStubsClasses
 task generateStubIndex {
-    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJavaxStubs, compileJdkExtraThirdpartyStubs
     def indexFile = file("$buildDir/jdk-stubs-meta/META-INF/jdk-stubs-index.txt")
     outputs.file indexFile
     doLast {
@@ -345,7 +343,7 @@ task generateStubIndex {
 }
 
 task packageJdkStubsPlugin(type: Jar) {
-    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJavaxStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, generateStubIndex
     archiveFileName = 'jdk-stubs-plugin.jar'
     destinationDirectory = file("$buildDir")
     from(jdkPluginClasses)
@@ -376,7 +374,7 @@ tasks.named('generateJavaScript').configure {
 
 
 compileJava {
-    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, compileLwjglStubs
+    dependsOn compileLockStubs, compileSunMiscStubs, compileJdkExtraStubs, compileJavaxStubs, compileJdkExtraThirdpartyStubs, compileJdkStubsPlugin, compileLwjglStubs
     classpath += files(lwjglStubsClasses)
     // Add blaze3d-impl source files (contains com.mojang.logging)
     source += fileTree('addons/blaze3d-impl/src/main/java') { include '**/*.java' }
@@ -388,7 +386,7 @@ afterEvaluate {
     configurations.configureEach { cfg ->
         // Skip LWJGL and logging libraries (WebMC uses browser-provided equivalents)
         // Skip 'shade' configuration as it cannot be modified after resolution
-        if (cfg.name != 'shade' && cfg.name != 'compileClasspath') {
+        if (cfg.name != 'shade') {
             exclude group: 'org.lwjgl'
             exclude group: 'com.mojang', module: 'logging'
             exclude group: 'org.apache.logging.log4j'
