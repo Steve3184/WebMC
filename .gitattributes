@@ -1,0 +1,29 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts must use LF
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+
+# Gradle files
+*.gradle text
+*.gradle.kts text
+
+# Workflow files
+.github/** text eol=lf
+
+# Java files
+*.java text
+
+# Text files
+*.md text
+*.txt text
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jar binary
+*.zip binary
