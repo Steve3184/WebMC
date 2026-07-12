@@ -90,13 +90,22 @@ public final class WebGpuTexture extends GpuTexture {
                     WebGL2RenderingContext.TEXTURE_2D, glTex, 0);
             }
         }
-        if (depth != null && depth != currentDepthAttachment) {
+        if (depth != null) {
             depth.ensureGlTexture(gl);
+            if (depth != currentDepthAttachment) {
+                gl.bindFramebuffer(WebGL2RenderingContext.FRAMEBUFFER, glFbo);
+                gl.framebufferTexture2D(WebGL2RenderingContext.FRAMEBUFFER,
+                    WebGL2RenderingContext.DEPTH_ATTACHMENT,
+                    WebGL2RenderingContext.TEXTURE_2D, depth.glTex, 0);
+                currentDepthAttachment = depth;
+            }
+        } else if (currentDepthAttachment != null) {
+            // Detach depth if depth becomes null (different from previous state)
             gl.bindFramebuffer(WebGL2RenderingContext.FRAMEBUFFER, glFbo);
             gl.framebufferTexture2D(WebGL2RenderingContext.FRAMEBUFFER,
                 WebGL2RenderingContext.DEPTH_ATTACHMENT,
-                WebGL2RenderingContext.TEXTURE_2D, depth.glTex, 0);
-            currentDepthAttachment = depth;
+                WebGL2RenderingContext.TEXTURE_2D, null, 0);
+            currentDepthAttachment = null;
         }
         return glFbo;
     }

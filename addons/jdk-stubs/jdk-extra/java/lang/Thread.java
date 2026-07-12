@@ -142,8 +142,8 @@ public class Thread {
         return 0;
     }
 
-    public ThreadState getState() {
-        return ThreadState.NEW;
+    public Object getState() {
+        return null;
     }
 
     public void checkAccess() {

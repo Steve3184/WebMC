@@ -8,13 +8,7 @@ public abstract class SSLSocketFactory {
     protected SSLSocketFactory() {}
 
     public static SSLSocketFactory getDefault() {
-        try {
-            SSLContext context = SSLContext.getInstance("TLS");
-            context.init(null, null, null);
-            return context.getSocketFactory();
-        } catch (Exception e) {
-            return null;
-        }
+        return null;
     }
 
     public abstract String[] getDefaultCipherSuites();
