@@ -49,7 +49,7 @@ EOF
       - name: Build with Gradle (TeaVM)
         run: |
           export GRADLE_OPTS="-Xmx14g -Xss64m -XX:+UseG1GC -Dorg.gradle.jvmargs=-Xmx14g"
-          ./gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache \
+          ./gradlew compileTeavmJava generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache \
             -Dorg.gradle.jvmargs="-Xmx14g" \
             -Dorg.gradle.workers.max=1 \
             -Dkotlin.daemon.jvmargs="-Xmx14g" 2>&1
