@@ -200,6 +200,10 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
         });
         STUBS.put("java.util.Locale", new StubMethod[] {
             new StubMethod("getISO3Country", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getISO3Language", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDisplayLanguage", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDisplayCountry", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDisplayVariant", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
         });
         STUBS.put("java.util.UUID", new StubMethod[] {
             new StubMethod("<init>", "(JJ)V", false, ReturnKind.VOID),
