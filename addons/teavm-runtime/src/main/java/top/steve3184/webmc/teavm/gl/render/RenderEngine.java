@@ -65,15 +65,17 @@ public final class RenderEngine {
     private long frameStartTime = 0;
     private float currentFps = 60.0f;
 
-    // Fog settings
-    private float fogStart = 0.8f;
-    private float fogEnd = 1.0f;
-    private float[] fogColor = {0.5f, 0.7f, 1.0f};
-    private boolean fogEnabled = true;
-
     // Sky color
     private float[] skyColor = {0.5f, 0.7f, 1.0f};
     private float skyDarken = 0.0f;
+
+    // Fog settings
+    private float fogStart = 0.8f;
+    private float fogEnd = 1.0f;
+    private float fogDensity = 0.001f;
+    private int fogMode = 0; // 0 = Linear, 1 = Exponential, 2 = Exponential Squared
+    private float[] fogColor = {0.5f, 0.7f, 1.0f};
+    private boolean fogEnabled = true;
 
     // Camera position (for frustum culling)
     private float cameraX = 0, cameraY = 0, cameraZ = 0;
@@ -422,6 +424,25 @@ public final class RenderEngine {
     public void setRenderDistance(int distance) {
         this.renderDistance = Math.max(2, Math.min(32, distance));
         resize(width, height); // Update projection matrix
+    }
+
+    /**
+     * Set fog parameters matching Minecraft's FogRenderer.
+     */
+    public void setFog(float start, float end, float density, int mode) {
+        this.fogStart = start;
+        this.fogEnd = end;
+        this.fogDensity = density;
+        this.fogMode = mode;
+        WebLog.debug(String.format("Fog updated: start=%.2f, end=%.2f, density=%.4f, mode=%d",
+                               start, end, density, mode));
+    }
+
+    /**
+     * Get sky color array.
+     */
+    public float[] getSkyColor() {
+        return skyColor;
     }
 
     /**

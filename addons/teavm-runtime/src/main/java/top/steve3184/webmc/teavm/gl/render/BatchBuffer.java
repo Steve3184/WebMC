@@ -193,8 +193,10 @@ public final class BatchBuffer {
 
     private void drawBatch() {
         if (quadCount > 0) {
+            // WebGL1 uses UNSIGNED_SHORT for indices (16-bit), WebGL2 can use UNSIGNED_INT (32-bit)
+            // For cross-browser compatibility, we use 16-bit indices
             gl.drawElements(WebGLRenderingContext.TRIANGLES, quadCount * INDICES_PER_QUAD,
-                          WebGLRenderingContext.UNSIGNED_INT, 0);
+                          WebGLRenderingContext.UNSIGNED_SHORT, 0);
         } else {
             gl.drawArrays(WebGLRenderingContext.TRIANGLES, 0, vertexCount);
         }
