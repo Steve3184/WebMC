@@ -14,12 +14,14 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 1
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -27,6 +29,16 @@ jobs:
           distribution: 'temurin'
           java-version: 21
           cache: 'gradle'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Copy init script
         run: cp .github/workflows/init.gradle .
@@ -51,24 +63,38 @@ jobs:
             -Dorg.gradle.jvmargs="-Xmx14g" \
             -Dorg.gradle.workers.max=1 \
             -Dkotlin.daemon.jvmargs="-Xmx14g" 2>&1
+        id: build
 
       - name: Check build output
         run: |
           if [ -f "build/web-run/game.js" ]; then
             SIZE=$(wc -c < build/web-run/game.js)
             echo "game.js size: $((SIZE / 1024 / 1024))MB"
+            echo "build_result=success" >> $GITHUB_OUTPUT
+            echo "build_size=$((SIZE / 1024 / 1024))" >> $GITHUB_OUTPUT
           else
             echo "No game.js found in build/web-run/"
             find build -name "*.js" -type f 2>/dev/null | head -5 || echo "No JS files found"
+            echo "build_result=failed" >> $GITHUB_OUTPUT
+            exit 1
           fi
 
       - name: Upload WebMC build artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: webmc-build
+          name: webmc-build-${{ github.run_id }}
           path: |
             build/web-run/game.js
             build/web-run/game.vfs
             build/web-run/*.br
           retention-days: 7
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ steps.build.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
