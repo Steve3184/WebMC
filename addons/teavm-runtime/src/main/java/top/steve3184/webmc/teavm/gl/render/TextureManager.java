@@ -292,7 +292,7 @@ public final class TextureManager {
         return useMipmaps;
     }
 
-    private static native void log(String msg) /*-{
-        console.log(msg);
-    }-*/;
+    private static void log(String msg) {
+        top.steve3184.webmc.teavm.WebLog.info(msg);
+    }
 }

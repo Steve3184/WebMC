@@ -3,6 +3,7 @@ package top.steve3184.webmc.teavm.gl;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
 import org.teavm.jso.webgl.WebGLRenderingContext;
+import top.steve3184.webmc.teavm.WebLog;
 
 /**
  * GPU detection and performance tier classification.
@@ -188,7 +189,7 @@ public final class GpuDetector {
     )
     private static native int getInt(WebGLRenderingContext gl, int pname);
 
-    private static native void log(String msg) /*-{
-        console.log(msg);
-    }-*/;
+    private static void log(String msg) {
+        WebLog.info(msg);
+    }
 }

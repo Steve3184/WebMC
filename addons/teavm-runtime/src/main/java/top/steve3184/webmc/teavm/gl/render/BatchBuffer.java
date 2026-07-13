@@ -3,6 +3,7 @@ package top.steve3184.webmc.teavm.gl.render;
 import org.teavm.jso.typedarrays.Float32Array;
 import org.teavm.jso.webgl.WebGLBuffer;
 import org.teavm.jso.webgl.WebGLRenderingContext;
+import top.steve3184.webmc.teavm.WebLog;
 import top.steve3184.webmc.teavm.gl.GpuDetector;
 import top.steve3184.webmc.teavm.gl.WebGLContextHolder;
 
@@ -223,7 +224,7 @@ public final class BatchBuffer {
         }
     }
 
-    private static native void log(String msg) /*-{
-        console.log(msg);
-    }-*/;
+    private static void log(String msg) {
+        WebLog.info(msg);
+    }
 }

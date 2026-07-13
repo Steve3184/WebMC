@@ -48,8 +48,8 @@ public final class WebGLStateCache {
         }
     }
 
-    @JSBody(params = {"gl", "pname"}, script =
-        "try { var v = gl.getParameter(pname); return [v[0]|0, v[1]|0, v[2]|0, v[3]|0]; } catch(e) { return null; }"
+    @JSBody(params = {"gl"}, script =
+        "try { var v = gl.getParameter(gl.VIEWPORT); return [v[0]|0, v[1]|0, v[2]|0, v[3]|0]; } catch(e) { return null; }"
     )
     private static native int[] getViewport(WebGLRenderingContext gl);
 

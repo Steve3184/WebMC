@@ -5,6 +5,7 @@ import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLCanvasElement;
 import org.teavm.jso.webgl.WebGL2RenderingContext;
 import org.teavm.jso.webgl.WebGLRenderingContext;
+import top.steve3184.webmc.teavm.WebLog;
 import top.steve3184.webmc.teavm.gl.GpuDetector;
 import top.steve3184.webmc.teavm.gl.ShaderManager;
 import top.steve3184.webmc.teavm.gl.WebGLContextHolder;
@@ -314,7 +315,7 @@ public final class RenderEngine {
         return framesRendered;
     }
 
-    private static native void log(String msg) /*-{
-        console.log(msg);
-    }-*/;
+    private static void log(String msg) {
+        WebLog.info(msg);
+    }
 }

@@ -5,6 +5,7 @@ import org.teavm.jso.webgl.WebGLProgram;
 import org.teavm.jso.webgl.WebGLRenderingContext;
 import org.teavm.jso.webgl.WebGLShader;
 import org.teavm.jso.webgl.WebGLUniformLocation;
+import top.steve3184.webmc.teavm.WebLog;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -320,7 +321,7 @@ public final class ShaderManager {
         log("[ShaderManager] Destroyed all programs");
     }
 
-    private static native void log(String msg) /*-{
-        console.log(msg);
-    }-*/;
+    private static void log(String msg) {
+        WebLog.info(msg);
+    }
 }
