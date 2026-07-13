@@ -1,5 +1,6 @@
 package top.steve3184.webmc.gpu;
 
+import org.teavm.jso.typedarrays.Uint8Array;
 import org.teavm.jso.webgl.WebGL2RenderingContext;
 import org.teavm.jso.webgl.WebGLTexture;
 import top.steve3184.webmc.teavm.gl.GpuDetector;
@@ -24,7 +25,6 @@ public final class TextureManager {
 
     // Texture limits based on GPU
     private static int maxTextureSize = 2048;
-    private static int maxTextureUnits = 8;
 
     private TextureManager() {}
 
@@ -35,19 +35,13 @@ public final class TextureManager {
         if (initialized) return;
 
         gl = WebGLContextHolder.gl();
+        if (gl == null) return;
 
         GpuProfile profile = GpuDetector.getProfile();
         maxTextureSize = profile.getMaxTextureSize();
-        maxTextureUnits = profile.getTier().maxTextureUnits;
-
-        // Enable mipmapping if supported
-        if (profile.supportsMipmaps()) {
-            gl.hint(WebGL2RenderingContext.GENERATE_MIPMAP_HINT, WebGL2RenderingContext.NICEST);
-        }
 
         initialized = true;
-        System.out.println("[mc-web/texture] TextureManager init: maxSize=" + maxTextureSize
-            + ", units=" + maxTextureUnits + ", mipmaps=" + profile.supportsMipmaps());
+        log("[mc-web/texture] TextureManager init: maxSize=" + maxTextureSize + ", tier=" + profile.getTier());
     }
 
     /**
@@ -100,16 +94,6 @@ public final class TextureManager {
         gl.texParameteri(WebGL2RenderingContext.TEXTURE_2D, WebGL2RenderingContext.TEXTURE_WRAP_T,
             WebGL2RenderingContext.CLAMP_TO_EDGE);
 
-        // Enable anisotropic filtering if available
-        GpuProfile profile = GpuDetector.getProfile();
-        if (profile.shouldUseAntialiasing()) {
-            WebGLExtension ext = gl.getExtension("EXT_texture_filter_anisotropic");
-            if (ext != null) {
-                gl.texParameterf(WebGL2RenderingContext.TEXTURE_2D,
-                    ext.getConstantValue("TEXTURE_MAX_ANISOTROPY_EXT"), 4.0f);
-            }
-        }
-
         return tex;
     }
 
@@ -120,109 +104,53 @@ public final class TextureManager {
         if (gl == null) return;
 
         gl.bindTexture(WebGL2RenderingContext.TEXTURE_2D, texture);
-
-        // Use compressed upload if available
-        // RGBA format is most compatible
+        Uint8Array pixelData = createPixelData(data);
         gl.texImage2D(WebGL2RenderingContext.TEXTURE_2D, 0,
             WebGL2RenderingContext.RGBA, width, height, 0,
             WebGL2RenderingContext.RGBA, WebGL2RenderingContext.UNSIGNED_BYTE,
-            createUint8Array(data));
+            pixelData);
 
-        // Generate mipmaps for better quality
-        if (generateMipmap && GpuDetector.getProfile().supportsMipmaps()) {
+        if (generateMipmap) {
             gl.generateMipmap(WebGL2RenderingContext.TEXTURE_2D);
         }
     }
 
     /**
-     * Update a portion of a texture.
+     * Delete a texture.
      */
-    public static void updateSubTexture(WebGLTexture texture, int x, int y, int width, int height, byte[] data) {
-        if (gl == null) return;
-
-        gl.bindTexture(WebGL2RenderingContext.TEXTURE_2D, texture);
-        gl.texSubImage2D(WebGL2RenderingContext.TEXTURE_2D, 0, x, y, width, height,
-            WebGL2RenderingContext.RGBA, WebGL2RenderingContext.UNSIGNED_BYTE,
-            createUint8Array(data));
-    }
-
-    /**
-     * Delete a texture and remove from cache.
-     */
-    public static void deleteTexture(String id) {
-        TextureInfo info = textureCache.remove(id);
-        if (info != null && info.texture != null) {
-            gl.deleteTexture(info.texture);
-        }
-    }
-
-    /**
-     * Clear the entire texture cache.
-     */
-    public static void clearCache() {
-        for (TextureInfo info : textureCache.values()) {
-            if (info.texture != null) {
-                gl.deleteTexture(info.texture);
-            }
-        }
-        textureCache.clear();
-        System.out.println("[mc-web/texture] Cache cleared");
+    public static void deleteTexture(WebGLTexture texture) {
+        if (gl == null || texture == null) return;
+        gl.deleteTexture(texture);
     }
 
     /**
      * Get cache statistics.
      */
     public static CacheStats getCacheStats() {
-        return new CacheStats(textureCache.size(), cacheHits, cacheMisses);
+        int total = cacheHits + cacheMisses;
+        float hitRate = total > 0 ? (float) cacheHits / total * 100 : 0;
+        return new CacheStats(cacheHits, cacheMisses, hitRate, textureCache.size());
     }
 
     /**
-     * Get maximum texture size.
+     * Clear texture cache.
      */
-    public static int getMaxTextureSize() {
-        return maxTextureSize;
-    }
-
-    /**
-     * Get maximum texture units.
-     */
-    public static int getMaxTextureUnits() {
-        return maxTextureUnits;
-    }
-
-    /**
-     * Check if a texture size is within GPU limits.
-     */
-    public static boolean isSizeValid(int width, int height) {
-        return width <= maxTextureSize && height <= maxTextureSize;
-    }
-
-    /**
-     * Calculate optimal mip level for a texture given screen resolution.
-     */
-    public static int calculateMipLevel(int textureSize, int screenSize) {
-        if (screenSize <= 0) return 0;
-        int level = 0;
-        int size = textureSize;
-        while (size > screenSize && size > 1) {
-            size >>= 1;
-            level++;
+    public static void clearCache() {
+        for (TextureInfo info : textureCache.values()) {
+            deleteTexture(info.texture);
         }
-        return level;
+        textureCache.clear();
+        cacheHits = 0;
+        cacheMisses = 0;
     }
 
-    // JSO helpers
-    @org.teavm.jso.JSBody(params = {"data"}, script = "return new Uint8Array(data);")
-    private static native org.teavm.jso.typedarrays.Uint8Array createUint8Array(byte[] data);
-
-    // Internal types
-    public static final class TextureInfo {
+    // Texture info holder
+    public static class TextureInfo {
         public final String id;
         public final WebGLTexture texture;
         public final int width;
         public final int height;
         public long lastUsed;
-        public long uploadTime;
 
         public TextureInfo(String id, WebGLTexture texture, int width, int height) {
             this.id = id;
@@ -230,40 +158,30 @@ public final class TextureManager {
             this.width = width;
             this.height = height;
             this.lastUsed = System.currentTimeMillis();
-            this.uploadTime = this.lastUsed;
         }
     }
 
-    public static final class CacheStats {
-        public final int cacheSize;
+    // Cache statistics
+    public static class CacheStats {
         public final int hits;
         public final int misses;
+        public final float hitRate;
+        public final int cacheSize;
 
-        public CacheStats(int size, int hits, int misses) {
-            this.cacheSize = size;
+        public CacheStats(int hits, int misses, float hitRate, int cacheSize) {
             this.hits = hits;
             this.misses = misses;
-        }
-
-        public float getHitRate() {
-            int total = hits + misses;
-            return total > 0 ? (float) hits / total : 0f;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("CacheStats{size=%d, hits=%d, misses=%d, hitRate=%.1f%%}",
-                cacheSize, hits, misses, getHitRate() * 100);
+            this.hitRate = hitRate;
+            this.cacheSize = cacheSize;
         }
     }
 
-    @org.teavm.jso.JSBody(params = {"gl", "name"}, script = "return gl.getExtension(name);")
-    private static native WebGLExtension getExtension(WebGL2RenderingContext gl, String name);
+    // Native JS helpers
+    private static native Uint8Array createPixelData(byte[] data) /*-{
+        return new Uint8Array(data);
+    }-*/;
 
-    @org.teavm.jso.JSBody(script = "return {};")
-    private static native WebGLExtension createExtension();
-
-    public interface WebGLExtension {
-        int getConstantValue(String name);
-    }
+    private static native void log(String msg) /*-{
+        console.log(msg);
+    }-*/;
 }

@@ -1,5 +1,7 @@
 package top.steve3184.webmc.gpu;
 
+import top.steve3184.webmc.teavm.gl.GpuDetector;
+
 /**
  * Adaptive render distance system that automatically adjusts quality
  * based on current frame rate to maintain smooth gameplay.
@@ -61,7 +63,7 @@ public final class AdaptiveRenderDistance {
                 break;
         }
 
-        System.out.println("[mc-web/adaptive] Initial settings: renderDistance=" + currentRenderDistance
+        log("[mc-web/adaptive] Initial: renderDistance=" + currentRenderDistance
             + ", particles=" + currentParticleRange
             + ", smoothLighting=" + smoothLighting
             + ", fancyGraphics=" + fancyGraphics);
@@ -103,138 +105,71 @@ public final class AdaptiveRenderDistance {
                 lastAdjustmentTime = now;
             }
         } else {
-            // FPS is in acceptable range
+            // FPS in acceptable range, reset counters
             consecutiveLowFps = 0;
             consecutiveHighFps = 0;
-            isStable = true;
         }
     }
 
-    /**
-     * Decrease render quality to improve performance.
-     */
     private static void decreaseQuality() {
-        isStable = false;
-        System.out.println("[mc-web/adaptive] Performance drop detected - reducing quality");
-
-        // Strategy: reduce in order of visual impact vs performance gain
-        if (fancyGraphics) {
-            fancyGraphics = false;
-            System.out.println("[mc-web/adaptive] Disabled fancy graphics");
+        // Reduce render distance first (biggest impact)
+        if (currentRenderDistance > 4) {
+            currentRenderDistance -= 2;
+            log("[mc-web/adaptive] Decreased render distance to " + currentRenderDistance);
             return;
         }
 
-        if (currentParticleRange > 30) {
-            currentParticleRange = Math.max(30, currentParticleRange - 25);
-            System.out.println("[mc-web/adaptive] Reduced particle range to " + currentParticleRange);
+        // Then reduce particles
+        if (currentParticleRange > 20) {
+            currentParticleRange -= 25;
+            log("[mc-web/adaptive] Decreased particle range to " + currentParticleRange);
             return;
         }
 
+        // Disable smooth lighting
         if (smoothLighting) {
             smoothLighting = false;
-            System.out.println("[mc-web/adaptive] Disabled smooth lighting");
+            log("[mc-web/adaptive] Disabled smooth lighting");
             return;
         }
 
-        if (currentRenderDistance > 4) {
-            currentRenderDistance = Math.max(4, currentRenderDistance - 2);
-            System.out.println("[mc-web/adaptive] Reduced render distance to " + currentRenderDistance);
-            return;
+        // Disable fancy graphics
+        if (fancyGraphics) {
+            fancyGraphics = false;
+            log("[mc-web/adaptive] Disabled fancy graphics");
         }
-
-        System.out.println("[mc-web/adaptive] At minimum quality settings");
     }
 
-    /**
-     * Increase render quality when performance allows.
-     */
     private static void increaseQuality() {
-        isStable = true;
-        System.out.println("[mc-web/adaptive] Headroom available - increasing quality");
+        GpuProfile profile = GpuDetector.getProfile();
+        int maxRenderDist = profile.getRenderDistance().chunks;
 
-        // Strategy: enable in reverse order of disable
-        if (currentRenderDistance < 16) {
-            currentRenderDistance = Math.min(16, currentRenderDistance + 2);
-            System.out.println("[mc-web/adaptive] Increased render distance to " + currentRenderDistance);
-            return;
-        }
-
-        if (!smoothLighting) {
-            smoothLighting = true;
-            System.out.println("[mc-web/adaptive] Enabled smooth lighting");
-            return;
-        }
-
-        if (currentParticleRange < 150) {
-            currentParticleRange = Math.min(150, currentParticleRange + 25);
-            System.out.println("[mc-web/adaptive] Increased particle range to " + currentParticleRange);
-            return;
-        }
-
+        // Enable fancy graphics first
         if (!fancyGraphics) {
             fancyGraphics = true;
-            System.out.println("[mc-web/adaptive] Enabled fancy graphics");
+            log("[mc-web/adaptive] Enabled fancy graphics");
             return;
         }
 
-        System.out.println("[mc-web/adaptive] At maximum quality settings");
-    }
+        // Enable smooth lighting
+        if (!smoothLighting) {
+            smoothLighting = true;
+            log("[mc-web/adaptive] Enabled smooth lighting");
+            return;
+        }
 
-    /**
-     * Manually set render distance.
-     */
-    public static void setRenderDistance(int distance) {
-        currentRenderDistance = Math.max(4, Math.min(32, distance));
-        System.out.println("[mc-web/adaptive] Manual render distance set to " + currentRenderDistance);
-    }
+        // Increase particles
+        if (currentParticleRange < 150) {
+            currentParticleRange += 25;
+            log("[mc-web/adaptive] Increased particle range to " + currentParticleRange);
+            return;
+        }
 
-    /**
-     * Manually set particle range.
-     */
-    public static void setParticleRange(int range) {
-        currentParticleRange = Math.max(0, Math.min(250, range));
-    }
-
-    /**
-     * Enable/disable smooth lighting.
-     */
-    public static void setSmoothLighting(boolean enabled) {
-        smoothLighting = enabled;
-    }
-
-    /**
-     * Enable/disable fancy graphics.
-     */
-    public static void setFancyGraphics(boolean enabled) {
-        fancyGraphics = enabled;
-    }
-
-    /**
-     * Force maximum quality settings.
-     */
-    public static void setMaxQuality() {
-        currentRenderDistance = 16;
-        currentParticleRange = 150;
-        smoothLighting = true;
-        fancyGraphics = true;
-        isStable = true;
-        consecutiveLowFps = 0;
-        consecutiveHighFps = 0;
-        System.out.println("[mc-web/adaptive] Set to maximum quality");
-    }
-
-    /**
-     * Force minimum quality settings.
-     */
-    public static void setMinQuality() {
-        currentRenderDistance = 4;
-        currentParticleRange = 30;
-        smoothLighting = false;
-        fancyGraphics = false;
-        isStable = true;
-        consecutiveLowFps = 0;
-        consecutiveHighFps = 0;
-        System.out.println("[mc-web/adaptive] Set to minimum quality");
+        // Increase render distance
+        if (currentRenderDistance < maxRenderDist) {
+            currentRenderDistance += 2;
+            log("[mc-web/adaptive] Increased render distance to " + currentRenderDistance);
+        }
     }
 
     // Getters
@@ -242,15 +177,34 @@ public final class AdaptiveRenderDistance {
     public static int getParticleRange() { return currentParticleRange; }
     public static boolean isSmoothLighting() { return smoothLighting; }
     public static boolean isFancyGraphics() { return fancyGraphics; }
-    public static boolean isStable() { return isStable; }
+
+    // Setters (for manual override)
+    public static void setRenderDistance(int value) {
+        currentRenderDistance = Math.max(4, Math.min(32, value));
+    }
+
+    public static void setParticleRange(int value) {
+        currentParticleRange = Math.max(20, Math.min(150, value));
+    }
+
+    public static void setSmoothLighting(boolean value) {
+        smoothLighting = value;
+    }
+
+    public static void setFancyGraphics(boolean value) {
+        fancyGraphics = value;
+    }
 
     /**
-     * Get current settings as a diagnostic string.
+     * Reset to defaults based on GPU profile.
      */
-    public static String getSettingsString() {
-        return String.format(
-            "AdaptiveRenderDistance{renderDistance=%d, particles=%d, smoothLighting=%s, fancyGraphics=%s, stable=%s}",
-            currentRenderDistance, currentParticleRange, smoothLighting, fancyGraphics, isStable
-        );
+    public static void resetToDefaults() {
+        isStable = false;
+        init();
+        isStable = true;
     }
+
+    private static native void log(String msg) /*-{
+        console.log(msg);
+    }-*/;
 }

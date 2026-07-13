@@ -1,5 +1,7 @@
 package top.steve3184.webmc.gpu;
 
+import top.steve3184.webmc.teavm.gl.GpuDetector;
+
 /**
  * Real-time render statistics collector.
  * Tracks FPS, frame times, draw calls, and GPU utilization.
@@ -151,6 +153,14 @@ public final class RenderStats {
     // =============== Getters ===============
 
     public int getCurrentFps() { return currentFps; }
+
+    public double getFrameTime() {
+        return lastFrameTime / 1000.0; // Convert ms to seconds
+    }
+
+    public long getLastFrameTimeMs() {
+        return lastFrameTime;
+    }
     public long getLastFrameTime() { return lastFrameTime; }
 
     public int getDrawCallsThisFrame() { return drawCallsThisFrame; }
