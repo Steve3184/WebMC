@@ -242,12 +242,14 @@ public final class ShaderManager {
         "varying vec4 Color0;\n" +
         "varying vec3 Normal0;\n" +
         "varying vec2 LightMap0;\n" +
+        "varying float FogDist;\n" +
         "void main() {\n" +
         "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
         "  TexCoord0 = TexCoord;\n" +
         "  Color0 = Color;\n" +
         "  Normal0 = Normal;\n" +
         "  LightMap0 = LightMap;\n" +
+        "  FogDist = length(gl_Position.xyz);\n" +
         "}\n";
 
     // Entity vertex shader - with diffuse lighting

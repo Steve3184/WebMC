@@ -344,15 +344,21 @@
          * Generate a one-line summary string
          */
         _getSummaryString: function () {
-            const stats = this.getStats();
-            let summary = `FPS: ${stats.fps}`;
+            // FIX: Avoid calling getStats() which creates infinite recursion
+            const fps = this._fps || 0;
+            const frameTimeAvg = this._frameTimeCount > 0 ?
+                Math.round((this._frameTimeSum / this._frameTimeCount) * 100) / 100 : 0;
+            const memoryUsedMB = this._memoryUsed || 0;
+            const memoryLimitMB = this._memoryLimit || 0;
 
-            if (stats.frameTime.avg > 0) {
-                summary += ` | Frame: ${stats.frameTime.avg.toFixed(1)}ms`;
+            let summary = `FPS: ${fps}`;
+
+            if (frameTimeAvg > 0) {
+                summary += ` | Frame: ${frameTimeAvg.toFixed(1)}ms`;
             }
 
-            if (stats.memory && stats.memory.usedMB !== undefined) {
-                summary += ` | Mem: ${stats.memory.usedMB}MB / ${stats.memory.limitMB}MB`;
+            if (memoryUsedMB > 0) {
+                summary += ` | Mem: ${memoryUsedMB}MB / ${memoryLimitMB}MB`;
             }
 
             return summary;

@@ -1,0 +1,9 @@
+{
+  "page_load": true,
+  "canvas_exists": true,
+  "js_loaded": false,
+  "console_errors": [],
+  "webgl_available": true,
+  "event_system": false,
+  "issues": []
+}
