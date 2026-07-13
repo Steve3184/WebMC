@@ -1,17 +1,16 @@
 package top.steve3184.webmc.teavm.gl.render;
 
-import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
-import org.teavm.jso.typedarrays.Int32Array;
+import org.teavm.jso.typedarrays.Int8Array;
 import org.teavm.jso.webgl.WebGLRenderingContext;
 import org.teavm.jso.webgl.WebGLTexture;
+import top.steve3184.webmc.teavm.WebLog;
 import top.steve3184.webmc.teavm.gl.GpuDetector;
 import top.steve3184.webmc.teavm.gl.WebGLContextHolder;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * High-performance texture manager with LRU caching and GPU compression hints.
+ * Texture manager for efficient texture handling.
+ * Supports mipmapping, texture atlases, and GPU-tier specific optimizations.
  */
 public final class TextureManager {
 
@@ -19,61 +18,30 @@ public final class TextureManager {
 
     private WebGLRenderingContext gl;
     private GpuDetector.GpuProfile profile;
-    private Map<String, TextureInfo> textureCache;
-    private int maxCacheSize;
-    private int currentTextureCount = 0;
-    private int textureMemoryUsedMB = 0;
 
-    // Texture settings based on GPU tier
-    private boolean useMipmaps = true;
-    private int maxAnisotropy = 1;
-    private int defaultFilter = WebGLRenderingContext.LINEAR_MIPMAP_LINEAR;
+    // Texture cache
+    private WebGLTexture[] textureCache;
+    private int textureCount = 0;
+    private static final int MAX_TEXTURES = 256;
 
-    public static class TextureInfo {
-        public final String path;
-        public final WebGLTexture texture;
-        public final int width;
-        public final int height;
-        public final int format;
-        private long lastUsed;
-        public int refCount;
+    // Active texture
+    private WebGLTexture currentTexture;
+    private int currentTextureUnit = 0;
 
-        public TextureInfo(String path, WebGLTexture texture, int width, int height, int format) {
-            this.path = path;
-            this.texture = texture;
-            this.width = width;
-            this.height = height;
-            this.format = format;
-            this.lastUsed = System.currentTimeMillis();
-            this.refCount = 1;
-        }
+    // Mipmap settings
+    private boolean mipmapsEnabled = true;
+    private int mipmapLevel = 0;
 
-        public void touch() {
-            lastUsed = System.currentTimeMillis();
-        }
-
-        public long getLastUsed() {
-            return lastUsed;
-        }
-
-        public int getMemorySize() {
-            // Estimate: RGBA = 4 bytes per pixel
-            return width * height * 4 / (1024 * 1024);
-        }
-    }
+    // Anisotropic filtering
+    private float maxAnisotropy = 1.0f;
+    private boolean anisotropicEnabled = false;
 
     private TextureManager() {
-        gl = WebGLContextHolder.gl();
-        profile = GpuDetector.getProfile();
-        textureCache = new HashMap<>();
-
-        // Configure based on GPU tier
-        configureForTier();
+        this.gl = WebGLContextHolder.gl();
+        this.profile = GpuDetector.getProfile();
+        this.textureCache = new WebGLTexture[MAX_TEXTURES];
     }
 
-    /**
-     * Get singleton instance.
-     */
     public static TextureManager getInstance() {
         if (instance == null) {
             instance = new TextureManager();
@@ -82,217 +50,215 @@ public final class TextureManager {
     }
 
     /**
-     * Configure texture settings based on GPU tier.
+     * Initialize texture manager.
      */
-    private void configureForTier() {
-        switch (profile.tier) {
-            case ULTRA:
-                maxCacheSize = 512;
-                useMipmaps = true;
-                maxAnisotropy = 16;
-                defaultFilter = WebGLRenderingContext.LINEAR_MIPMAP_LINEAR;
-                break;
-            case HIGH:
-                maxCacheSize = 256;
-                useMipmaps = true;
-                maxAnisotropy = 8;
-                defaultFilter = WebGLRenderingContext.LINEAR_MIPMAP_LINEAR;
-                break;
-            case MEDIUM:
-                maxCacheSize = 128;
-                useMipmaps = true;
-                maxAnisotropy = 4;
-                defaultFilter = WebGLRenderingContext.LINEAR_MIPMAP_NEAREST;
-                break;
-            case LOW:
-                maxCacheSize = 64;
-                useMipmaps = false;
-                maxAnisotropy = 1;
-                defaultFilter = WebGLRenderingContext.NEAREST;
-                break;
-            default:
-                maxCacheSize = 32;
-                useMipmaps = false;
-                maxAnisotropy = 1;
-                defaultFilter = WebGLRenderingContext.NEAREST;
-        }
-        log("[TextureManager] Configured for " + profile.getTierName() +
-             " tier: " + maxCacheSize + " textures, mipmaps=" + useMipmaps);
-    }
-
-    /**
-     * Create a texture from raw pixel data.
-     */
-    public TextureInfo createTexture(String path, int width, int height, int[] pixels, int format) {
-        if (gl == null) return null;
-
-        // Check cache
-        TextureInfo cached = textureCache.get(path);
-        if (cached != null) {
-            cached.touch();
-            return cached;
-        }
-
-        // Evict if necessary
-        while (textureCache.size() >= maxCacheSize) {
-            evictLRU();
-        }
-
-        // Create texture
-        WebGLTexture texture = gl.createTexture();
-        gl.bindTexture(WebGLRenderingContext.TEXTURE_2D, texture);
-
-        // Upload pixels using JS interop
-        uploadTexture(gl, width, height, pixels, format);
-
-        // Set filters
-        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
-            WebGLRenderingContext.TEXTURE_MIN_FILTER, defaultFilter);
-        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
-            WebGLRenderingContext.TEXTURE_MAG_FILTER,
-            WebGLRenderingContext.LINEAR);
-        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
-            WebGLRenderingContext.TEXTURE_WRAP_S, WebGLRenderingContext.REPEAT);
-        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
-            WebGLRenderingContext.TEXTURE_WRAP_T, WebGLRenderingContext.REPEAT);
-
-        // Generate mipmaps if enabled
-        if (useMipmaps) {
-            gl.generateMipmap(WebGLRenderingContext.TEXTURE_2D);
-        }
-
-        // Create info
-        TextureInfo info = new TextureInfo(path, texture, width, height, format);
-        textureCache.put(path, info);
-        currentTextureCount++;
-        textureMemoryUsedMB += info.getMemorySize();
-
-        log("[TextureManager] Created texture: " + path + " (" + width + "x" + height + ")");
-
-        return info;
-    }
-
-    @JSBody(params = {"gl", "width", "height", "pixels", "format"}, script =
-        "try {" +
-        "  var arr = new Uint8Array(pixels.length * 4);" +
-        "  for (var i = 0; i < pixels.length; i++) {" +
-        "    arr[i * 4 + 0] = (pixels[i] >> 16) & 0xff;" +
-        "    arr[i * 4 + 1] = (pixels[i] >> 8) & 0xff;" +
-        "    arr[i * 4 + 2] = pixels[i] & 0xff;" +
-        "    arr[i * 4 + 3] = (pixels[i] >> 24) & 0xff;" +
-        "  }" +
-        "  gl.texImage2D(gl.TEXTURE_2D, 0, format, width, height, 0, format, gl.UNSIGNED_BYTE, arr);" +
-        "} catch(e) { console.error('texImage2D error:', e); }"
-    )
-    private static native void uploadTexture(WebGLRenderingContext gl, int width, int height, int[] pixels, int format);
-
-    /**
-     * Bind a texture.
-     */
-    public void bindTexture(TextureInfo info, int unit) {
-        if (gl == null || info == null) return;
-
-        gl.activeTexture(WebGLRenderingContext.TEXTURE0 + unit);
-        gl.bindTexture(WebGLRenderingContext.TEXTURE_2D, info.texture);
-        info.touch();
-    }
-
-    /**
-     * Bind a texture by path (loads if necessary).
-     */
-    public void bindTexture(String path, int unit) {
-        TextureInfo info = textureCache.get(path);
-        if (info != null) {
-            bindTexture(info, unit);
+    public void init() {
+        if (gl == null) {
+            WebLog.warn("[TextureManager] Cannot init: WebGL context not available");
             return;
         }
 
-        // Would need async loading - placeholder
-        log("[TextureManager] Texture not loaded: " + path);
+        // Setup texture quality based on GPU tier
+        setupTextureQuality();
+
+        WebLog.info("[TextureManager] Initialized (max textures: " + MAX_TEXTURES + ")");
+        WebLog.info("[TextureManager] Anisotropic filtering: " +
+                   (anisotropicEnabled ? maxAnisotropy + "x" : "disabled"));
+    }
+
+    private void setupTextureQuality() {
+        switch (profile.tier) {
+            case ULTRA:
+                mipmapsEnabled = true;
+                mipmapLevel = 4;
+                anisotropicEnabled = true;
+                maxAnisotropy = 8.0f;
+                break;
+            case HIGH:
+                mipmapsEnabled = true;
+                mipmapLevel = 3;
+                anisotropicEnabled = true;
+                maxAnisotropy = 4.0f;
+                break;
+            case MEDIUM:
+                mipmapsEnabled = true;
+                mipmapLevel = 2;
+                anisotropicEnabled = true;
+                maxAnisotropy = 2.0f;
+                break;
+            case LOW:
+                mipmapsEnabled = false;
+                mipmapLevel = 0;
+                anisotropicEnabled = false;
+                maxAnisotropy = 1.0f;
+                break;
+            default:
+                mipmapsEnabled = true;
+                mipmapLevel = 2;
+                anisotropicEnabled = false;
+        }
+    }
+
+    /**
+     * Create a new texture.
+     */
+    public WebGLTexture createTexture(int width, int height) {
+        WebGLTexture texture = gl.createTexture();
+        if (texture == null) {
+            WebLog.error("[TextureManager] Failed to create texture");
+            return null;
+        }
+
+        bindTexture(texture, 0);
+
+        // Allocate texture storage (1x1 placeholder)
+        Int8Array data = Int8Array.create(width * height * 4);
+        gl.texImage2D(WebGLRenderingContext.TEXTURE_2D, 0,
+                     WebGLRenderingContext.RGBA, width, height, 0,
+                     WebGLRenderingContext.RGBA, WebGLRenderingContext.UNSIGNED_BYTE, data);
+
+        // Set default parameters
+        setTextureParameters();
+
+        // Cache texture
+        if (textureCount < MAX_TEXTURES) {
+            textureCache[textureCount++] = texture;
+        }
+
+        return texture;
+    }
+
+    /**
+     * Upload texture data.
+     */
+    public void uploadTexture(WebGLTexture texture, int width, int height,
+                             Int8Array data, boolean generateMipmaps) {
+        bindTexture(texture, 0);
+
+        gl.texImage2D(WebGLRenderingContext.TEXTURE_2D, 0,
+                     WebGLRenderingContext.RGBA, width, height, 0,
+                     WebGLRenderingContext.RGBA, WebGLRenderingContext.UNSIGNED_BYTE, data);
+
+        if (generateMipmaps && mipmapsEnabled) {
+            gl.generateMipmap(WebGLRenderingContext.TEXTURE_2D);
+        }
+
+        setTextureParameters();
+    }
+
+    /**
+     * Bind texture to texture unit.
+     */
+    public void bindTexture(WebGLTexture texture, int unit) {
+        if (unit != currentTextureUnit || texture != currentTexture) {
+            gl.activeTexture(WebGLRenderingContext.TEXTURE0 + unit);
+            gl.bindTexture(WebGLRenderingContext.TEXTURE_2D, texture);
+            currentTextureUnit = unit;
+            currentTexture = texture;
+        }
+    }
+
+    /**
+     * Set texture parameters based on GPU tier.
+     */
+    private void setTextureParameters() {
+        // Minification filter
+        if (mipmapsEnabled) {
+            switch (mipmapLevel) {
+                case 4:
+                case 3:
+                    gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                                    WebGLRenderingContext.TEXTURE_MIN_FILTER,
+                                    WebGLRenderingContext.LINEAR_MIPMAP_LINEAR);
+                    break;
+                default:
+                    gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                                    WebGLRenderingContext.TEXTURE_MIN_FILTER,
+                                    WebGLRenderingContext.LINEAR_MIPMAP_NEAREST);
+            }
+        } else {
+            gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                            WebGLRenderingContext.TEXTURE_MIN_FILTER,
+                            WebGLRenderingContext.LINEAR);
+        }
+
+        // Magnification filter
+        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                        WebGLRenderingContext.TEXTURE_MAG_FILTER,
+                        WebGLRenderingContext.LINEAR);
+
+        // Wrapping
+        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                        WebGLRenderingContext.TEXTURE_WRAP_S,
+                        WebGLRenderingContext.REPEAT);
+        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                        WebGLRenderingContext.TEXTURE_WRAP_T,
+                        WebGLRenderingContext.REPEAT);
+    }
+
+    /**
+     * Create a simple solid color texture.
+     */
+    public WebGLTexture createSolidColorTexture(float r, float g, float b, float a) {
+        WebGLTexture texture = gl.createTexture();
+        if (texture == null) return null;
+
+        bindTexture(texture, 0);
+
+        // Create 1x1 pixel texture using Int8Array
+        Int8Array data = Int8Array.create(4);
+        data.set(0, (byte)(int)(r * 255));
+        data.set(1, (byte)(int)(g * 255));
+        data.set(2, (byte)(int)(b * 255));
+        data.set(3, (byte)(int)(a * 255));
+
+        gl.texImage2D(WebGLRenderingContext.TEXTURE_2D, 0,
+                     WebGLRenderingContext.RGBA, 1, 1, 0,
+                     WebGLRenderingContext.RGBA, WebGLRenderingContext.UNSIGNED_BYTE, data);
+
+        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                        WebGLRenderingContext.TEXTURE_MIN_FILTER,
+                        WebGLRenderingContext.NEAREST);
+        gl.texParameteri(WebGLRenderingContext.TEXTURE_2D,
+                        WebGLRenderingContext.TEXTURE_MAG_FILTER,
+                        WebGLRenderingContext.NEAREST);
+
+        return texture;
     }
 
     /**
      * Delete a texture.
      */
-    public void deleteTexture(TextureInfo info) {
-        if (gl == null || info == null) return;
-
-        gl.deleteTexture(info.texture);
-        textureCache.remove(info.path);
-        currentTextureCount--;
-        textureMemoryUsedMB -= info.getMemorySize();
+    public void deleteTexture(WebGLTexture texture) {
+        if (texture != null) {
+            gl.deleteTexture(texture);
+        }
     }
 
     /**
-     * Evict least recently used texture.
+     * Get current texture.
      */
-    private void evictLRU() {
-        String oldestKey = null;
-        long oldestTime = Long.MAX_VALUE;
-
-        for (Map.Entry<String, TextureInfo> entry : textureCache.entrySet()) {
-            if (entry.getValue().refCount == 0 && entry.getValue().getLastUsed() < oldestTime) {
-                oldestTime = entry.getValue().getLastUsed();
-                oldestKey = entry.getKey();
-            }
-        }
-
-        if (oldestKey != null) {
-            TextureInfo info = textureCache.get(oldestKey);
-            if (info != null) {
-                gl.deleteTexture(info.texture);
-                textureCache.remove(oldestKey);
-                currentTextureCount--;
-                textureMemoryUsedMB -= info.getMemorySize();
-                log("[TextureManager] Evicted: " + oldestKey);
-            }
-        }
+    public WebGLTexture getCurrentTexture() {
+        return currentTexture;
     }
 
     /**
-     * Clear all cached textures.
-     */
-    public void clearCache() {
-        if (gl == null) return;
-
-        for (TextureInfo info : textureCache.values()) {
-            gl.deleteTexture(info.texture);
-        }
-        textureCache.clear();
-        currentTextureCount = 0;
-        textureMemoryUsedMB = 0;
-        log("[TextureManager] Cache cleared");
-    }
-
-    /**
-     * Get cached texture count.
+     * Get texture count.
      */
     public int getTextureCount() {
-        return currentTextureCount;
+        return textureCount;
     }
 
     /**
-     * Get estimated memory usage in MB.
+     * Clear texture cache.
      */
-    public int getMemoryUsageMB() {
-        return textureMemoryUsedMB;
-    }
-
-    /**
-     * Get max cache size.
-     */
-    public int getMaxCacheSize() {
-        return maxCacheSize;
-    }
-
-    /**
-     * Check if mipmaps are enabled.
-     */
-    public boolean hasMipmaps() {
-        return useMipmaps;
-    }
-
-    private static void log(String msg) {
-        top.steve3184.webmc.teavm.WebLog.info(msg);
+    public void clearCache() {
+        for (int i = 0; i < textureCount; i++) {
+            if (textureCache[i] != null) {
+                gl.deleteTexture(textureCache[i]);
+                textureCache[i] = null;
+            }
+        }
+        textureCount = 0;
     }
 }

@@ -1,200 +1,170 @@
 package top.steve3184.webmc.teavm.gl;
 
-import org.teavm.jso.JSObject;
-import org.teavm.jso.webgl.WebGLProgram;
-import org.teavm.jso.webgl.WebGLRenderingContext;
-import org.teavm.jso.webgl.WebGLShader;
-import org.teavm.jso.webgl.WebGLUniformLocation;
+import org.teavm.jso.JSBody;
+import org.teavm.jso.core.JSString;
+import org.teavm.jso.webgl.*;
 import top.steve3184.webmc.teavm.WebLog;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * High-performance shader manager with compilation caching.
- * Compiles and caches GLSL shaders for efficient rendering.
+ * Shader manager with Minecraft-compatible shaders.
+ * Provides optimized shaders for terrain, entities, UI, and particles.
  */
 public final class ShaderManager {
 
     private static WebGLRenderingContext gl;
-    private static Map<String, WebGLProgram> programCache = new HashMap<>();
-    private static Map<Integer, WebGLUniformLocation> uniformCache = new HashMap<>();
-    private static int currentProgram = 0;
+    private static WebGLProgram currentProgram;
+    private static String currentShaderName = "";
+
+    private static WebGLProgram terrainProgram;
+    private static WebGLProgram terrainColoredProgram;
+    private static WebGLProgram entityProgram;
+    private static WebGLProgram entityCutoutProgram;
+    private static WebGLProgram particlesProgram;
+    private static WebGLProgram positionTexProgram;
+    private static WebGLProgram positionTexColProgram;
+    private static WebGLProgram positionColorProgram;
+    private static WebGLProgram positionColorLightmapProgram;
+    private static WebGLProgram positionTexLightmapProgram;
+    private static WebGLProgram skyProgram;
+    private static WebGLProgram cloudsProgram;
+
+    // Attribute locations
+    private static int attrPosition = -1;
+    private static int attrTexCoord = -1;
+    private static int attrNormal = -1;
+    private static int attrColor = -1;
+    private static int attrLightMap = -1;
+    private static int attrOverlay = -1;
+    private static int attrNormal2 = -1;
+    private static int attrMidBlock = -1;
+
     private static boolean initialized = false;
-
-    // Shader source templates (WebGL1 compatible - no #version 300 es)
-    private static final String VERTEX_SHADER_3D =
-        "attribute vec3 aPosition;\n" +
-        "attribute vec2 aTexCoord;\n" +
-        "attribute vec3 aNormal;\n" +
-        "uniform mat4 uProjection;\n" +
-        "uniform mat4 uModelView;\n" +
-        "varying vec2 vTexCoord;\n" +
-        "varying vec3 vNormal;\n" +
-        "varying vec3 vPosition;\n" +
-        "void main() {\n" +
-        "    vTexCoord = aTexCoord;\n" +
-        "    vNormal = mat3(uModelView) * aNormal;\n" +
-        "    vPosition = (uModelView * vec4(aPosition, 1.0)).xyz;\n" +
-        "    gl_Position = uProjection * uModelView * vec4(aPosition, 1.0);\n" +
-        "}";
-
-    private static final String FRAGMENT_SHADER_3D =
-        "precision mediump float;\n" +
-        "varying vec2 vTexCoord;\n" +
-        "varying vec3 vNormal;\n" +
-        "varying vec3 vPosition;\n" +
-        "uniform sampler2D uTexture;\n" +
-        "uniform vec3 uLightDir;\n" +
-        "uniform vec3 uAmbient;\n" +
-        "uniform float uFogStart;\n" +
-        "uniform float uFogEnd;\n" +
-        "uniform vec3 uFogColor;\n" +
-        "void main() {\n" +
-        "    vec4 texColor = texture2D(uTexture, vTexCoord);\n" +
-        "    float diff = max(dot(normalize(vNormal), uLightDir), 0.0);\n" +
-        "    vec3 lighting = uAmbient + diff * vec3(1.0);\n" +
-        "    vec3 color = texColor.rgb * lighting;\n" +
-        "    float fogFactor = clamp((length(vPosition) - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);\n" +
-        "    color = mix(color, uFogColor, fogFactor);\n" +
-        "    gl_FragColor = vec4(color, texColor.a);\n" +
-        "}";
-
-    private static final String VERTEX_SHADER_2D =
-        "attribute vec2 aPosition;\n" +
-        "attribute vec2 aTexCoord;\n" +
-        "attribute vec4 aColor;\n" +
-        "uniform mat4 uProjection;\n" +
-        "varying vec2 vTexCoord;\n" +
-        "varying vec4 vColor;\n" +
-        "void main() {\n" +
-        "    vTexCoord = aTexCoord;\n" +
-        "    vColor = aColor;\n" +
-        "    gl_Position = uProjection * vec4(aPosition, 0.0, 1.0);\n" +
-        "}";
-
-    private static final String FRAGMENT_SHADER_2D =
-        "precision mediump float;\n" +
-        "varying vec2 vTexCoord;\n" +
-        "varying vec4 vColor;\n" +
-        "uniform sampler2D uTexture;\n" +
-        "uniform bool uHasTexture;\n" +
-        "void main() {\n" +
-        "    if (uHasTexture) {\n" +
-        "        gl_FragColor = texture2D(uTexture, vTexCoord) * vColor;\n" +
-        "    } else {\n" +
-        "        gl_FragColor = vColor;\n" +
-        "    }\n" +
-        "}";
-
-    private static final String VERTEX_SHADER_SKY =
-        "attribute vec3 aPosition;\n" +
-        "uniform mat4 uProjection;\n" +
-        "uniform mat4 uModelView;\n" +
-        "varying vec3 vPosition;\n" +
-        "void main() {\n" +
-        "    vPosition = aPosition;\n" +
-        "    mat4 rotMatrix = mat4(mat3(uModelView));\n" +
-        "    gl_Position = uProjection * rotMatrix * vec4(aPosition, 1.0);\n" +
-        "    gl_Position.z = gl_Position.w;\n" +
-        "}";
-
-    private static final String FRAGMENT_SHADER_SKY =
-        "precision mediump float;\n" +
-        "varying vec3 vPosition;\n" +
-        "uniform vec3 uSkyColor;\n" +
-        "uniform vec3 uHorizonColor;\n" +
-        "uniform float uTime;\n" +
-        "void main() {\n" +
-        "    float y = normalize(vPosition).y;\n" +
-        "    vec3 skyColor = mix(uHorizonColor, uSkyColor, max(y, 0.0));\n" +
-        "    // Stars\n" +
-        "    vec3 stars = vec3(0.0);\n" +
-        "    if (y > 0.0) {\n" +
-        "        float starNoise = fract(sin(dot(vPosition.xz, vec2(12.9898, 78.233))) * 43758.5453);\n" +
-        "        if (starNoise > 0.997) stars = vec3(1.0) * (starNoise - 0.997) * 333.0;\n" +
-        "    }\n" +
-        "    gl_FragColor = vec4(skyColor + stars, 1.0);\n" +
-        "}";
 
     private ShaderManager() {}
 
     /**
-     * Initialize shader manager.
+     * Initialize all shaders.
      */
-    public static void init(WebGLRenderingContext glContext) {
+    public static void init(WebGLRenderingContext webgl) {
         if (initialized) return;
-        gl = glContext;
-        programCache.clear();
-        uniformCache.clear();
+        gl = webgl;
+
+        WebLog.info("[ShaderManager] Initializing shaders...");
+
+        terrainProgram = createProgram("terrain", TERRAIN_VERTEX, TERRAIN_FRAGMENT);
+        terrainColoredProgram = createProgram("terrain_colored", TERRAIN_COLORED_VERTEX, TERRAIN_FRAGMENT);
+        entityProgram = createProgram("entity", ENTITY_VERTEX, ENTITY_FRAGMENT);
+        entityCutoutProgram = createProgram("entity_cutout", ENTITY_CUTOUT_VERTEX, ENTITY_CUTOUT_FRAGMENT);
+        particlesProgram = createProgram("particles", PARTICLES_VERTEX, PARTICLES_FRAGMENT);
+        positionTexProgram = createProgram("position_tex", POSITION_TEX_VERTEX, POSITION_TEX_FRAGMENT);
+        positionTexColProgram = createProgram("position_tex_col", POSITION_TEX_COL_VERTEX, POSITION_TEX_COL_FRAGMENT);
+        positionColorProgram = createProgram("position_color", POSITION_COLOR_VERTEX, POSITION_COLOR_FRAGMENT);
+        positionColorLightmapProgram = createProgram("position_color_lm", POSITION_COLOR_LIGHTMAP_VERTEX, POSITION_COLOR_LIGHTMAP_FRAGMENT);
+        positionTexLightmapProgram = createProgram("position_tex_lm", POSITION_TEX_LIGHTMAP_VERTEX, POSITION_TEX_LIGHTMAP_FRAGMENT);
+        skyProgram = createProgram("sky", SKY_VERTEX, SKY_FRAGMENT);
+        cloudsProgram = createProgram("clouds", CLOUDS_VERTEX, CLOUDS_FRAGMENT);
+
+        // Cache attribute locations for terrain program
+        if (terrainProgram != null) {
+            attrPosition = gl.getAttribLocation(terrainProgram, "Position");
+            attrTexCoord = gl.getAttribLocation(terrainProgram, "TexCoord");
+            attrNormal = gl.getAttribLocation(terrainProgram, "Normal");
+            attrColor = gl.getAttribLocation(terrainProgram, "Color");
+            attrLightMap = gl.getAttribLocation(terrainProgram, "LightMap");
+            WebLog.info("[ShaderManager] Terrain shader attribute locations: pos=" + attrPosition +
+                       " tex=" + attrTexCoord + " norm=" + attrNormal + " col=" + attrColor + " lm=" + attrLightMap);
+        }
+
         initialized = true;
-        log("[ShaderManager] Initialized");
+        WebLog.info("[ShaderManager] All shaders initialized");
     }
 
     /**
-     * Get or create a shader program.
+     * Use terrain shader (blocks, terrain).
      */
-    public static WebGLProgram getProgram(String name) {
-        if (!initialized || gl == null) return null;
-        if (programCache.containsKey(name)) {
-            return programCache.get(name);
-        }
-
-        WebGLProgram program = null;
-        switch (name) {
-            case "basic3d":
-                program = createProgram(VERTEX_SHADER_3D, FRAGMENT_SHADER_3D);
-                break;
-            case "basic2d":
-                program = createProgram(VERTEX_SHADER_2D, FRAGMENT_SHADER_2D);
-                break;
-            case "sky":
-                program = createProgram(VERTEX_SHADER_SKY, FRAGMENT_SHADER_SKY);
-                break;
-            default:
-                log("[ShaderManager] Unknown program: " + name);
-                return null;
-        }
-
-        if (program != null) {
-            programCache.put(name, program);
-            log("[ShaderManager] Created program: " + name);
-        }
-        return program;
+    public static void useTerrainShader() {
+        useProgram(terrainProgram, "terrain");
     }
 
     /**
-     * Create a shader program from source.
+     * Use entity shader (mobs, items).
      */
-    private static WebGLProgram createProgram(String vertexSrc, String fragmentSrc) {
-        WebGLShader vertexShader = compileShader(WebGLRenderingContext.VERTEX_SHADER, vertexSrc);
-        WebGLShader fragmentShader = compileShader(WebGLRenderingContext.FRAGMENT_SHADER, fragmentSrc);
+    public static void useEntityShader() {
+        useProgram(entityProgram, "entity");
+    }
 
-        if (vertexShader == null || fragmentShader == null) {
+    /**
+     * Use entity cutout shader (transparent entities).
+     */
+    public static void useEntityCutoutShader() {
+        useProgram(entityCutoutProgram, "entity_cutout");
+    }
+
+    /**
+     * Use particles shader.
+     */
+    public static void useParticlesShader() {
+        useProgram(particlesProgram, "particles");
+    }
+
+    /**
+     * Use position + texture shader.
+     */
+    public static void usePositionTexShader() {
+        useProgram(positionTexProgram, "position_tex");
+    }
+
+    /**
+     * Use sky shader.
+     */
+    public static void useSkyShader() {
+        useProgram(skyProgram, "sky");
+    }
+
+    /**
+     * Use clouds shader.
+     */
+    public static void useCloudsShader() {
+        useProgram(cloudsProgram, "clouds");
+    }
+
+    private static void useProgram(WebGLProgram program, String name) {
+        if (program == null) return;
+        if (currentProgram != program) {
+            gl.useProgram(program);
+            currentProgram = program;
+            currentShaderName = name;
+        }
+    }
+
+    public static String getCurrentShader() {
+        return currentShaderName;
+    }
+
+    private static WebGLProgram createProgram(String name, String vertexSrc, String fragmentSrc) {
+        WebGLShader vs = compileShader(WebGLRenderingContext.VERTEX_SHADER, vertexSrc);
+        WebGLShader fs = compileShader(WebGLRenderingContext.FRAGMENT_SHADER, fragmentSrc);
+
+        if (vs == null || fs == null) {
+            WebLog.error("[ShaderManager] Failed to compile " + name + " shader");
             return null;
         }
 
         WebGLProgram program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
         gl.linkProgram(program);
 
         if (!gl.getProgramParameterb(program, WebGLRenderingContext.LINK_STATUS)) {
             String info = gl.getProgramInfoLog(program);
-            log("[ShaderManager] Link error: " + info);
-            gl.deleteProgram(program);
+            WebLog.error("[ShaderManager] Link error for " + name + ": " + info);
             return null;
         }
 
-        // Clean up shaders after linking
-        gl.deleteShader(vertexShader);
-        gl.deleteShader(fragmentShader);
-
+        WebLog.info("[ShaderManager] Compiled shader: " + name);
         return program;
     }
 
-    /**
-     * Compile a shader.
-     */
     private static WebGLShader compileShader(int type, String source) {
         WebGLShader shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -202,126 +172,343 @@ public final class ShaderManager {
 
         if (!gl.getShaderParameterb(shader, WebGLRenderingContext.COMPILE_STATUS)) {
             String info = gl.getShaderInfoLog(shader);
-            log("[ShaderManager] Compile error (" + (type == WebGLRenderingContext.VERTEX_SHADER ? "VS" : "FS") + "): " + info);
+            WebLog.error("[ShaderManager] Compile error: " + info);
             gl.deleteShader(shader);
             return null;
         }
-
         return shader;
     }
 
-    /**
-     * Use a shader program.
-     */
-    public static void useProgram(WebGLProgram program) {
-        if (!initialized || gl == null) return;
-        int programId = program != null ? program.hashCode() : 0;
-        if (currentProgram != programId) {
-            gl.useProgram(program);
-            currentProgram = programId;
-        }
-    }
+    // ==================== SHADER SOURCES ====================
 
-    /**
-     * Get uniform location with caching.
-     */
-    public static WebGLUniformLocation getUniformLocation(WebGLProgram program, String name) {
-        int cacheKey = (program != null ? program.hashCode() : 0) * 31 + name.hashCode();
-        if (uniformCache.containsKey(cacheKey)) {
-            return uniformCache.get(cacheKey);
-        }
+    // Terrain vertex shader - matches Minecraft's format
+    private static final String TERRAIN_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute vec3 Normal;\n" +
+        "attribute vec4 Color;\n" +
+        "attribute vec2 LightMap;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "varying vec3 Normal0;\n" +
+        "varying vec2 LightMap0;\n" +
+        "varying float FogDist;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  Color0 = Color;\n" +
+        "  Normal0 = Normal;\n" +
+        "  LightMap0 = LightMap;\n" +
+        "  FogDist = length(gl_Position.xyz);\n" +
+        "}\n";
 
-        WebGLUniformLocation location = gl.getUniformLocation(program, name);
-        uniformCache.put(cacheKey, location);
-        return location;
-    }
+    private static final String TERRAIN_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "varying vec3 Normal0;\n" +
+        "varying vec2 LightMap0;\n" +
+        "varying float FogDist;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform sampler2D LightMap;\n" +
+        "uniform vec3 FogColor;\n" +
+        "uniform float FogStart;\n" +
+        "uniform float FogEnd;\n" +
+        "uniform float GameTime;\n" +
+        "uniform float BlurFactor;\n" +
+        "void main() {\n" +
+        "  vec4 tex = texture2D(Texture, TexCoord0);\n" +
+        "  if (tex.a < 0.1) discard;\n" +
+        "  vec4 light = texture2D(LightMap, LightMap0 / 240.0);\n" +
+        "  gl_FragColor = tex * Color0 * light;\n" +
+        "  float fogFactor = clamp((FogDist - FogStart) / (FogEnd - FogStart), 0.0, 1.0);\n" +
+        "  gl_FragColor.rgb = mix(gl_FragColor.rgb, FogColor, fogFactor);\n" +
+        "}\n";
 
-    /**
-     * Set uniform matrix 4x4.
-     */
-    public static void setUniformMatrix4(WebGLProgram program, String name, float[] matrix) {
-        WebGLUniformLocation loc = getUniformLocation(program, name);
-        if (loc != null) {
-            gl.uniformMatrix4fv(loc, false, matrix);
-        }
-    }
+    // Terrain colored vertex shader
+    private static final String TERRAIN_COLORED_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute vec3 Normal;\n" +
+        "attribute vec4 Color;\n" +
+        "attribute vec2 LightMap;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "varying vec3 Normal0;\n" +
+        "varying vec2 LightMap0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  Color0 = Color;\n" +
+        "  Normal0 = Normal;\n" +
+        "  LightMap0 = LightMap;\n" +
+        "}\n";
 
-    /**
-     * Set uniform vector3.
-     */
-    public static void setUniform3f(WebGLProgram program, String name, float x, float y, float z) {
-        WebGLUniformLocation loc = getUniformLocation(program, name);
-        if (loc != null) {
-            gl.uniform3f(loc, x, y, z);
-        }
-    }
+    // Entity vertex shader - with diffuse lighting
+    private static final String ENTITY_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute vec3 Normal;\n" +
+        "attribute vec4 Color;\n" +
+        "attribute vec2 LightMap;\n" +
+        "attribute vec2 Overlay;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "uniform vec3 ColorModulator;\n" +
+        "uniform float GameTime;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "varying vec3 Normal0;\n" +
+        "varying vec2 LightMap0;\n" +
+        "varying vec2 Overlay0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  Color0 = Color * vec4(ColorModulator, 1.0);\n" +
+        "  Normal0 = Normal;\n" +
+        "  LightMap0 = LightMap;\n" +
+        "  Overlay0 = Overlay;\n" +
+        "}\n";
 
-    /**
-     * Set uniform float.
-     */
-    public static void setUniform1f(WebGLProgram program, String name, float x) {
-        WebGLUniformLocation loc = getUniformLocation(program, name);
-        if (loc != null) {
-            gl.uniform1f(loc, x);
-        }
-    }
+    private static final String ENTITY_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "varying vec3 Normal0;\n" +
+        "varying vec2 LightMap0;\n" +
+        "varying vec2 Overlay0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform sampler2D LightMap;\n" +
+        "uniform vec3 OverrideColor;\n" +
+        "uniform float Shade;\n" +
+        "void main() {\n" +
+        "  vec4 tex = texture2D(Texture, TexCoord0);\n" +
+        "  if (tex.a < 0.1) discard;\n" +
+        "  vec4 light = texture2D(LightMap, LightMap0 / 240.0);\n" +
+        "  vec3 normal = normalize(Normal0);\n" +
+        "  vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));\n" +
+        "  float diffuse = max(dot(normal, lightDir), 0.0);\n" +
+        "  gl_FragColor = tex * Color0 * light * (0.5 + 0.5 * diffuse * Shade);\n" +
+        "}\n";
 
-    /**
-     * Set uniform int.
-     */
-    public static void setUniform1i(WebGLProgram program, String name, int x) {
-        WebGLUniformLocation loc = getUniformLocation(program, name);
-        if (loc != null) {
-            gl.uniform1i(loc, x);
-        }
-    }
+    // Entity cutout shader (with alpha cutout)
+    private static final String ENTITY_CUTOUT_VERTEX = ENTITY_VERTEX;
 
-    /**
-     * Set uniform boolean.
-     */
-    public static void setUniformBool(WebGLProgram program, String name, boolean x) {
-        WebGLUniformLocation loc = getUniformLocation(program, name);
-        if (loc != null) {
-            gl.uniform1i(loc, x ? 1 : 0);
-        }
-    }
+    private static final String ENTITY_CUTOUT_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "varying vec3 Normal0;\n" +
+        "varying vec2 LightMap0;\n" +
+        "varying vec2 Overlay0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform sampler2D LightMap;\n" +
+        "uniform vec3 ColorModulator;\n" +
+        "uniform float Cutout;\n" +
+        "void main() {\n" +
+        "  vec4 tex = texture2D(Texture, TexCoord0);\n" +
+        "  if (tex.a < Cutout) discard;\n" +
+        "  vec4 light = texture2D(LightMap, LightMap0 / 240.0);\n" +
+        "  gl_FragColor = tex * Color0 * vec4(ColorModulator, 1.0) * light;\n" +
+        "}\n";
 
-    /**
-     * Bind attribute locations.
-     */
-    public static void bindAttribLocations(WebGLProgram program, int position, String name) {
-        gl.bindAttribLocation(program, position, name);
-    }
+    // Particles vertex shader
+    private static final String PARTICLES_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute float VertexAlpha;\n" +
+        "attribute vec4 Color;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying float Alpha0;\n" +
+        "varying vec4 Color0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  Alpha0 = VertexAlpha;\n" +
+        "  Color0 = Color;\n" +
+        "}\n";
 
-    /**
-     * Get current program ID.
-     */
-    public static int getCurrentProgram() {
-        return currentProgram;
-    }
+    private static final String PARTICLES_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying float Alpha0;\n" +
+        "varying vec4 Color0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform vec3 FogColor;\n" +
+        "uniform float FogStart;\n" +
+        "uniform float FogEnd;\n" +
+        "void main() {\n" +
+        "  vec4 tex = texture2D(Texture, TexCoord0);\n" +
+        "  if (tex.a * Alpha0 < 0.1) discard;\n" +
+        "  gl_FragColor = tex * Color0 * Alpha0;\n" +
+        "}\n";
 
-    /**
-     * Check if initialized.
-     */
-    public static boolean isInitialized() {
-        return initialized;
-    }
+    // Simple position + texture shader
+    private static final String POSITION_TEX_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "}\n";
 
-    /**
-     * Delete all cached programs.
-     */
-    public static void destroy() {
-        if (!initialized || gl == null) return;
-        for (WebGLProgram program : programCache.values()) {
-            gl.deleteProgram(program);
-        }
-        programCache.clear();
-        uniformCache.clear();
-        currentProgram = 0;
-        log("[ShaderManager] Destroyed all programs");
-    }
+    private static final String POSITION_TEX_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform vec4 Color;\n" +
+        "void main() {\n" +
+        "  gl_FragColor = texture2D(Texture, TexCoord0) * Color;\n" +
+        "}\n";
 
-    private static void log(String msg) {
-        WebLog.info(msg);
-    }
+    // Position + texture + color shader
+    private static final String POSITION_TEX_COL_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute vec4 Color;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  Color0 = Color;\n" +
+        "}\n";
+
+    private static final String POSITION_TEX_COL_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec4 Color0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "void main() {\n" +
+        "  gl_FragColor = texture2D(Texture, TexCoord0) * Color0;\n" +
+        "}\n";
+
+    // Position + color shader
+    private static final String POSITION_COLOR_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec4 Color;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec4 Color0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * vec4(Position, 1.0);\n" +
+        "  Color0 = Color;\n" +
+        "}\n";
+
+    private static final String POSITION_COLOR_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec4 Color0;\n" +
+        "void main() {\n" +
+        "  gl_FragColor = Color0;\n" +
+        "}\n";
+
+    // Position + color + lightmap shader
+    private static final String POSITION_COLOR_LIGHTMAP_VERTEX = POSITION_COLOR_VERTEX;
+
+    private static final String POSITION_COLOR_LIGHTMAP_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec4 Color0;\n" +
+        "uniform sampler2D LightMap;\n" +
+        "uniform float TextureAtlasSize;\n" +
+        "void main() {\n" +
+        "  vec4 light = texture2D(LightMap, gl_FragCoord.xy / 256.0);\n" +
+        "  gl_FragColor = Color0 * light;\n" +
+        "}\n";
+
+    // Position + texture + lightmap shader
+    private static final String POSITION_TEX_LIGHTMAP_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute vec2 LightMapCoord;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec2 LightMapCoord0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  LightMapCoord0 = LightMapCoord;\n" +
+        "}\n";
+
+    private static final String POSITION_TEX_LIGHTMAP_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying vec2 LightMapCoord0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform sampler2D LightMap;\n" +
+        "uniform vec4 Color;\n" +
+        "void main() {\n" +
+        "  vec4 tex = texture2D(Texture, TexCoord0);\n" +
+        "  vec4 light = texture2D(LightMap, LightMapCoord0 / 240.0);\n" +
+        "  gl_FragColor = tex * Color * light;\n" +
+        "}\n";
+
+    // Sky shader
+    private static final String SKY_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "varying float YCoord;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  YCoord = Position.y;\n" +
+        "}\n";
+
+    private static final String SKY_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying float YCoord;\n" +
+        "uniform vec3 SkyColor;\n" +
+        "uniform float SkyDarken;\n" +
+        "uniform float Stars;\n" +
+        "void main() {\n" +
+        "  float gradient = 1.0 - YCoord;\n" +
+        "  vec3 color = mix(SkyColor, vec3(0.0, 0.0, 0.0), gradient * SkyDarken);\n" +
+        "  gl_FragColor = vec4(color, 1.0);\n" +
+        "}\n";
+
+    // Clouds shader
+    private static final String CLOUDS_VERTEX =
+        "precision mediump float;\n" +
+        "attribute vec3 Position;\n" +
+        "attribute vec2 TexCoord;\n" +
+        "attribute float Brightness;\n" +
+        "uniform mat4 ProjMat;\n" +
+        "uniform mat4 ModelViewMat;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying float Brightness0;\n" +
+        "void main() {\n" +
+        "  gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n" +
+        "  TexCoord0 = TexCoord;\n" +
+        "  Brightness0 = Brightness;\n" +
+        "}\n";
+
+    private static final String CLOUDS_FRAGMENT =
+        "precision mediump float;\n" +
+        "varying vec2 TexCoord0;\n" +
+        "varying float Brightness0;\n" +
+        "uniform sampler2D Texture;\n" +
+        "uniform vec3 Color;\n" +
+        "void main() {\n" +
+        "  vec4 tex = texture2D(Texture, TexCoord0);\n" +
+        "  if (tex.a < 0.1) discard;\n" +
+        "  gl_FragColor = vec4(Color * Brightness0, tex.a);\n" +
+        "}\n";
 }
