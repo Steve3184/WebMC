@@ -2,181 +2,193 @@ package top.steve3184.webmc.teavm.gl;
 
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
-import org.teavm.jso.browser.Window;
-import org.teavm.jso.canvas.CanvasRenderingContext2D;
-import org.teavm.jso.webgl.WebGL2RenderingContext;
-import org.teavm.jso.webgl.WebGLContextAttributes;
-import org.teavm.jso.webgl.WebGLTexture;
-import top.steve3184.webmc.gpu.GpuProfile;
+import org.teavm.jso.webgl.WebGLRenderingContext;
 
 /**
- * Detects GPU capabilities and creates optimized rendering profile.
- * Runs once at startup to determine hardware tier and configure rendering.
+ * GPU detection and performance tier classification.
+ * Detects GPU capabilities and assigns a performance tier for optimizations.
  */
 public final class GpuDetector {
 
-    private static GpuProfile cachedProfile;
+    public enum Tier {
+        ULTRA(4, "Ultra"),
+        HIGH(3, "High"),
+        MEDIUM(2, "Medium"),
+        LOW(1, "Low"),
+        FALLBACK(0, "Fallback");
+
+        public final int level;
+        public final String name;
+
+        Tier(int level, String name) {
+            this.level = level;
+            this.name = name;
+        }
+    }
+
+    public static class GpuProfile {
+        public final Tier tier;
+        public final String vendor;
+        public final String renderer;
+        public final int maxTextureSize;
+        public final int maxVertexAttribs;
+        public final boolean supportsFloatTextures;
+        public final boolean supportsInstancing;
+
+        public GpuProfile(Tier tier, String vendor, String renderer,
+                         int maxTextureSize, int maxVertexAttribs,
+                         boolean supportsFloatTextures, boolean supportsInstancing) {
+            this.tier = tier;
+            this.vendor = vendor;
+            this.renderer = renderer;
+            this.maxTextureSize = maxTextureSize;
+            this.maxVertexAttribs = maxVertexAttribs;
+            this.supportsFloatTextures = supportsFloatTextures;
+            this.supportsInstancing = supportsInstancing;
+        }
+
+        public String getTierName() {
+            return tier.name;
+        }
+
+        public int getTierLevel() {
+            return tier.level;
+        }
+    }
+
+    private static GpuProfile cachedProfile = null;
+
+    private GpuDetector() {}
 
     /**
-     * Detect GPU and create optimized profile.
-     * Results are cached for subsequent calls.
+     * Detect and return GPU profile with performance tier.
      */
-    public static GpuProfile detectGpu() {
+    public static GpuProfile detectProfile() {
         if (cachedProfile != null) {
             return cachedProfile;
         }
 
-        // Try to get WebGL2 context
-        WebGL2RenderingContext gl = tryCreateWebGL2Context();
-        boolean hasWebGL2 = gl != null;
-
-        if (!hasWebGL2) {
-            // Fallback to basic profile
-            cachedProfile = GpuProfile.builder()
-                .hasWebGL2(false)
-                .tier(GpuProfile.Tier.LOW)
-                .build();
+        WebGLRenderingContext gl = WebGLContextHolder.gl();
+        if (gl == null) {
+            cachedProfile = new GpuProfile(Tier.FALLBACK, "Unknown", "No WebGL",
+                2048, 8, false, false);
             return cachedProfile;
         }
 
-        // Detect capabilities
-        int maxTextureSize = gl.getParameteri(WebGL2RenderingContext.MAX_TEXTURE_SIZE);
-        int maxVertexAttribs = gl.getParameteri(WebGL2RenderingContext.MAX_VERTEX_ATTRIBS);
+        String vendor = getString(gl, WebGLRenderingContext.VENDOR);
+        String renderer = getString(gl, WebGLRenderingContext.RENDERER);
+        int maxTextureSize = getInt(gl, WebGLRenderingContext.MAX_TEXTURE_SIZE);
+        int maxVertexAttribs = getInt(gl, WebGLRenderingContext.MAX_VERTEX_ATTRIBS);
 
-        // Check extensions
-        JSObject depthExt = gl.getExtension("WEBGL_depth_texture");
-        JSObject floatExt = gl.getExtension("OES_texture_float");
-        boolean hasDepthTexture = depthExt != null;
-        boolean hasFloatTextures = floatExt != null;
+        // Check for float texture support
+        boolean supportsFloatTextures = checkFloatTextureSupport(gl);
 
-        // Get renderer info for tier inference
-        String renderer = getUnmaskedRenderer(gl);
+        // WebGL2 has instancing, WebGL1 doesn't natively
+        boolean supportsInstancing = supportsWebGL2();
 
-        // Determine tier
-        GpuProfile.Tier tier = inferTier(renderer, maxTextureSize, maxVertexAttribs, hasFloatTextures);
+        // Calculate performance score
+        int score = calculateScore(renderer, maxTextureSize, maxVertexAttribs,
+            supportsFloatTextures, supportsInstancing);
 
-        // On mobile, reduce tier
-        if (isMobileDevice()) {
-            if (tier == GpuProfile.Tier.ULTRA) tier = GpuProfile.Tier.HIGH;
-            else if (tier == GpuProfile.Tier.HIGH) tier = GpuProfile.Tier.MEDIUM;
-        }
+        Tier tier = getTierFromScore(score, renderer);
 
-        // Determine render distance based on tier
-        GpuProfile.RenderDistance renderDist = GpuProfile.RenderDistance.NORMAL;
-        if (tier == GpuProfile.Tier.HIGH || tier == GpuProfile.Tier.ULTRA) {
-            renderDist = GpuProfile.RenderDistance.FAR;
-        }
+        cachedProfile = new GpuProfile(tier, vendor, renderer, maxTextureSize,
+            maxVertexAttribs, supportsFloatTextures, supportsInstancing);
 
-        cachedProfile = GpuProfile.builder()
-            .hasWebGL2(true)
-            .tier(tier)
-            .renderDistance(renderDist)
-            .maxTextureSize(maxTextureSize)
-            .maxVertexAttribs(maxVertexAttribs)
-            .supportsDepthTexture(hasDepthTexture)
-            .supportsFloatTextures(hasFloatTextures)
-            .supportsInstancing(true) // WebGL2 always has instancing
-            .build();
+        log("[GpuDetector] Detected: " + vendor + " / " + renderer);
+        log("[GpuDetector] Tier: " + tier.name + " (score: " + score + ")");
 
         return cachedProfile;
     }
 
-    private static WebGL2RenderingContext tryCreateWebGL2Context() {
-        return getCanvasContextInternal();
+    /**
+     * Check if WebGL2 is available.
+     */
+    private static boolean supportsWebGL2() {
+        return WebGLVersionDetector.detect() == WebGLVersionDetector.WebGLVersion.WEBGL2;
     }
-
-    @JSBody(script =
-        "var canvas = document.getElementById('canvas');" +
-        "if (!canvas) canvas = document.createElement('canvas');" +
-        "canvas.width = 1; canvas.height = 1;" +
-        "return canvas.getContext('webgl2', {antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance'});"
-    )
-    private static native WebGL2RenderingContext getCanvasContextInternal();
 
     /**
-     * Get unmasked renderer string using raw JS.
+     * Get the cached GPU profile.
      */
-    private static String getUnmaskedRenderer(WebGL2RenderingContext gl) {
-        try {
-            JSObject debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-            if (debugInfo != null) {
-                return getRendererString(gl);
-            }
-        } catch (Exception e) {
-            // Extension not available
+    public static GpuProfile getProfile() {
+        if (cachedProfile == null) {
+            detectProfile();
         }
-        return "";
+        return cachedProfile;
     }
 
-    @JSBody(params = {"gl"}, script =
-        "var ext = gl.getExtension('WEBGL_debug_renderer_info');" +
-        "if (ext) return gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);" +
-        "return '';"
-    )
-    private static native String getRendererString(WebGL2RenderingContext gl);
-
-    private static GpuProfile.Tier inferTier(String renderer, int maxTextureSize,
-                                             int maxVertexAttribs, boolean hasFloatTextures) {
-        // High score = better GPU
+    /**
+     * Calculate performance score based on GPU capabilities.
+     */
+    private static int calculateScore(String renderer, int maxTextureSize,
+            int maxVertexAttribs, boolean supportsFloatTextures, boolean supportsInstancing) {
         int score = 0;
 
-        // Known high-end GPUs
-        if (renderer != null && !renderer.isEmpty()) {
-            String r = renderer.toLowerCase();
-            if (r.contains("nvidia") || r.contains("geforce")) {
-                score += 3;
-                if (r.contains("rtx") || r.contains("gtx 10") || r.contains("gtx 16")) score += 2;
-                if (r.contains("gtx 20") || r.contains("gtx 30") || r.contains("gtx 40")) score += 2;
-            } else if (r.contains("amd") || r.contains("radeon")) {
-                score += 2;
-                if (r.contains("rx 5") || r.contains("rx 6") || r.contains("rx 7")) score += 2;
-            } else if (r.contains("apple") || r.contains("m1") || r.contains("m2") || r.contains("m3")) {
-                score += 3;
-            } else if (r.contains("intel")) {
-                score += 1;
-                if (r.contains("iris") || r.contains("uhd 6")) score += 1;
-            }
+        if (renderer == null) return 0;
+
+        // Renderer-based scoring
+        String r = renderer.toLowerCase();
+
+        // High-end GPUs
+        if (r.contains("nvidia") || r.contains("geforce rtx") ||
+            r.contains("radeon rx") || r.contains("apple m")) {
+            score += 5;
+        } else if (r.contains("radeon") || r.contains("geforce gtx") ||
+                   r.contains("intel iris") || r.contains("apple")) {
+            score += 3;
+        } else if (r.contains("intel") || r.contains("adreno")) {
+            score += 2;
+        } else if (r.contains("mali") || r.contains("powervr")) {
+            score += 1;
         }
 
         // Texture size scoring
         if (maxTextureSize >= 16384) score += 2;
         else if (maxTextureSize >= 8192) score += 1;
 
-        // Vertex attribs scoring
-        if (maxVertexAttribs >= 16) score += 1;
+        // Feature scoring
+        if (supportsFloatTextures) score += 1;
+        if (supportsInstancing) score += 1;
 
-        // Float textures
-        if (hasFloatTextures) score += 1;
-
-        // Mobile gets one tier lower
-        if (isMobileDevice()) score -= 2;
-
-        // Map score to tier
-        if (score >= 7) return GpuProfile.Tier.ULTRA;
-        if (score >= 5) return GpuProfile.Tier.HIGH;
-        if (score >= 3) return GpuProfile.Tier.MEDIUM;
-        return GpuProfile.Tier.LOW;
+        return score;
     }
 
-    @JSBody(script =
-        "return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);"
+    /**
+     * Determine tier from score.
+     */
+    private static Tier getTierFromScore(int score, String renderer) {
+        if (score >= 8) return Tier.ULTRA;
+        if (score >= 6) return Tier.HIGH;
+        if (score >= 4) return Tier.MEDIUM;
+        if (score >= 2) return Tier.LOW;
+        return Tier.FALLBACK;
+    }
+
+    /**
+     * Check if float textures are supported.
+     */
+    private static boolean checkFloatTextureSupport(WebGLRenderingContext gl) {
+        return checkExtension(gl, "EXT_color_buffer_float") ||
+               checkExtension(gl, "OES_texture_float");
+    }
+
+    @JSBody(params = {"gl", "ext"}, script =
+        "return gl.getExtension(ext) !== null;"
     )
-    private static native boolean isMobileDevice();
+    private static native boolean checkExtension(WebGLRenderingContext gl, String ext);
 
-    /**
-     * Get cached profile, or detect if not yet done.
-     */
-    public static GpuProfile getProfile() {
-        if (cachedProfile == null) {
-            return detectGpu();
-        }
-        return cachedProfile;
-    }
+    @JSBody(params = {"gl", "pname"}, script =
+        "try { var v = gl.getParameter(pname); return (v === undefined || v === null) ? '' : String(v); } catch(e) { return ''; }"
+    )
+    private static native String getString(WebGLRenderingContext gl, int pname);
 
-    /**
-     * Reset cached profile to force re-detection.
-     */
-    public static void reset() {
-        cachedProfile = null;
-    }
+    @JSBody(params = {"gl", "pname"}, script =
+        "try { var v = gl.getParameter(pname); return (v === undefined || v === null) ? 0 : (v | 0); } catch(e) { return 0; }"
+    )
+    private static native int getInt(WebGLRenderingContext gl, int pname);
+
+    private static native void log(String msg) /*-{
+        console.log(msg);
+    }-*/;
 }
