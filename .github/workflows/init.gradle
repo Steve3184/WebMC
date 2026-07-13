@@ -28,10 +28,15 @@ settingsEvaluated { settings ->
     }
 }
 
-// CI: Set compileJava memory
+// CI: Disable fork for compilation tasks (Windows worker ClassNotFoundException workaround)
+// Note: Fork is already disabled in build.gradle for JDK stubs compilation tasks
 allprojects {
     tasks.withType(JavaCompile).configureEach {
-        options.fork = true
-        options.forkOptions.jvmArgs << '-Xmx10g' << '-Xss64m'
+        // Let the build.gradle settings control fork behavior
+        // CI can override this via environment variables
+        if (System.getenv('CI') == 'true') {
+            options.fork = false
+            options.incremental = true
+        }
     }
 }

@@ -707,7 +707,7 @@ public final class CanvasWindowBackend implements WindowBackend {
         "  if (navigator && navigator.clipboard && navigator.clipboard.writeText) {" +
         "    navigator.clipboard.writeText(text).catch(function() {});" +
         "  }" +
-        "}")
+        "} catch (e) {}")
     private static native void writeClipboardNative(String text);
 
     @Override

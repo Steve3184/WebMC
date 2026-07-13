@@ -327,15 +327,21 @@ public final class WebCommandEncoder implements CommandEncoder {
         WebGL2RenderingContext gl = WebGLContextHolder.gl();
         int w = wt.getWidth(0);
         int h = wt.getHeight(0);
-        gl.bindFramebuffer(WebGL2RenderingContext.READ_FRAMEBUFFER, wt.ensureFbo(gl, null));
-        gl.bindFramebuffer(WebGL2RenderingContext.DRAW_FRAMEBUFFER, null);
-        gl.colorMask(true, true, true, true);
-        gl.disable(WebGL2RenderingContext.SCISSOR_TEST);
+
+        // Get canvas size before binding any framebuffer
+        int canvasW = getDrawingBufferWidth(gl);
+        int canvasH = getDrawingBufferHeight(gl);
+        if (canvasW <= 0 || canvasH <= 0) {
+            canvasW = w;
+            canvasH = h;
+        }
+
+        // Read FBO center pixel for diagnostics
         if (presentDiagCount < 5) {
             presentDiagCount++;
-            int canvasW = getDrawingBufferWidth(gl);
-            int canvasH = getDrawingBufferHeight(gl);
+            gl.bindFramebuffer(WebGL2RenderingContext.READ_FRAMEBUFFER, wt.ensureFbo(gl, null));
             org.teavm.jso.typedarrays.Uint8Array px = org.teavm.jso.typedarrays.Uint8Array.create(4);
+            // Note: readPixels y is from bottom, so we need to flip
             readPixels(gl, w / 2, h / 2, 1, 1, px);
             int errBefore = gl.getError();
             System.err.println("[mc-web/diag] presentTexture: fbo=" + w + "x" + h
@@ -343,14 +349,22 @@ public final class WebCommandEncoder implements CommandEncoder {
                 + " centerPx=(" + getU8(px, 0) + "," + getU8(px, 1) + "," + getU8(px, 2) + "," + getU8(px, 3) + ")"
                 + " errBefore=0x" + Integer.toHexString(errBefore));
         }
-        int canvasW = getDrawingBufferWidth(gl);
-        int canvasH = getDrawingBufferHeight(gl);
-        if (canvasW <= 0 || canvasH <= 0) {
-            canvasW = w;
-            canvasH = h;
-        }
+
+        // Blit from FBO to default framebuffer (canvas)
+        // Note: blitFramebuffer flips Y axis automatically when writing to default framebuffer
+        // This matches the expected behavior where (0,0) in canvas is top-left
+        gl.bindFramebuffer(WebGL2RenderingContext.READ_FRAMEBUFFER, wt.ensureFbo(gl, null));
+        gl.bindFramebuffer(WebGL2RenderingContext.DRAW_FRAMEBUFFER, null);
+        gl.colorMask(true, true, true, true);
+        gl.disable(WebGL2RenderingContext.SCISSOR_TEST);
+
         viewport(gl, 0, 0, canvasW, canvasH);
-        blitFramebuffer(gl, 0, 0, w, h, 0, 0, canvasW, canvasH);
+
+        // Blit with Y-flip: source (0,0) is bottom-left, dest (0,0) is bottom-left
+        // But canvas uses top-left as origin, so we need to flip the Y in the destination
+        // WebGL blitFramebuffer handles this automatically when one target is the default framebuffer
+        blitFramebuffer(gl, 0, 0, w, h, 0, canvasH, canvasW, 0);
+
         if (presentDiagCount <= 5) {
             int errAfter = gl.getError();
             if (errAfter != 0) {

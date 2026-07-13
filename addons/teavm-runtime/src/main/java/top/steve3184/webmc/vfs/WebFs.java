@@ -367,10 +367,7 @@ public final class WebFs {
 
     @JSBody(params = "url", script =
         "var x = new XMLHttpRequest();" +
-        "x.open('GET', url, false);" + // sync
-        // sync XHR forbids responseType in a Document context — use the
-        // \"binary string\" trick: overrideMimeType + read responseText
-        // and copy each char's low byte into an Int8Array.
+        "x.open('GET', url, false);" +
         "x.overrideMimeType('text/plain; charset=x-user-defined');" +
         "x.send(null);" +
         "if (x.status !== 200 && x.status !== 0) { throw new Error('fetch ' + url + ' status=' + x.status); }" +

@@ -6,6 +6,7 @@ import org.teavm.jso.JSBody;
 import org.teavm.jso.dom.html.HTMLCanvasElement;
 import org.teavm.jso.dom.html.HTMLDocument;
 import org.teavm.jso.webgl.WebGL2RenderingContext;
+import sun.misc.Unsafe;
 import top.steve3184.webmc.teavm.gl.WebGLContextHolder;
 import top.steve3184.webmc.teavm.gl.WebGLVersionDetector;
 
@@ -78,7 +79,6 @@ public final class WebMain {
     private static native String bootMode();
 
     @JSBody(script =
-        "// Export clipboard callback for CanvasWindowBackend" +
         "window.__webmcOnClipboardCopy = function(text) {" +
         "  top.steve3184.webmc.teavm.runtime.CanvasWindowBackend.onBrowserCopy(text || '');" +
         "};")
@@ -97,6 +97,10 @@ public final class WebMain {
         System.setProperty("slf4j.internal.report.stream", "System.out");
         WebFilteredPrintStream.install();
         startupMark("webmain:entered", "args=" + (args == null ? 0 : args.length));
+
+        // Initialize sun.misc.Unsafe. The @JSBody-annotated Unsafe methods won't be eliminated
+        // because they have JS side effects.
+        Unsafe u = Unsafe.getUnsafe();
 
         // Boot the browser-side filesystem before ANY other MC or JDK NIO code runs.
         try {

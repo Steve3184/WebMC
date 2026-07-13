@@ -9,4 +9,7 @@ public abstract class Certificate implements java.io.Serializable {
     public abstract void verify(java.security.PublicKey key, String sigProvider);
     public abstract String toString();
     public abstract java.security.PublicKey getPublicKey();
+
+    public void checkValidity() throws CertificateException {}
+    public void checkValidity(java.util.Date date) throws CertificateException {}
 }

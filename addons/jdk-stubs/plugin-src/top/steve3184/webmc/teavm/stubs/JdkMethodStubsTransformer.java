@@ -92,12 +92,6 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
             new StubMethod("codePointOf", "(Ljava/lang/String;)I", true, ReturnKind.ZERO_INT),
             new StubMethod("toString", "(I)Ljava/lang/String;", true, ReturnKind.NULL_OBJECT),
         });
-        STUBS.put("java.lang.Runtime", new StubMethod[] {
-            new StubMethod("addShutdownHook", "(Ljava/lang/Thread;)V", false, ReturnKind.VOID),
-            new StubMethod("removeShutdownHook", "(Ljava/lang/Thread;)Z", false, ReturnKind.FALSE_BOOL),
-            new StubMethod("exec", "(Ljava/lang/String;)Ljava/lang/Process;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("exec", "([Ljava/lang/String;[Ljava/lang/String;)Ljava/lang/Process;", false, ReturnKind.NULL_OBJECT),
-        });
         STUBS.put("java.lang.SecurityManager", new StubMethod[] {
             new StubMethod("getClassContext", "()[Ljava/lang/Class;", false, ReturnKind.NULL_OBJECT),
         });
@@ -141,17 +135,8 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
             new StubMethod("removeShutdownHook", "(Ljava/lang/Thread;)Z", false, ReturnKind.FALSE_BOOL),
             new StubMethod("exec", "(Ljava/lang/String;)Ljava/lang/Process;", false, ReturnKind.NULL_OBJECT),
             new StubMethod("exec", "([Ljava/lang/String;[Ljava/lang/String;)Ljava/lang/Process;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("exec", "([Ljava/lang/String;)Ljava/lang/Process;", false, ReturnKind.NULL_OBJECT),
             new StubMethod("maxMemory", "()J", false, ReturnKind.ZERO_LONG),
-        });
-        STUBS.put("java.lang.Class", new StubMethod[] {
-            new StubMethod("getGenericInterfaces", "()[Ljava/lang/reflect/Type;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("getGenericSuperclass", "()Ljava/lang/reflect/Type;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("getModule", "()Ljava/lang/Module;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("getSigners", "()[Ljava/lang/Object;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("getTypeParameters", "()[Ljava/lang/reflect/TypeVariable;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("isAnonymousClass", "()Z", false, ReturnKind.FALSE_BOOL),
-            new StubMethod("getResource", "(Ljava/lang/String;)Ljava/net/URL;", false, ReturnKind.NULL_OBJECT),
-            new StubMethod("getProtectionDomain", "()Ljava/security/ProtectionDomain;", false, ReturnKind.NULL_OBJECT),
         });
         STUBS.put("java.lang.Thread", new StubMethod[] {
             new StubMethod("setContextClassLoader", "(Ljava/lang/ClassLoader;)V", false, ReturnKind.VOID),
@@ -184,6 +169,11 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
             new StubMethod("setLastModifiedTime", "(Ljava/nio/file/Path;Ljava/nio/file/attribute/FileTime;)Ljava/nio/file/Path;", true, ReturnKind.NULL_OBJECT),
             new StubMethod("getPosixFilePermissions", "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/util/Set;", true, ReturnKind.NULL_OBJECT),
             new StubMethod("setPosixFilePermissions", "(Ljava/nio/file/Path;Ljava/util/Set;)Ljava/nio/file/Path;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("getFileStore", "(Ljava/nio/file/Path;)Ljava/nio/file/FileStore;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("getFileAttributeView", "(Ljava/nio/file/Path;Ljava/lang/Class;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileAttributeView;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("newByteChannel", "(Ljava/nio/file/Path;Ljava/util/Set;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/channels/SeekableByteChannel;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("getAttribute", "(Ljava/nio/file/Path;Ljava/lang/String;[Ljava/nio/file/LinkOption;)Ljava/lang/Object;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("getOwner", "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/UserPrincipal;", true, ReturnKind.NULL_OBJECT),
         });
         STUBS.put("java.nio.file.FileSystem", new StubMethod[] {
             new StubMethod("getPathMatcher", "(Ljava/lang/String;)Ljava/nio/file/PathMatcher;", false, ReturnKind.NULL_OBJECT),
@@ -192,14 +182,22 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
             new StubMethod("getMimeDecoder", "()Ljava/util/Base64$Decoder;", true, ReturnKind.NULL_OBJECT),
             new StubMethod("getMimeEncoder", "(I[B)Ljava/util/Base64$Encoder;", true, ReturnKind.NULL_OBJECT),
         });
-        STUBS.put("java.util.Collections", new StubMethod[] {
-            new StubMethod("unmodifiableSortedMap", "(Ljava/util/SortedMap;)Ljava/util/SortedMap;", true, ReturnKind.NULL_OBJECT),
-        });
         STUBS.put("java.util.concurrent.TimeUnit", new StubMethod[] {
             new StubMethod("convert", "(Ljava/time/Duration;)J", false, ReturnKind.ZERO_LONG),
         });
         STUBS.put("java.util.Locale", new StubMethod[] {
             new StubMethod("getISO3Country", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getISO3Language", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDisplayLanguage", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDisplayCountry", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDisplayVariant", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getExtensionKeys", "()Ljava/util/Set;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getExtension", "(C)Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("forLanguageTag", "(Ljava/lang/String;)Ljava/util/Locale;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("getScript", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getUnicodeLocaleAttributes", "()Ljava/util/Set;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getUnicodeLocaleKeys", "()Ljava/util/Set;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getUnicodeLocaleType", "(Ljava/lang/String;)Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
         });
         STUBS.put("java.util.UUID", new StubMethod[] {
             new StubMethod("<init>", "(JJ)V", false, ReturnKind.VOID),
@@ -272,13 +270,6 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
         STUBS.put("java.nio.channels.Channels", new StubMethod[] {
             new StubMethod("newWriter", "(Ljava/nio/channels/WritableByteChannel;Ljava/nio/charset/Charset;)Ljava/io/Writer;", true, ReturnKind.NULL_OBJECT),
         });
-        STUBS.put("java.nio.file.Files", new StubMethod[] {
-            new StubMethod("setLastModifiedTime", "(Ljava/nio/file/Path;Ljava/nio/file/attribute/FileTime;)Ljava/nio/file/Path;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("getPosixFilePermissions", "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/util/Set;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("setPosixFilePermissions", "(Ljava/nio/file/Path;Ljava/util/Set;)Ljava/nio/file/Path;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("getFileStore", "(Ljava/nio/file/Path;)Ljava/nio/file/FileStore;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("getFileAttributeView", "(Ljava/nio/file/Path;Ljava/lang/Class;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileAttributeView;", true, ReturnKind.NULL_OBJECT),
-        });
         STUBS.put("java.nio.file.FileSystems", new StubMethod[] {
             new StubMethod("newFileSystem", "(Ljava/nio/file/Path;)Ljava/nio/file/FileSystem;", true, ReturnKind.NULL_OBJECT),
         });
@@ -335,24 +326,12 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
             new StubMethod("getTrafficClass", "()I", false, ReturnKind.ZERO_INT),
             new StubMethod("setTrafficClass", "(I)V", false, ReturnKind.VOID),
         });
-        STUBS.put("java.nio.file.Files", new StubMethod[] {
-            new StubMethod("setLastModifiedTime", "(Ljava/nio/file/Path;Ljava/nio/file/attribute/FileTime;)Ljava/nio/file/Path;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("getPosixFilePermissions", "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/util/Set;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("setPosixFilePermissions", "(Ljava/nio/file/Path;Ljava/util/Set;)Ljava/nio/file/Path;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("getFileStore", "(Ljava/nio/file/Path;)Ljava/nio/file/FileStore;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("getFileAttributeView", "(Ljava/nio/file/Path;Ljava/lang/Class;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileAttributeView;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("newByteChannel", "(Ljava/nio/file/Path;Ljava/util/Set;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/channels/SeekableByteChannel;", true, ReturnKind.NULL_OBJECT),
-        });
         STUBS.put("java.nio.file.FileSystem", new StubMethod[] {
             new StubMethod("getPathMatcher", "(Ljava/lang/String;)Ljava/nio/file/PathMatcher;", false, ReturnKind.NULL_OBJECT),
             new StubMethod("newWatchService", "()Ljava/nio/file/WatchService;", false, ReturnKind.NULL_OBJECT),
         });
         STUBS.put("java.time.Duration", new StubMethod[] {
             new StubMethod("toSeconds", "()J", false, ReturnKind.ZERO_LONG),
-        });
-        STUBS.put("java.util.Collections", new StubMethod[] {
-            new StubMethod("unmodifiableSortedMap", "(Ljava/util/SortedMap;)Ljava/util/SortedMap;", true, ReturnKind.NULL_OBJECT),
-            new StubMethod("unmodifiableSequencedSet", "(Ljava/util/SequencedSet;)Ljava/util/SequencedSet;", true, ReturnKind.NULL_OBJECT),
         });
         STUBS.put("java.util.zip.Inflater", new StubMethod[] {
             new StubMethod("inflate", "(Ljava/nio/ByteBuffer;)I", false, ReturnKind.ZERO_INT),
@@ -402,6 +381,160 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
             new StubMethod("getLogger", "(Ljava/lang/Class;)Lorg/slf4j/Logger;", true, ReturnKind.CONSOLE_LOGGER_BY_CLASS),
         };
         STUBS.put("org.slf4j.LoggerFactory", sl4fLoggerFactory);
+        // java.security.cert — X509Certificate stub for HTTPS/SSL in browser
+        STUBS.put("java.security.cert.X509Certificate", new StubMethod[] {
+            new StubMethod("getSubjectX500Principal", "()Ljavax/security/auth/x500/X500Principal;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getIssuerX500Principal", "()Ljavax/security/auth/x500/X500Principal;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getSubjectDN", "()Ljava/security/Principal;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getIssuerDN", "()Ljava/security/Principal;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getNotBefore", "()Ljava/util/Date;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getNotAfter", "()Ljava/util/Date;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getSubjectAlternativeNames", "()Ljava/util/Collection;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getIssuerAlternativeNames", "()Ljava/util/Collection;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getExtensionValue", "(Ljava/lang/String;)[B", false, ReturnKind.NULL_OBJECT),
+        });
+        STUBS.put("javax.security.auth.x500.X500Principal", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("getName", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getName", "(Ljava/lang/String;)Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+        });
+        // java.text.SimpleDateFormat — needed by Apache HttpClient DateUtils
+        STUBS.put("java.text.SimpleDateFormat", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("<init>", "(Ljava/lang/String;Ljava/util/Locale;)V", false, ReturnKind.VOID),
+            new StubMethod("set2DigitYearStart", "(Ljava/util/Date;)V", false, ReturnKind.VOID),
+            new StubMethod("get2DigitYearStart", "()Ljava/util/Date;", false, ReturnKind.NULL_OBJECT),
+        });
+        // java.lang.Class — all reflection methods merged
+        STUBS.put("java.lang.Class", new StubMethod[] {
+            new StubMethod("getGenericInterfaces", "()[Ljava/lang/reflect/Type;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getGenericSuperclass", "()Ljava/lang/reflect/Type;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getModule", "()Ljava/lang/Module;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getSigners", "()[Ljava/lang/Object;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getTypeParameters", "()[Ljava/lang/reflect/TypeVariable;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("isAnonymousClass", "()Z", false, ReturnKind.FALSE_BOOL),
+            new StubMethod("getResource", "(Ljava/lang/String;)Ljava/net/URL;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getProtectionDomain", "()Ljava/security/ProtectionDomain;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getDeclaredClasses", "()[Ljava/lang/Class;", false, ReturnKind.NULL_OBJECT),
+        });
+        // java.security.Principal — interface stub for certificate principals
+        STUBS.put("java.security.Principal", new StubMethod[] {
+            new StubMethod("getName", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+        });
+        // org.apache.logging.log4j — needed by Netty logging
+        STUBS.put("org.apache.logging.log4j.LogManager", new StubMethod[] {
+            new StubMethod("<init>", "()V", false, ReturnKind.VOID),
+            new StubMethod("getLogger", "(Ljava/lang/String;)Lorg/apache/logging/log4j/Logger;", false, ReturnKind.NULL_OBJECT),
+        });
+        STUBS.put("org.apache.logging.log4j.Logger", new StubMethod[] {
+            new StubMethod("info", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("warn", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("debug", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("error", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("trace", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+        });
+        STUBS.put("org.apache.logging.log4j.Level", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+        });
+        // org.apache.log4j — older logging (used by some netty bridges)
+        STUBS.put("org.apache.log4j.Logger", new StubMethod[] {
+            new StubMethod("getLogger", "(Ljava/lang/String;)Lorg/apache/log4j/Logger;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("info", "(Ljava/lang/Object;)V", false, ReturnKind.VOID),
+            new StubMethod("warn", "(Ljava/lang/Object;)V", false, ReturnKind.VOID),
+            new StubMethod("debug", "(Ljava/lang/Object;)V", false, ReturnKind.VOID),
+            new StubMethod("error", "(Ljava/lang/Object;)V", false, ReturnKind.VOID),
+        });
+        STUBS.put("org.apache.log4j.Level", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+        });
+        STUBS.put("org.apache.log4j.Priority", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+        });
+        // javax.naming.ldap — needed by Apache HttpClient SSL hostname verification
+        STUBS.put("javax.naming.ldap.LdapName", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("getComponents", "()Ljava/util/List;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("size", "()I", false, ReturnKind.ZERO_INT),
+            new StubMethod("toString", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getRdns", "()Ljava/util/List;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("compareTo", "(Ljava/lang/Object;)I", false, ReturnKind.ZERO_INT),
+            new StubMethod("getParserClassName", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+        });
+        STUBS.put("javax.naming.ldap.Rdn", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("<init>", "()V", false, ReturnKind.VOID),
+            new StubMethod("getType", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getValue", "()Ljava/lang/Object;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("toString", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("getRdns", "()Ljava/util/List;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("compareTo", "(Ljava/lang/Object;)I", false, ReturnKind.ZERO_INT),
+            new StubMethod("toAttributes", "()Ljavax/naming/directory/Attributes;", false, ReturnKind.NULL_OBJECT),
+        });
+        STUBS.put("javax.naming.directory.Attribute", new StubMethod[] {
+            new StubMethod("get", "()Ljava/lang/Object;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("get", "(I)Ljava/lang/Object;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("size", "()I", false, ReturnKind.ZERO_INT),
+            new StubMethod("getAll", "()Ljava/util/Enumeration;", false, ReturnKind.NULL_OBJECT),
+        });
+        STUBS.put("javax.naming.directory.BasicAttribute", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("<init>", "(Ljava/lang/String;Ljava/lang/Object;)V", false, ReturnKind.VOID),
+        });
+        // Thread.dumpStack
+        STUBS.put("java.lang.Thread", new StubMethod[] {
+            new StubMethod("dumpStack", "()V", false, ReturnKind.VOID),
+            new StubMethod("setContextClassLoader", "(Ljava/lang/ClassLoader;)V", false, ReturnKind.VOID),
+            new StubMethod("getThreadGroup", "()Ljava/lang/ThreadGroup;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("<init>", "(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;Ljava/lang/String;)V", false, ReturnKind.VOID),
+            new StubMethod("<init>", "(Ljava/lang/ThreadGroup;Ljava/lang/Runnable;Ljava/lang/String;J)V", false, ReturnKind.VOID),
+            new StubMethod("getState", "()Ljava/lang/Thread$State;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("threadId", "()J", false, ReturnKind.ZERO_LONG),
+            new StubMethod("sleep", "(Ljava/time/Duration;)V", true, ReturnKind.VOID),
+        });
+        // FileInputStream.getChannel
+        STUBS.put("java.io.FileInputStream", new StubMethod[] {
+            new StubMethod("getChannel", "()Ljava/nio/channels/FileChannel;", false, ReturnKind.NULL_OBJECT),
+        });
+        // FileOutputStream.getChannel
+        STUBS.put("java.io.FileOutputStream", new StubMethod[] {
+            new StubMethod("getChannel", "()Ljava/nio/channels/FileChannel;", false, ReturnKind.NULL_OBJECT),
+        });
+        // Collections.unmodifiableSortedSet
+        STUBS.put("java.util.Collections", new StubMethod[] {
+            new StubMethod("unmodifiableSortedSet", "(Ljava/util/SortedSet;)Ljava/util/SortedSet;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("unmodifiableSortedMap", "(Ljava/util/SortedMap;)Ljava/util/SortedMap;", true, ReturnKind.NULL_OBJECT),
+            new StubMethod("unmodifiableSequencedSet", "(Ljava/util/SequencedSet;)Ljava/util/SequencedSet;", true, ReturnKind.NULL_OBJECT),
+        });
+        // SSLSocketFactory.getDefault (inherited from SocketFactory, returns SocketFactory)
+        STUBS.put("javax.net.ssl.SSLSocketFactory", new StubMethod[] {
+            new StubMethod("getDefault", "()Ljavax/net/SocketFactory;", true, ReturnKind.NULL_OBJECT),
+        });
+        // MarkerManager.getMarker
+        STUBS.put("org.apache.logging.log4j.MarkerManager", new StubMethod[] {
+            new StubMethod("getMarker", "(Ljava/lang/String;)Lorg/apache/logging/log4j/Marker;", true, ReturnKind.NULL_OBJECT),
+        });
+        // LoggerAdapter.getLogger
+        STUBS.put("org.apache.logging.log4j.spi.LoggerAdapter", new StubMethod[] {
+            new StubMethod("getLogger", "(Ljava/lang/String;)Ljava/lang/Object;", false, ReturnKind.NULL_OBJECT),
+        });
+        // ReentrantReadWriteLock
+        STUBS.put("java.util.concurrent.locks.ReentrantReadWriteLock", new StubMethod[] {
+            new StubMethod("getReadLockCount", "()I", false, ReturnKind.ZERO_INT),
+            new StubMethod("isWriteLocked", "()Z", false, ReturnKind.FALSE_BOOL),
+        });
+        // StringCharacterIterator
+        STUBS.put("java.text.StringCharacterIterator", new StubMethod[] {
+            new StubMethod("<init>", "(Ljava/lang/String;)V", false, ReturnKind.VOID),
+        });
+        // PosixFileAttributes — owner and group
+        STUBS.put("java.nio.file.attribute.PosixFileAttributes", new StubMethod[] {
+            new StubMethod("owner", "()Ljava/nio/file/attribute/UserPrincipal;", false, ReturnKind.NULL_OBJECT),
+            new StubMethod("group", "()Ljava/nio/file/attribute/GroupPrincipal;", false, ReturnKind.NULL_OBJECT),
+        });
+        // UserPrincipal — needed by Apache Commons Compress for tar file handling
+        STUBS.put("java.nio.file.attribute.UserPrincipal", new StubMethod[] {
+            new StubMethod("getName", "()Ljava/lang/String;", false, ReturnKind.NULL_OBJECT),
+        });
     }
 
     /** Static fields to inject (className → field names). For Thread$State.TERMINATED:
@@ -410,7 +543,12 @@ public class JdkMethodStubsTransformer implements ClassHolderTransformer {
      *  comes from netty's Recycler.LocalPool.isTerminated. */
     private static final Map<String, String[]> STATIC_FIELDS = new HashMap<>();
     static {
+        // TeaVM's Thread class has Thread.State as inner enum
         STATIC_FIELDS.put("java.lang.Thread$State", new String[] {
+            "NEW", "RUNNABLE", "BLOCKED", "WAITING", "TIMED_WAITING", "TERMINATED"
+        });
+        // Our standalone ThreadState stub class (different name)
+        STATIC_FIELDS.put("java.lang.ThreadState", new String[] {
             "NEW", "RUNNABLE", "BLOCKED", "WAITING", "TIMED_WAITING", "TERMINATED"
         });
     }

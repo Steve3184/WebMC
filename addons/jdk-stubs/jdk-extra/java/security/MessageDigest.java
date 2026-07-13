@@ -64,7 +64,14 @@ public class MessageDigest extends MessageDigestSpi {
         return n;
     }
     public void reset() { buffer.reset(); }
-    public static boolean isEqual(byte[] a, byte[] b) { return java.util.Arrays.equals(a, b); }
+    public static boolean isEqual(byte[] a, byte[] b) {
+        if (a == b) return true;
+        if (a == null || b == null || a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != b[i]) return false;
+        }
+        return true;
+    }
 
     @Override protected void engineUpdate(byte input) { update(input); }
     @Override protected void engineUpdate(byte[] input, int offset, int len) { update(input, offset, len); }
