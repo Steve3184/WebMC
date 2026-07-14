@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main, 'security/*']
+    branches: ['**']
   pull_request:
-    branches: [main, 'security/*']
+    branches: [main]
   workflow_dispatch:
 
 env:
