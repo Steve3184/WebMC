@@ -78,6 +78,8 @@ jobs:
           if [ -f addons/web/index.html ]; then
             cp -f addons/web/index.html build/web-run/
           fi
+          # Copy favicon
+          cp -f addons/web/favicon.ico build/web-run/ 2>/dev/null || true
           # Wait for file to be fully written
           sync
           sleep 2
@@ -114,6 +116,7 @@ jobs:
             build/web-run/game.js
             build/web-run/game.vfs
             build/web-run/index.html
+            build/web-run/favicon.ico
             build/web-run/bootstrap.js
             build/web-run/vfs.js
             build/web-run/socket.js
