@@ -68,6 +68,9 @@ jobs:
         run: |
           mkdir -p build/web-run
           cp -r build/generated/teavm/js/* build/web-run/
+          # Wait for file to be fully written (avoid race condition)
+          sync
+          sleep 2
           ls -la build/web-run/
         id: build
 
