@@ -23,6 +23,13 @@ import top.steve3184.webmc.teavm.gl.render.RenderStats;
 import top.steve3184.webmc.teavm.gl.render.TextureManager;
 import top.steve3184.webmc.teavm.runtime.CanvasWindowBackend;
 import top.steve3184.webmc.vfs.WebFs;
+import top.steve3184.webmc.game.WebCamera;
+import top.steve3184.webmc.game.WebGameState;
+import top.steve3184.webmc.world.WebChunkGenerator;
+import top.steve3184.webmc.world.WebChunkProvider;
+import top.steve3184.webmc.world.WebWorldRenderer;
+import top.steve3184.webmc.world.BlockType;
+import top.steve3184.webmc.input.WebInputManager;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -32,11 +39,23 @@ public class WebMain {
     private static RenderEngine renderEngine;
     private static boolean initialized = false;
 
+    // ========== WebMC Game Components ==========
+    private static WebCamera camera;
+    private static WebChunkGenerator chunkGenerator;
+    private static WebChunkProvider chunkProvider;
+    private static WebWorldRenderer worldRenderer;
+    private static WebInputManager inputManager;
+    private static WebGameState gameState = WebGameState.MENU;
+
     // Performance tracking
     private static int frameCount = 0;
     private static long fpsUpdateTime = 0;
     private static int currentFps = 0;
     private static long lastFrameTime = 0;
+
+    // Render loop control
+    private static volatile boolean running = true;
+    private static long renderLoopId = 0;
 
     @JSBody(params = {}, script =
         "window.webmcFrameCount = 0;" +
@@ -50,7 +69,7 @@ public class WebMain {
     public static void main(String[] args) {
         initPerformanceMonitor();
         WebLog.info("========================================");
-        WebLog.info("  WebMC 1.21.8 - High Performance Renderer");
+        WebLog.info("  WebMC 1.21.8 - Browser Minecraft");
         WebLog.info("========================================");
         LOGGER.info("WebMC starting...");
 
@@ -135,20 +154,56 @@ public class WebMain {
         WebLog.info("  Renderer: " + profile.renderer);
         WebLog.info("  Performance Tier: " + profile.getTierName());
         WebLog.info("  Max Texture Size: " + profile.maxTextureSize);
-        WebLog.info("  Instancing: " + (profile.supportsInstancing ? "Supported" : "Not supported"));
-        WebLog.info("  Float Textures: " + (profile.supportsFloatTextures ? "Supported" : "Not supported"));
         WebLog.info("========================================");
+
+        // Initialize game components
+        initGame();
 
         // Initialize rendering components
         initRendering();
 
         initialized = true;
+        gameState = WebGameState.PLAYING;
         WebLog.info("========================================");
         WebLog.info("WebMC Initialized Successfully!");
+        WebLog.info("  Press click to lock mouse");
+        WebLog.info("  WASD to move, Mouse to look");
         WebLog.info("========================================");
 
         // Start render loop
         startRenderLoop();
+    }
+
+    /**
+     * Initialize game components
+     */
+    private static void initGame() {
+        WebLog.info("Initializing game components...");
+
+        // Initialize camera
+        camera = new WebCamera(0, 72, 0); // Start above ground
+        WebLog.info("Camera initialized at (0, 72, 0)");
+
+        // Initialize chunk generator
+        chunkGenerator = new WebChunkGenerator();
+        WebLog.info("Chunk generator initialized");
+
+        // Initialize chunk provider
+        chunkProvider = new WebChunkProvider(chunkGenerator);
+        WebLog.info("Chunk provider initialized");
+
+        // Initialize world renderer
+        worldRenderer = new WebWorldRenderer(chunkProvider, camera);
+        WebLog.info("World renderer initialized");
+
+        // Initialize input manager
+        inputManager = new WebInputManager(camera);
+        inputManager.init(canvas);
+        WebLog.info("Input manager initialized");
+
+        // Pre-load initial chunks
+        chunkProvider.loadChunksAround(0, 72, 0);
+        WebLog.info("Initial chunks loaded");
     }
 
     private static void initRendering() {
@@ -217,8 +272,8 @@ public class WebMain {
         fpsUpdateTime = getCurrentTimeMs();
         lastFrameTime = getCurrentTimeMs();
 
-        // Start the render loop
-        setupRenderLoop();
+        // Start the render loop with game logic
+        setupGameLoop();
     }
 
     @JSBody(params = {}, script =
@@ -236,6 +291,14 @@ public class WebMain {
         "window.webmcAvgFrameTime = 0.0;" +
         "window.webmcMinFrameTime = 0.0;" +
         "window.webmcMaxFrameTime = 0.0;" +
+        "window.webmcChunksLoaded = 0;" +
+        "" +
+        "// Expose performance report getter" +
+        "window.webmcGetPerformanceReport = function() {" +
+        "  return 'FPS: ' + window.webmcFPS + " +
+        "         ', Frame: ' + window.webmcAvgFrameTime.toFixed(2) + 'ms' + " +
+        "         ', Chunks: ' + window.webmcChunksLoaded;" +
+        "};" +
         "" +
         "function _renderLoop(currentTime) {" +
         "  var _deltaTime = currentTime - _lastTime;" +
@@ -266,10 +329,11 @@ public class WebMain {
         "}" +
         "" +
         "window.requestAnimationFrame(_renderLoop);" +
-        "console.log('[WebMain] High-Performance Render Loop Started');" +
-        "console.log('       Performance monitoring: FPS, Frame Time, Min/Max');"
+        "console.log('[WebMain] Game Render Loop Started');" +
+        "console.log('  Click canvas to lock mouse pointer');" +
+        "console.log('  WASD: Move, Mouse: Look, Space: Jump, Shift: Sprint');"
     )
-    private static native void setupRenderLoop();
+    private static native void setupGameLoop();
 
     @JSBody(params = {}, script = "return performance.now();")
     private static native long getCurrentTimeMs();
@@ -287,22 +351,10 @@ public class WebMain {
     public static native float getAvgFrameTime();
 
     /**
-     * Get minimum frame time.
+     * Get loaded chunk count.
      */
-    @JSBody(params = {}, script = "return window.webmcMinFrameTime || 0.0;")
-    public static native float getMinFrameTime();
-
-    /**
-     * Get maximum frame time.
-     */
-    @JSBody(params = {}, script = "return window.webmcMaxFrameTime || 0.0;")
-    public static native float getMaxFrameTime();
-
-    /**
-     * Get total frames rendered.
-     */
-    @JSBody(params = {}, script = "return window.webmcFrameCount || 0;")
-    public static native int getFrameCount();
+    @JSBody(params = {}, script = "return window.webmcChunksLoaded || 0;")
+    public static native int getChunksLoaded();
 
     /**
      * Get detailed performance report.
@@ -310,14 +362,8 @@ public class WebMain {
     public static String getPerformanceReport() {
         int fps = getFPS();
         float avgFrame = getAvgFrameTime();
-        float minFrame = getMinFrameTime();
-        float maxFrame = getMaxFrameTime();
-        int frames = getFrameCount();
-
-        RenderStats stats = null;
-        if (renderEngine != null && renderEngine.getBatchBuffer() != null) {
-            stats = renderEngine.getBatchBuffer().getStats();
-        }
+        int chunks = chunkProvider != null ? chunkProvider.getLoadedChunkCount() : 0;
+        int triangles = worldRenderer != null ? worldRenderer.getTrianglesRendered() : 0;
 
         StringBuilder report = new StringBuilder();
         report.append("\n========================================\n");
@@ -325,31 +371,20 @@ public class WebMain {
         report.append("========================================\n");
         report.append(String.format("  FPS: %d\n", fps));
         report.append(String.format("  Frame Time: %.2fms (avg)\n", avgFrame));
-        report.append(String.format("  Frame Time Range: %.2fms - %.2fms\n", minFrame, maxFrame));
-        report.append(String.format("  Total Frames: %d\n", frames));
+        report.append(String.format("  Chunks Loaded: %d\n", chunks));
+        report.append(String.format("  Triangles: %d\n", triangles));
 
-        if (stats != null) {
-            report.append("  ----------------------------------------\n");
-            report.append("  Rendering Statistics:\n");
-            report.append(String.format("    GPU Tier: %s\n", stats.gpuTier));
-            report.append(String.format("    Batches: %d\n", stats.batchesSubmitted));
-            report.append(String.format("    Draw Calls: %d\n", stats.drawCalls));
-            report.append(String.format("    Vertices: %s\n", formatCount(stats.verticesSubmitted)));
-            report.append(String.format("    Triangles: %s\n", formatCount(stats.trianglesSubmitted)));
+        if (camera != null) {
+            report.append("  Camera Position: (");
+            report.append(String.format("%.1f, %.1f, %.1f", camera.getX(), camera.getY(), camera.getZ()));
+            report.append(")\n");
+            report.append(String.format("  Camera Yaw: %.1f, Pitch: %.1f\n",
+                camera.getYawDegrees(), camera.getPitchDegrees()));
         }
 
         report.append("========================================\n");
 
         return report.toString();
-    }
-
-    private static String formatCount(long count) {
-        if (count >= 1000000) {
-            return String.format("%.1fM", count / 1000000.0);
-        } else if (count >= 1000) {
-            return String.format("%.1fk", count / 1000.0);
-        }
-        return String.valueOf(count);
     }
 
     /**
@@ -369,9 +404,30 @@ public class WebMain {
     }
 
     /**
+     * Get game state.
+     */
+    public static WebGameState getGameState() {
+        return gameState;
+    }
+
+    /**
      * Get render engine instance.
      */
     public static RenderEngine getRenderEngine() {
         return renderEngine;
+    }
+
+    /**
+     * Get camera instance.
+     */
+    public static WebCamera getCamera() {
+        return camera;
+    }
+
+    /**
+     * Get world renderer instance.
+     */
+    public static WebWorldRenderer getWorldRenderer() {
+        return worldRenderer;
     }
 }
