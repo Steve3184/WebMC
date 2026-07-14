@@ -113,6 +113,12 @@ jobs:
           path: |
             build/web-run/game.js
             build/web-run/game.vfs
+            build/web-run/index.html
+            build/web-run/bootstrap.js
+            build/web-run/vfs.js
+            build/web-run/socket.js
+            build/web-run/performance.js
+            build/web-run/performance-hud.js
             build/web-run/*.br
           retention-days: 7
 
