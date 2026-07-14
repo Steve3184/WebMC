@@ -80,9 +80,9 @@ jobs:
             # Use stat instead of wc to get file size (more reliable)
             SIZE=$(stat -c%s build/web-run/game.js 2>/dev/null || stat -f%z build/web-run/game.js 2>/dev/null)
             if [ "$SIZE" -gt 1000 ]; then
-              echo "game.js size: $((SIZE / 1024 / 1024))MB ($SIZE bytes)"
+              echo "game.js size: $((SIZE / 1024))KB ($SIZE bytes)"
               echo "build_result=success" >> $GITHUB_OUTPUT
-              echo "build_size=$((SIZE / 1024 / 1024))" >> $GITHUB_OUTPUT
+              echo "build_size=$((SIZE / 1024))" >> $GITHUB_OUTPUT
             else
               echo "game.js is too small: $SIZE bytes"
               echo "build_result=failed" >> $GITHUB_OUTPUT
