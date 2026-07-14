@@ -481,8 +481,8 @@ public final class ShaderManager {
         "uniform float SkyDarken;\n" +
         "uniform float Stars;\n" +
         "void main() {\n" +
-        "  float gradient = 1.0 - YCoord;\n" +
-        "  vec3 color = mix(SkyColor, vec3(0.0, 0.0, 0.0), gradient * SkyDarken);\n" +
+        "  float gradient = YCoord;\n" +
+        "  vec3 color = mix(vec3(0.0, 0.0, 0.0), SkyColor, gradient * (1.0 - SkyDarken));\n" +
         "  gl_FragColor = vec4(color, 1.0);\n" +
         "}\n";
 
