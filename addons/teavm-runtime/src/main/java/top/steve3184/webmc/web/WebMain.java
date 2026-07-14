@@ -272,9 +272,23 @@ public class WebMain {
         fpsUpdateTime = getCurrentTimeMs();
         lastFrameTime = getCurrentTimeMs();
 
+        // Register Java render callback to JS
+        registerRenderCallback();
+
         // Start the render loop with game logic
         setupGameLoop();
     }
+
+    /**
+     * Register the Java render callback to JS.
+     * This allows the JS render loop to call Java's render method.
+     */
+    @JSBody(params = {}, script =
+        "window._javaRender = function() {" +
+        "  top.steve3184.webmc.web.WebMain.triggerRender();" +
+        "};"
+    )
+    private static native void registerRenderCallback();
 
     @JSBody(params = {}, script =
         "var _lastTime = performance.now();" +
@@ -325,7 +339,15 @@ public class WebMain {
         "  }" +
         "" +
         "  window.webmcFrameCount = window.webmcFrameCount + 1;" +
+        "  _doRender();" +
         "  window.requestAnimationFrame(_renderLoop);" +
+        "}" +
+        "" +
+        "// Render callback - called every frame" +
+        "function _doRender() {" +
+        "  if (window._javaRender) {" +
+        "    window._javaRender();" +
+        "  }" +
         "}" +
         "" +
         "window.requestAnimationFrame(_renderLoop);" +
@@ -334,6 +356,22 @@ public class WebMain {
         "console.log('  WASD: Move, Mouse: Look, Space: Jump, Shift: Sprint');"
     )
     private static native void setupGameLoop();
+
+    /**
+     * Called from Java to register the render callback.
+     */
+    @JSBody(params = {}, script = "return window._javaRender;")
+    public static native boolean hasRenderCallback();
+
+    /**
+     * JavaScript calls this to trigger a Java render frame.
+     * This is invoked from the JS render loop via _javaRender().
+     */
+    public static void triggerRender() {
+        if (renderEngine != null) {
+            renderEngine.render();
+        }
+    }
 
     @JSBody(params = {}, script = "return performance.now();")
     private static native long getCurrentTimeMs();

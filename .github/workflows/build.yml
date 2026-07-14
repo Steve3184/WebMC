@@ -68,7 +68,17 @@ jobs:
         run: |
           mkdir -p build/web-run
           cp -r build/generated/teavm/js/* build/web-run/
-          # Wait for file to be fully written (avoid race condition)
+          # Copy necessary frontend files from addons/web/
+          cp -f addons/web/bootstrap.js build/web-run/
+          cp -f addons/web/vfs.js build/web-run/ 2>/dev/null || true
+          cp -f addons/web/socket.js build/web-run/ 2>/dev/null || true
+          cp -f addons/web/performance.js build/web-run/ 2>/dev/null || true
+          cp -f addons/web/performance-hud.js build/web-run/ 2>/dev/null || true
+          # Copy or generate index.html
+          if [ -f addons/web/index.html ]; then
+            cp -f addons/web/index.html build/web-run/
+          fi
+          # Wait for file to be fully written
           sync
           sleep 2
           ls -la build/web-run/

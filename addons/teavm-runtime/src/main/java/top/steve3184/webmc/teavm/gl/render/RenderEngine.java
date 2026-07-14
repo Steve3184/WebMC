@@ -346,6 +346,39 @@ public final class RenderEngine {
     }
 
     /**
+     * Complete render frame.
+     * Called every animation frame from JavaScript.
+     */
+    public void render() {
+        // Begin frame
+        beginFrame();
+
+        // Render sky
+        renderSky();
+
+        // Render terrain (solid layer)
+        renderTerrainLayer(LAYER_SOLID);
+
+        // End terrain layer
+        endTerrainLayer(LAYER_SOLID);
+
+        // Render terrain (translucent layer)
+        renderTerrainLayer(LAYER_TRANSLUCENT);
+
+        // End terrain layer
+        endTerrainLayer(LAYER_TRANSLUCENT);
+
+        // Render entities
+        renderEntity();
+
+        // Render particles
+        renderParticles();
+
+        // End frame
+        endFrame();
+    }
+
+    /**
      * End current frame.
      */
     public void endFrame() {
