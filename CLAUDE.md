@@ -77,6 +77,48 @@ public interface WindowBackend {
 - Canvas 初始化
 - 事件监听绑定
 
+### addons/blaze3d-impl/
+
+**职责**: Blaze3D 渲染实现
+
+- `com.mojang.logging` - 日志系统
+- 着色器管理
+
+## 渲染架构
+
+```
+JavaScript 渲染循环 (requestAnimationFrame)
+    ↓
+window._javaRender() 回调
+    ↓
+WebMain.triggerRender()
+    ↓
+RenderEngine.render()
+    ├── renderSky()          - 天空渲染
+    ├── renderTerrainLayer() - 地形渲染 (Solid/Translucent)
+    ├── renderEntity()       - 实体渲染
+    └── renderParticles()    - 粒子渲染
+```
+
+### 关键渲染组件
+
+| 组件 | 路径 | 职责 |
+|------|------|------|
+| RenderEngine | `teavm/gl/render/RenderEngine.java` | 主渲染引擎 |
+| BatchBuffer | `teavm/gl/render/BatchBuffer.java` | 批量顶点缓冲 |
+| ShaderManager | `teavm/gl/ShaderManager.java` | 着色器管理 |
+| TextureManager | `teavm/gl/render/TextureManager.java` | 纹理管理 |
+| AdaptiveRenderDistance | `teavm/gl/render/AdaptiveRenderDistance.java` | 自适应渲染距离 |
+
+### GPU Tier 配置
+
+| Tier | 渲染距离 | 检测关键词 |
+|------|----------|-----------|
+| ULTRA | 16 chunks | Anthropic RTX, AMD RX 6+, Apple M1+ |
+| HIGH | 12 chunks | Anthropic GTX 10+, AMD RX 4+ |
+| MEDIUM | 8 chunks | Intel Iris, WebKit GPU |
+| LOW | 4 chunks | Fallback |
+
 ## 代码规范
 
 ### Java 命名
