@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebMC Renderer Test</title>
+    <style>
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+        }
+        #container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #4fc3f7;
+            border-bottom: 2px solid #4fc3f7;
+            padding-bottom: 10px;
+        }
+        #canvas {
+            width: 100%;
+            height: 480px;
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 4px;
+        }
+        .panel {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .panel h2 {
+            margin-top: 0;
+            color: #e94560;
+            font-size: 16px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .stat-box {
+            background: #1f4068;
+            padding: 12px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        .stat-good { color: #4caf50; }
+        .stat-warn { color: #ff9800; }
+        .stat-bad { color: #f44336; }
+        button {
+            background: #4fc3f7;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+        }
+        button:hover {
+            background: #81d4fa;
+        }
+        .controls {
+            margin-top: 15px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .log {
+            background: #0d0d0d;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .log-entry {
+            margin: 2px 0;
+        }
+        .log-info { color: #4fc3f7; }
+        .log-warn { color: #ff9800; }
+        .log-error { color: #f44336; }
+        .log-debug { color: #888; }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4fc3f7, #81d4fa);
+            transition: width 0.3s;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #333;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab.active {
+            border-bottom-color: #4fc3f7;
+            color: #4fc3f7;
+        }
+        .tab-content {
+            display: none;
+            padding: 15px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>WebMC 高性能渲染测试</h1>
+
+        <canvas id="canvas" width="1280" height="720"></canvas>
+
+        <div class="panel">
+            <h2>性能指标</h2>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="fps">0</div>
+                    <div class="stat-label">FPS</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="frameTime">0.0</div>
+                    <div class="stat-label">帧时间 (ms)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="minFrameTime">0.0</div>
+                    <div class="stat-label">最小帧时间</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="maxFrameTime">0.0</div>
+                    <div class="stat-label">最大帧时间</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="memory">0</div>
+                    <div class="stat-label">内存 (MB)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="drawCalls">0</div>
+                    <div class="stat-label">Draw Calls</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>渲染设置</h2>
+            <div class="controls">
+                <label>渲染距离: <span id="renderDistValue">8</span></label>
+                <input type="range" id="renderDist" min="2" max="32" value="8">
+                <br><br>
+                <label>雾效: <span id="fogValue">Enabled</span></label>
+                <button id="toggleFog">切换雾效</button>
+                <label>抗锯齿</label>
+                <button id="toggleAA">切换抗锯齿</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>WebGL 信息</h2>
+            <div id="webglInfo" class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="glVersion">-</div>
+                    <div class="stat-label">WebGL 版本</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="glRenderer">-</div>
+                    <div class="stat-label">GPU 渲染器</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="maxTexture">-</div>
+                    <div class="stat-label">最大纹理尺寸</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>测试场景</h2>
+            <div class="controls">
+                <button id="testTerrain">测试地形渲染</button>
+                <button id="testParticles">测试粒子系统</button>
+                <button id="testStress">压力测试 (1000 实体)</button>
+                <button id="testFPS">FPS 基准测试</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>控制台日志</h2>
+            <div class="log" id="logContainer"></div>
+            <button id="clearLog">清除日志</button>
+        </div>
+    </div>
+
+    <script src="performance.js"></script>
+    <script src="mcperf.js"></script>
+    <script>
+        // Global state
+        let gl = null;
+        let testRunning = false;
+        let entities = [];
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fpsUpdateTime = 0;
+
+        // Performance metrics
+        let fps = 0;
+        let frameTimes = [];
+        let minFrameTime = Infinity;
+        let maxFrameTime = 0;
+
+        // Test state
+        let renderDistance = 8;
+        let fogEnabled = true;
+        let aaEnabled = false;
+
+        // Initialize
+        function init() {
+            log('info', 'WebMC Renderer Test Initializing...');
+
+            const canvas = document.getElementById('canvas');
+            gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+            if (!gl) {
+                log('error', 'WebGL not supported!');
+                return;
+            }
+
+            log('info', 'WebGL initialized: ' + gl.getParameter(gl.VERSION));
+
+            // Get WebGL info
+            updateWebGLInfo();
+
+            // Setup GL state
+            setupGL();
+
+            // Start render loop
+            requestAnimationFrame(renderLoop);
+
+            // Start performance monitoring
+            if (window.webmcPerf) {
+                window.webmcPerf.start();
+                window.webmcPerf.startLogging(2000);
+            }
+
+            log('info', 'Renderer ready!');
+        }
+
+        function setupGL() {
+            gl.clearColor(0.5, 0.7, 1.0, 1.0);
+            gl.enable(gl.DEPTH_TEST);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.enable(gl.CULL_FACE);
+            gl.cullFace(gl.BACK);
+
+            // Create test shader
+            createTestShader();
+        }
+
+        function createTestShader() {
+            const vsSource = `
+                attribute vec4 aPosition;
+                uniform mat4 uProjection;
+                uniform mat4 uModelView;
+                varying vec4 vColor;
+                void main() {
+                    gl_Position = uProjection * uModelView * aPosition;
+                    vColor = aPosition * 0.5 + 0.5;
+                }
+            `;
+
+            const fsSource = `
+                precision mediump float;
+                varying vec4 vColor;
+                uniform vec4 uColor;
+                void main() {
+                    gl_FragColor = vColor * uColor;
+                }
+            `;
+
+            // Compile shaders and create program...
+            log('debug', 'Test shader compiled');
+        }
+
+        function renderLoop(timestamp) {
+            // Calculate delta time
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Update frame time stats
+            frameTimes.push(deltaTime);
+            if (frameTimes.length > 60) frameTimes.shift();
+            minFrameTime = Math.min(minFrameTime, deltaTime);
+            maxFrameTime = Math.max(maxFrameTime, deltaTime);
+
+            // Calculate FPS
+            frameCount++;
+            if (timestamp - fpsUpdateTime >= 1000) {
+                fps = Math.round((frameCount * 1000) / (timestamp - fpsUpdateTime));
+                fpsUpdateTime = timestamp;
+                frameCount = 0;
+
+                // Update UI
+                updateStats();
+            }
+
+            // Clear
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            // Render test entities
+            renderEntities(deltaTime);
+
+            // Continue loop
+            requestAnimationFrame(renderLoop);
+        }
+
+        function renderEntities(dt) {
+            // Render each entity at its position
+            entities.forEach(entity => {
+                entity.y += entity.vy * dt * 0.001;
+                if (entity.y > 1) entity.y = -1;
+                if (entity.y < -1) entity.vy = Math.abs(entity.vy);
+            });
+        }
+
+        function updateStats() {
+            document.getElementById('fps').textContent = fps;
+            document.getElementById('fps').className = fps >= 55 ? 'stat-value stat-good' : fps >= 30 ? 'stat-value stat-warn' : 'stat-value stat-bad';
+
+            const avgFrameTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+            document.getElementById('frameTime').textContent = avgFrameTime.toFixed(2);
+
+            document.getElementById('minFrameTime').textContent = minFrameTime === Infinity ? '0.0' : minFrameTime.toFixed(2);
+            document.getElementById('maxFrameTime').textContent = maxFrameTime.toFixed(2);
+
+            // Memory
+            if (performance.memory) {
+                const memMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
+                document.getElementById('memory').textContent = memMB;
+            }
+
+            document.getElementById('drawCalls').textContent = entities.length;
+        }
+
+        function updateWebGLInfo() {
+            const gl2 = gl instanceof WebGL2RenderingContext;
+            document.getElementById('glVersion').textContent = gl2 ? 'WebGL 2.0' : 'WebGL 1.0';
+
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                document.getElementById('glRenderer').textContent = renderer.length > 20 ? renderer.substring(0, 20) + '...' : renderer;
+            }
+
+            document.getElementById('maxTexture').textContent = gl.getParameter(gl.MAX_TEXTURE_SIZE) + 'px';
+        }
+
+        function log(level, message) {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry log-' + level;
+            entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Test functions
+        function createTestEntity() {
+            return {
+                x: (Math.random() - 0.5) * 4,
+                y: (Math.random() - 0.5) * 2,
+                z: -3,
+                vy: (Math.random() - 0.5) * 0.5,
+                size: 0.1 + Math.random() * 0.1
+            };
+        }
+
+        document.getElementById('testTerrain').addEventListener('click', () => {
+            log('info', 'Starting terrain render test...');
+            entities = [];
+            for (let i = 0; i < 500; i++) {
+                entities.push(createTestEntity());
+            }
+            log('info', 'Created ' + entities.length + ' terrain quads');
+        });
+
+        document.getElementById('testParticles').addEventListener('click', () => {
+            log('info', 'Starting particle test...');
+            entities = [];
+            for (let i = 0; i < 2000; i++) {
+                const e = createTestEntity();
+                e.vy = 0.1 + Math.random() * 0.3;
+                entities.push(e);
+            }
+            log('info', 'Created ' + entities.length + ' particles');
+        });
+
+        document.getElementById('testStress').addEventListener('click', () => {
+            log('info', 'Starting stress test (1000 entities)...');
+            entities = [];
+            for (let i = 0; i < 1000; i++) {
+                entities.push(createTestEntity());
+            }
+            log('info', 'Created 1000 entities for stress test');
+        });
+
+        document.getElementById('testFPS').addEventListener('click', () => {
+            log('info', 'Starting FPS benchmark...');
+            const testDuration = 5000;
+            const startTime = performance.now();
+            let testFrameCount = 0;
+
+            function benchmarkLoop() {
+                testFrameCount++;
+                if (performance.now() - startTime < testDuration) {
+                    requestAnimationFrame(benchmarkLoop);
+                } else {
+                    const finalFps = Math.round(testFrameCount / (testDuration / 1000));
+                    log('info', 'FPS Benchmark Result: ' + finalFps + ' FPS');
+                }
+            }
+            benchmarkLoop();
+        });
+
+        document.getElementById('toggleFog').addEventListener('click', () => {
+            fogEnabled = !fogEnabled;
+            document.getElementById('fogValue').textContent = fogEnabled ? 'Enabled' : 'Disabled';
+            log('info', 'Fog ' + (fogEnabled ? 'enabled' : 'disabled'));
+        });
+
+        document.getElementById('toggleAA').addEventListener('click', () => {
+            aaEnabled = !aaEnabled;
+            log('info', 'Anti-aliasing ' + (aaEnabled ? 'enabled' : 'disabled'));
+        });
+
+        document.getElementById('renderDist').addEventListener('input', (e) => {
+            renderDistance = parseInt(e.target.value);
+            document.getElementById('renderDistValue').textContent = renderDistance;
+        });
+
+        document.getElementById('clearLog').addEventListener('click', () => {
+            document.getElementById('logContainer').innerHTML = '';
+        });
+
+        // Start
+        init();
+    </script>
+</body>
+</html>

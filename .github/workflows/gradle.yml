@@ -11,6 +11,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
     - uses: actions/checkout@v4
@@ -24,6 +25,16 @@ jobs:
         distribution: 'temurin'
         java-version: 21
         cache: 'gradle'
+
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
 
     - name: Copy init script
       run: cp .github/workflows/init.gradle .
@@ -60,8 +71,9 @@ jobs:
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: webmc-build
+        name: webmc-build-${{ github.run_id }}
         path: |
           build/web-run/game.js
           build/web-run/game.vfs
           build/web-run/*.br
+        retention-days: 7

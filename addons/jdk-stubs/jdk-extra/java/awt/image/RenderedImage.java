@@ -1,6 +1,6 @@
 package java.awt.image;
 
-public interface RenderedImage {
-    int getWidth();
-    int getHeight();
+public abstract class RenderedImage {
+    public abstract int getWidth();
+    public abstract int getHeight();
 }

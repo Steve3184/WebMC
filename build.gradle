@@ -192,11 +192,16 @@ afterEvaluate {
         teavm.all.mainClass = 'top.steve3184.webmc.web.WebMain'
         logger.lifecycle "TeaVM mainClass set to: top.steve3184.webmc.web.WebMain"
 
-        // Configure mainClass via task property (not doFirst to avoid configuration cache issue)
-        tasks.named('generateJavaScript').configure {
-            // mainClass is set via teavm.all.mainClass in afterEvaluate above
-            // This additional configure block ensures it's set after plugin configuration
-        }
+        // Configure mainClass via task property
+        // Note: TeaVM outputs to build/generated/teavm/js/ by default
+
+// Task to copy TeaVM output to build/web-run/ for CI compatibility
+// This runs after generateJavaScript
+task copyTeavmOutput(type: Copy) {
+    dependsOn 'generateJavaScript'
+    from "$buildDir/generated/teavm/js"
+    into "$buildDir/web-run"
+}
     } else {
         logger.warn "TeaVM extension not found - mainClass may not be set correctly"
     }
