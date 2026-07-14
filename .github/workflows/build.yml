@@ -59,10 +59,16 @@ jobs:
       - name: Build with Gradle (TeaVM)
         run: |
           export GRADLE_OPTS="-Xmx14g -Xss64m -XX:+UseG1GC -Dorg.gradle.jvmargs=-Xmx14g"
-          ./gradlew compileTeavmJava generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache \
+          ./gradlew generateJavaScript --no-daemon --init-script init.gradle --no-configuration-cache \
             -Dorg.gradle.jvmargs="-Xmx14g" \
             -Dorg.gradle.workers.max=1 \
             -Dkotlin.daemon.jvmargs="-Xmx14g" 2>&1
+
+      - name: Copy TeaVM output to web-run
+        run: |
+          mkdir -p build/web-run
+          cp -r build/generated/teavm/js/* build/web-run/
+          ls -la build/web-run/
         id: build
 
       - name: Check build output

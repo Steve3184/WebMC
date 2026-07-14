@@ -236,6 +236,16 @@ public final class TextureManager {
     }
 
     /**
+     * Bind texture by ID.
+     * Uses internal texture cache to find the texture.
+     */
+    public void bindTexture(int textureId) {
+        if (textureId >= 0 && textureId < textureCount && textureCache[textureId] != null) {
+            bindTexture(textureCache[textureId], 0);
+        }
+    }
+
+    /**
      * Get current texture.
      */
     public WebGLTexture getCurrentTexture() {
