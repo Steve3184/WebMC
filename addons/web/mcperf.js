@@ -77,19 +77,9 @@
             ].join("\n");
         },
 
-        // Log to console matching Minecraft style
+        // Keep the legacy hook without reintroducing noisy console output.
         logDebug: function() {
             this.updateFromWebMC();
-
-            // //console.log("%c WebMC Performance Debug ", "background: #1a8cff; color: white; padding: 2px 8px;");
-            // //console.log({
-                fps: this.fps,
-                frameTime: this.frameTimeMs,
-                renderDistance: this.renderDistance,
-                memory: this.memory,
-                gpu: this.gpu,
-                world: this.worldRendererStats
-            });
         }
     };
 

@@ -132,7 +132,6 @@
   if (window.VFS_URL) {
     VFS.init(window.VFS_URL, function (err) {
       if (err) console.error('[VFS] init failed:', err);
-      else // //console.log('[VFS] ready');
       if (window.VFS_ONREADY) window.VFS_ONREADY();
     });
   }
