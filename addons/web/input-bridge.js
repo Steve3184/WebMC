@@ -35,7 +35,7 @@
     // Check if InputBridge is available (will be exported by TeaVM)
     function ensureInputBridge() {
         if (typeof window.java_input_InputBridge === 'undefined') {
-            console.warn('[input-bridge] InputBridge not yet available, retrying...');
+            // console.warn('[input-bridge] InputBridge not yet available, retrying...');
             setTimeout(ensureInputBridge, 100);
             return false;
         }
@@ -266,7 +266,7 @@
     function installEventListeners() {
         var canvas = document.getElementById('canvas') || document.getElementById('game-canvas');
         if (!canvas) {
-            console.warn('[input-bridge] No canvas found, cannot install listeners');
+            // console.warn('[input-bridge] No canvas found, cannot install listeners');
             return;
         }
 
@@ -290,7 +290,7 @@
         // Resize events
         window.addEventListener('resize', handleResize, { passive: true });
 
-        console.log('[input-bridge] Event listeners installed');
+        // console.log('[input-bridge] Event listeners installed');
     }
 
     // Wait for DOM and TeaVM to be ready

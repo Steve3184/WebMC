@@ -18,6 +18,49 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hid
 #boot-error{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.9);color:#ff6b6b;font-family:monospace;font-size:14px;text-align:center;padding:40px;white-space:pre-wrap}
 #boot-error.show{display:flex}
 </style>
+<script>
+// Quiet mode: suppress all console output except errors
+// This must run before any other script to be effective
+(function() {
+  var _origLog = console.log;
+  var _origInfo = console.info;
+  var _origWarn = console.warn;
+  var _origDebug = console.debug;
+  var _origTable = console.table;
+
+  // Allow toggling via URL param: ?debug=1
+  var urlParams = new URLSearchParams(window.location.search);
+  var isDebug = urlParams.get('debug') === '1';
+
+  if (!isDebug) {
+    console.log = function() {};
+    console.info = function() {};
+    console.warn = function() {};
+    console.debug = function() {};
+    console.table = function() {};
+  }
+
+  // Expose toggle function
+  window.toggleDebugLogs = function(enable) {
+    if (enable) {
+      console.log = _origLog;
+      console.info = _origInfo;
+      console.warn = _origWarn;
+      console.debug = _origDebug;
+      console.table = _origTable;
+      console.log('[WebMC] Debug logging enabled');
+    } else {
+      console.log = function() {};
+      console.info = function() {};
+      console.warn = function() {};
+      console.debug = function() {};
+      console.table = function() {};
+    }
+  };
+
+  console.log('[WebMC] Quiet mode active (use ?debug=1 to enable logs)');
+})();
+</script>
 </head>
 <body>
 <canvas id="game-canvas"></canvas>

@@ -91,7 +91,7 @@
                 // Set up network monitoring
                 this._setupNetworkMonitoring();
 
-                console.log('[mc-web/diagnostics] Enhanced diagnostics initialized');
+                // console.log('[mc-web/diagnostics] Enhanced diagnostics initialized');
             }
         },
 
@@ -222,7 +222,7 @@
 
             // Log if verbose
             if (this._verbose) {
-                console.log(`[mc-web/diag] ${elapsed}ms ${name}${detail ? ': ' + detail : ''}`);
+                // console.log(`[mc-web/diag] ${elapsed}ms ${name}${detail ? ': ' + detail : ''}`);
             }
 
             return event;
@@ -266,7 +266,7 @@
                 this._warnings.shift();
             }
 
-            console.warn(`[mc-web/diagnostics/warn] ${type}: ${message}`, details || '');
+            // console.warn(`[mc-web/diagnostics/warn] ${type}: ${message}`, details || '');
             return warning;
         },
 
@@ -564,32 +564,32 @@
         log: function () {
             const report = this.getReport();
 
-            console.log('%c=== WebMC Diagnostic Report ===', 'font-weight: bold; color: #4CAF50;');
-            console.log(`Session Duration: ${report.timing.totalElapsedSec}s`);
-            console.log(`Timeline Events: ${report.timeline.length}`);
+            // console.log('%c=== WebMC Diagnostic Report ===', 'font-weight: bold; color: #4CAF50;');
+            // console.log(`Session Duration: ${report.timing.totalElapsedSec}s`);
+            // console.log(`Timeline Events: ${report.timeline.length}`);
 
             if (report.errors.count > 0) {
                 console.error(`Errors (${report.errors.count}):`, report.errors.list);
             }
 
             if (report.warnings.count > 0) {
-                console.warn(`Warnings (${report.warnings.count}):`, report.warnings.list);
+                // console.warn(`Warnings (${report.warnings.count}):`, report.warnings.list);
             }
 
-            console.log('VFS Load:', report.vfs);
-            console.log('Shader Compilations:', report.shaders);
-            console.log('Network Stats:', report.network.latencyStats);
-            console.log('WebGL Extensions:', report.webgl.extensions);
+            // console.log('VFS Load:', report.vfs);
+            // console.log('Shader Compilations:', report.shaders);
+            // console.log('Network Stats:', report.network.latencyStats);
+            // console.log('WebGL Extensions:', report.webgl.extensions);
 
             if (report.memory.latest) {
-                console.log(`Memory: ${report.memory.latest.usedMB}MB`);
+                // console.log(`Memory: ${report.memory.latest.usedMB}MB`);
             }
 
             if (report.frames) {
-                console.log(`Performance: FPS=${report.frames.fps}, Frame=${report.frames.frameTime.avg}ms`);
+                // console.log(`Performance: FPS=${report.frames.fps}, Frame=${report.frames.frameTime.avg}ms`);
             }
 
-            console.log('%c================================', 'font-weight: bold; color: #4CAF50;');
+            // console.log('%c================================', 'font-weight: bold; color: #4CAF50;');
         },
 
         /**
@@ -617,7 +617,7 @@
             this._shaderErrors = 0;
             this._totalShaderCompileTime = 0;
 
-            console.log('[mc-web/diagnostics] Diagnostic data cleared');
+            // console.log('[mc-web/diagnostics] Diagnostic data cleared');
         }
     };
 
@@ -629,5 +629,5 @@
         Diagnostics.start();
     }
 
-    console.log('[mc-web/diagnostics] Diagnostics module loaded. Access via window.webmcDiagnostics');
+    // console.log('[mc-web/diagnostics] Diagnostics module loaded. Access via window.webmcDiagnostics');
 })();
