@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: Minecraft
+    - generic [ref=e6]: Preparing Minecraft...
+    - button "Singleplayer" [ref=e7] [cursor=pointer]
+  - generic:
+    - generic: 0 FPS
+    - generic: 0.0ms | unknown
