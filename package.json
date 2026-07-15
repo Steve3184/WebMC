@@ -22,6 +22,7 @@
   "type": "commonjs",
   "devDependencies": {
     "acorn": "^8.17.0",
-    "escodegen": "^2.1.0"
+    "escodegen": "^2.1.0",
+    "globals": "^17.7.0"
   }
 }
