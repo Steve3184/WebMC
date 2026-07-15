@@ -199,7 +199,7 @@
             this.mark('perf:start');
             this._animationFrameId = requestAnimationFrame(this._tick.bind(this));
 
-            // console.log('[mc-web/perf] Performance monitoring started');
+            // //console.log('[mc-web/perf] Performance monitoring started');
         },
 
         /**
@@ -217,7 +217,7 @@
             }
 
             this.mark('perf:stop');
-            // console.log('[mc-web/perf] Performance monitoring stopped');
+            // //console.log('[mc-web/perf] Performance monitoring stopped');
         },
 
         /**
@@ -385,7 +385,7 @@
             this._lastTimestamp = 0;
             this._lastFpsUpdate = 0;
 
-            // console.log('[mc-web/perf] Statistics reset');
+            // //console.log('[mc-web/perf] Statistics reset');
         },
 
         /**
@@ -394,33 +394,33 @@
         log: function () {
             const stats = this.getStats();
 
-            // console.log('=== WebMC Performance Stats ===');
-            // console.log(`FPS: ${stats.fps} (avg: ${stats.fpsStats?.avg || 'N/A'})`);
-            // console.log(`Frame Time: ${stats.frameTime.avg}ms avg, ${stats.frameTime.min}ms min, ${stats.frameTime.max}ms max`);
+            // //console.log('=== WebMC Performance Stats ===');
+            // //console.log(`FPS: ${stats.fps} (avg: ${stats.fpsStats?.avg || 'N/A'})`);
+            // //console.log(`Frame Time: ${stats.frameTime.avg}ms avg, ${stats.frameTime.min}ms min, ${stats.frameTime.max}ms max`);
 
             if (stats.memory) {
                 if (stats.memory.usedMB !== undefined) {
-                    // console.log(`Memory: ${stats.memory.usedMB}MB / ${stats.memory.limitMB}MB (${stats.memory.usagePercent}%)`);
+                    // //console.log(`Memory: ${stats.memory.usedMB}MB / ${stats.memory.limitMB}MB (${stats.memory.usagePercent}%)`);
                 } else if (stats.memory.deviceMemoryGB) {
-                    // console.log(`Device Memory: ~${stats.memory.deviceMemoryGB}GB (detailed heap unavailable)`);
+                    // //console.log(`Device Memory: ~${stats.memory.deviceMemoryGB}GB (detailed heap unavailable)`);
                 }
             }
 
             if (stats.webgl) {
                 if (stats.webgl.error) {
-                    // console.log(`WebGL: ${stats.webgl.error}`);
+                    // //console.log(`WebGL: ${stats.webgl.error}`);
                 } else {
-                    // console.log(`WebGL: ${stats.webgl.contextType} - ${stats.webgl.renderer}`);
-                    // console.log(`  Max Texture Size: ${stats.webgl.maxTextureSize}px`);
+                    // //console.log(`WebGL: ${stats.webgl.contextType} - ${stats.webgl.renderer}`);
+                    // //console.log(`  Max Texture Size: ${stats.webgl.maxTextureSize}px`);
                 }
             }
 
             if (Object.keys(stats.milestones).length > 0) {
-                // console.log('Milestones:', stats.milestones);
+                // //console.log('Milestones:', stats.milestones);
             }
 
-            // console.log(`Uptime: ${(stats.uptimeMs / 1000).toFixed(1)}s`);
-            // console.log('================================');
+            // //console.log(`Uptime: ${(stats.uptimeMs / 1000).toFixed(1)}s`);
+            // //console.log('================================');
         },
 
         /**
@@ -430,10 +430,10 @@
             const interval = intervalMs || 2000;
             this._logIntervalId = setInterval(() => {
                 if (this._isRunning) {
-                    // console.log('[mc-web/perf] ' + this._getSummaryString());
+                    // //console.log('[mc-web/perf] ' + this._getSummaryString());
                 }
             }, interval);
-            // console.log(`[mc-web/perf] Periodic logging started (every ${interval}ms)`);
+            // //console.log(`[mc-web/perf] Periodic logging started (every ${interval}ms)`);
         },
 
         /**
@@ -443,7 +443,7 @@
             if (this._logIntervalId) {
                 clearInterval(this._logIntervalId);
                 this._logIntervalId = null;
-                // console.log('[mc-web/perf] Periodic logging stopped');
+                // //console.log('[mc-web/perf] Periodic logging stopped');
             }
         }
     };
@@ -456,5 +456,5 @@
         PerfCollector.start();
     }
 
-    // console.log('[mc-web/perf] Performance module loaded. Access via window.webmcPerf');
+    // //console.log('[mc-web/perf] Performance module loaded. Access via window.webmcPerf');
 })();

@@ -30,7 +30,7 @@
         return;
       }
 
-      // console.log('[VFS] Downloading VFS from', url);
+      // //console.log('[VFS] Downloading VFS from', url);
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
       xhr.responseType = 'arraybuffer';
@@ -69,9 +69,9 @@
 
     _parse: function (gzBytes) {
       var self = this;
-      // console.log('[VFS] Decompressing gzip...');
+      // //console.log('[VFS] Decompressing gzip...');
       var data = fflate.gunzipSync(gzBytes);
-      // console.log('[VFS] Decompressed to', (data.byteLength / 1048576).toFixed(1), 'MB');
+      // //console.log('[VFS] Decompressed to', (data.byteLength / 1048576).toFixed(1), 'MB');
 
       var view = new DataView(data.buffer, data.byteOffset, data.byteLength);
       var off = 0;
@@ -83,7 +83,7 @@
       if (version !== 1) throw new Error('Unsupported VFS version: ' + version);
 
       var count = view.getUint32(off, true); off += 4;
-      // console.log('[VFS] File count:', count);
+      // //console.log('[VFS] File count:', count);
 
       var index = {};
 
@@ -104,7 +104,7 @@
       self._data = data;
       self._files = index;
       self._ready = true;
-      // console.log('[VFS] Loaded ' + Object.keys(index).length + ' files');
+      // //console.log('[VFS] Loaded ' + Object.keys(index).length + ' files');
     },
 
     readFile: function (path, cb) {
@@ -132,7 +132,7 @@
   if (window.VFS_URL) {
     VFS.init(window.VFS_URL, function (err) {
       if (err) console.error('[VFS] init failed:', err);
-      else // console.log('[VFS] ready');
+      else // //console.log('[VFS] ready');
       if (window.VFS_ONREADY) window.VFS_ONREADY();
     });
   }

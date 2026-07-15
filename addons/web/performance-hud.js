@@ -62,7 +62,7 @@
             // Listen for messages from Java
             window.addEventListener('message', this._handleMessage.bind(this));
 
-            // console.log('[mc-web/hud] Performance HUD initialized');
+            // //console.log('[mc-web/hud] Performance HUD initialized');
         },
 
         /**
@@ -307,6 +307,6 @@
         }
     });
 
-    // console.log('[mc-web/hud] HUD module loaded. Press F3 to toggle.');
+    // //console.log('[mc-web/hud] HUD module loaded. Press F3 to toggle.');
 
 })();

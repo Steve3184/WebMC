@@ -50,7 +50,7 @@
         if (timeline.length < 320) {
             timeline.push(event);
         }
-        console.log(
+        //console.log(
             '[mc-web/startup] ' +
                 event.elapsedMs +
                 'ms ' +
@@ -673,7 +673,7 @@
         const vfsVersion = window.webmcVfsVersion || '1.21.8';
 
         if (!window.VfsLoader) {
-            console.warn('[bootstrap] VfsLoader not available, skipping VFS preload');
+            //console.warn('[bootstrap] VfsLoader not available, skipping VFS preload');
             return;
         }
 
@@ -718,7 +718,7 @@
             try {
                 await preloadVfs();
             } catch (err) {
-                console.warn('[bootstrap] VFS preload failed, continuing with fallback:', err);
+                //console.warn('[bootstrap] VFS preload failed, continuing with fallback:', err);
             }
         }
 

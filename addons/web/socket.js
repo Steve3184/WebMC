@@ -76,7 +76,7 @@
      */
     init: function (wsBase) {
       this._wsBase = wsBase;
-      // console.log('[SocketRedirect] Redirecting network to', wsBase);
+      // //console.log('[SocketRedirect] Redirecting network to', wsBase);
       this._patchNetwork();
     },
 
@@ -97,7 +97,7 @@
             // Redirect to WebSocket
             var wsUrl = self._wsBase + '?url=' + encodeURIComponent(url);
             self._redirects[xhr] = { method: method, url: url };
-            // console.log('[SocketRedirect] Redirecting HTTP to WS:', url);
+            // //console.log('[SocketRedirect] Redirecting HTTP to WS:', url);
             // Note: For full HTTP redirect over WS, implement a protocol
             // For now, log the redirect target
           }

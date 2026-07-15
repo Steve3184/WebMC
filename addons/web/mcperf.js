@@ -81,8 +81,8 @@
         logDebug: function() {
             this.updateFromWebMC();
 
-            // console.log("%c WebMC Performance Debug ", "background: #1a8cff; color: white; padding: 2px 8px;");
-            // console.log({
+            // //console.log("%c WebMC Performance Debug ", "background: #1a8cff; color: white; padding: 2px 8px;");
+            // //console.log({
                 fps: this.fps,
                 frameTime: this.frameTimeMs,
                 renderDistance: this.renderDistance,
@@ -109,7 +109,7 @@
 
     // Console API
     window.mcperf = mcPerf;
-    // console.log("[mcperf] Minecraft-style performance monitor loaded");
-    // console.log("  Use mcperf.logDebug() for detailed stats");
-    // console.log("  Use mcperf.fps, mcperf.memory, mcperf.gpu for raw values");
+    // //console.log("[mcperf] Minecraft-style performance monitor loaded");
+    // //console.log("  Use mcperf.logDebug() for detailed stats");
+    // //console.log("  Use mcperf.fps, mcperf.memory, mcperf.gpu for raw values");
 })();
