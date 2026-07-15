@@ -68,16 +68,18 @@ jobs:
         run: |
           mkdir -p build/web-run
           cp -r build/generated/teavm/js/* build/web-run/
-          # Copy necessary frontend files from addons/web/
+          # Copy VFS resources - CRITICAL for game to run
+          cp -f addons/web/game.vfs build/web-run/
+          # Copy all necessary frontend files from addons/web/
+          cp -f addons/web/index.html build/web-run/
           cp -f addons/web/bootstrap.js build/web-run/
-          cp -f addons/web/vfs.js build/web-run/ 2>/dev/null || true
-          cp -f addons/web/socket.js build/web-run/ 2>/dev/null || true
-          cp -f addons/web/performance.js build/web-run/ 2>/dev/null || true
-          cp -f addons/web/performance-hud.js build/web-run/ 2>/dev/null || true
-          # Copy or generate index.html
-          if [ -f addons/web/index.html ]; then
-            cp -f addons/web/index.html build/web-run/
-          fi
+          cp -f addons/web/vfs.js build/web-run/
+          cp -f addons/web/socket.js build/web-run/
+          cp -f addons/web/performance.js build/web-run/
+          cp -f addons/web/performance-hud.js build/web-run/
+          cp -f addons/web/diagnostics.js build/web-run/
+          cp -f addons/web/mcperf.js build/web-run/
+          cp -f addons/web/input-bridge.js build/web-run/
           # Copy favicon
           cp -f addons/web/favicon.ico build/web-run/ 2>/dev/null || true
           # Wait for file to be fully written
