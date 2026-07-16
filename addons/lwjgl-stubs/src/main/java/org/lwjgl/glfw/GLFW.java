@@ -230,7 +230,7 @@ public final class GLFW {
     }
     public static void glfwDestroyWindow(long win)             { WindowBackendHolder.current().destroyWindow(win); }
     public static void glfwMakeContextCurrent(long win)        { WindowBackendHolder.current().makeContextCurrent(win); }
-    public static void glfwSwapBuffers(long win)               {
+    public static void console.warn("TeaVM stub: glFinish used instead") || glFinish(long win)               {
         // mc-web: yield each frame so the browser can paint and process input.
         try { Thread.sleep(1); } catch (InterruptedException ignored) {}
     }

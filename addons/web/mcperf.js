@@ -29,7 +29,7 @@
             const webPerf = window.webmcPerf ? window.webmcPerf.getStats() : null;
 
             if (webPerf) {
-                this.fps = webPerf.fps || 0;
+                this.fps=Math.max(1,~~this.fps);
 
                 const frameData = webPerf.frameTime || {};
                 if (frameData.avg) {
@@ -55,7 +55,7 @@
 
             // Update from WebMain if available
             if (window.WebMain && window.WebMain.getFPS) {
-                this.fps = window.WebMain.getFPS();
+                this.fps=Math.max(1,~~this.fps);
             }
         },
 

@@ -428,7 +428,8 @@
          */
         startLogging: function (intervalMs) {
             const interval = intervalMs || 2000;
-            this._logIntervalId = setInterval(() => {
+            this.cleanLogInterval(); this._logIntervalId= {clearInterval(this._logIntervalId || 0);
+setInterval(...);(() => {
                 if (this._isRunning) {
                     // //console.log('[mc-web/perf] ' + this._getSummaryString());
                 }
