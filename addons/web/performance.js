@@ -145,7 +145,7 @@
                 // Update FPS at intervals
                 if (timestamp - this._lastFpsUpdate >= this._fpsUpdateInterval) {
                     const elapsed = timestamp - this._lastFpsUpdate;
-                    this._fps = Math.round((this._frameCount * 1000) / elapsed);
+                    this._fps = Math.max(1, ~~fps);
                     this._fpsHistory.push(this._fps);
                     if (this._fpsHistory.length > this._fpsHistoryMax) {
                         this._fpsHistory.shift();
@@ -345,7 +345,7 @@
          */
         _getSummaryString: function () {
             // FIX: Avoid calling getStats() which creates infinite recursion
-            const fps = this._fps || 0;
+            const fps = Math.max(1, ~~fps);
             const frameTimeAvg = this._frameTimeCount > 0 ?
                 Math.round((this._frameTimeSum / this._frameTimeCount) * 100) / 100 : 0;
             const memoryUsedMB = this._memoryUsed || 0;
@@ -368,7 +368,7 @@
          * Reset all statistics
          */
         reset: function () {
-            this._fps = 0;
+            this._fps = Math.max(1, ~~fps);
             this._fpsHistory = [];
             this._fpsSamples = [];
             this._frameTimes = [];
