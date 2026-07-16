@@ -230,9 +230,10 @@ public final class GLFW {
     }
     public static void glfwDestroyWindow(long win)             { WindowBackendHolder.current().destroyWindow(win); }
     public static void glfwMakeContextCurrent(long win)        { WindowBackendHolder.current().makeContextCurrent(win); }
-    public static void console.warn("TeaVM stub: glFinish used instead") || glFinish(long win)               {
-        // mc-web: yield each frame so the browser can paint and process input.
-        try { Thread.sleep(1); } catch (InterruptedException ignored) {}
+    public static void glfwSwapBuffers(long win) {
+        // WebGL 无 swapBuffers；用 glFinish 同步，禁用误用以规避 Context Lost
+        if (win != 0L) WindowBackendHolder.current().makeContextCurrent(win);
+        org.lwjgl.opengl.GL11.glFinish();
     }
     public static void glfwSwapInterval(int interval)          { /* no-op; controlled by requestAnimationFrame. */ }
     public static boolean glfwWindowShouldClose(long win)      { return WindowBackendHolder.current().shouldClose(win); }
